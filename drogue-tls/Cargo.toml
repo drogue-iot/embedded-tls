@@ -1,0 +1,45 @@
+[package]
+name = "drogue-tls"
+version = "0.1.0"
+authors = ["Jethro Beekman <jethro@fortanix.com>"]
+build = "build.rs"
+edition = "2018"
+license = "Apache-2.0/GPL-2.0+"
+description = """
+Idiomatic Rust wrapper for MbedTLS, allowing you to use MbedTLS with only safe
+code while being able to use such great Rust features like error handling and
+closures.
+
+Building on MbedTLS's focus on embedded use, this crate can be used in a no_std
+environment."""
+readme = "../README.md"
+repository = "https://github.com/fortanix/rust-mbedtls"
+documentation = "https://docs.rs/mbedtls/"
+keywords = ["MbedTLS","mbed","TLS","SSL","cryptography"]
+
+[dependencies]
+bitflags = "1"
+chrono = { version = "0.4", optional = true }
+#core_io = { version = "0.1", features = ["collections"] }
+spin = { version = "0.4.0", default-features = false, optional = true }
+serde = { version = "1.0.115", default-features = false, features = ["derive"] }
+#serde_derive = "1.0.115"
+byteorder = { version = "1.0.0", default-features = false }
+yasna = { version = "0.2", optional = true }
+block-modes = { version = "0.3", optional = true }
+rc2 = { version = "0.3", optional = true }
+
+[dependencies.drogue-tls-sys]
+version = "0.1.0"
+path = "../drogue-tls-sys"
+
+[dev-dependencies]
+libc = "0.2.0"
+rand = "0.4.0"
+#serde_cbor = "0.6"
+hex = "0.3"
+matches = "0.1.8"
+
+[build-dependencies]
+cc = "1.0"
+

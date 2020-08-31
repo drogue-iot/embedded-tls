@@ -966,7 +966,7 @@
  *      MBEDTLS_TLS_RSA_PSK_WITH_3DES_EDE_CBC_SHA
  *      MBEDTLS_TLS_RSA_PSK_WITH_RC4_128_SHA
  */
-//#define MBEDTLS_KEY_EXCHANGE_RSA_PSK_ENABLED
+#define MBEDTLS_KEY_EXCHANGE_RSA_PSK_ENABLED
 
 /**
  * \def MBEDTLS_KEY_EXCHANGE_RSA_ENABLED
@@ -994,7 +994,7 @@
  *      MBEDTLS_TLS_RSA_WITH_RC4_128_SHA
  *      MBEDTLS_TLS_RSA_WITH_RC4_128_MD5
  */
-//#define MBEDTLS_KEY_EXCHANGE_RSA_ENABLED
+#define MBEDTLS_KEY_EXCHANGE_RSA_ENABLED
 
 /**
  * \def MBEDTLS_KEY_EXCHANGE_DHE_RSA_ENABLED
@@ -1027,7 +1027,7 @@
  *             See dhm.h for more details.
  *
  */
-//#define MBEDTLS_KEY_EXCHANGE_DHE_RSA_ENABLED
+#define MBEDTLS_KEY_EXCHANGE_DHE_RSA_ENABLED
 
 /**
  * \def MBEDTLS_KEY_EXCHANGE_ECDHE_RSA_ENABLED
@@ -1052,7 +1052,7 @@
  *      MBEDTLS_TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA
  *      MBEDTLS_TLS_ECDHE_RSA_WITH_RC4_128_SHA
  */
-//#define MBEDTLS_KEY_EXCHANGE_ECDHE_RSA_ENABLED
+#define MBEDTLS_KEY_EXCHANGE_ECDHE_RSA_ENABLED
 
 /**
  * \def MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
@@ -1076,7 +1076,7 @@
  *      MBEDTLS_TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA
  *      MBEDTLS_TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
  */
-//#define MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
+#define MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
 
 /**
  * \def MBEDTLS_KEY_EXCHANGE_ECDH_ECDSA_ENABLED
@@ -1100,7 +1100,7 @@
  *      MBEDTLS_TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256
  *      MBEDTLS_TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384
  */
-//#define MBEDTLS_KEY_EXCHANGE_ECDH_ECDSA_ENABLED
+#define MBEDTLS_KEY_EXCHANGE_ECDH_ECDSA_ENABLED
 
 /**
  * \def MBEDTLS_KEY_EXCHANGE_ECDH_RSA_ENABLED
@@ -1124,7 +1124,7 @@
  *      MBEDTLS_TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256
  *      MBEDTLS_TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384
  */
-//#define MBEDTLS_KEY_EXCHANGE_ECDH_RSA_ENABLED
+#define MBEDTLS_KEY_EXCHANGE_ECDH_RSA_ENABLED
 
 /**
  * \def MBEDTLS_KEY_EXCHANGE_ECJPAKE_ENABLED
@@ -1864,7 +1864,7 @@
  *
  * Comment this macro to disable support for server name indication in SSL
  */
-//#define MBEDTLS_SSL_SERVER_NAME_INDICATION
+#define MBEDTLS_SSL_SERVER_NAME_INDICATION
 
 /**
  * \def MBEDTLS_SSL_TRUNCATED_HMAC
@@ -2027,7 +2027,7 @@
  *
  * Uncomment to enable trusted certificate callbacks.
  */
-//#define MBEDTLS_X509_TRUSTED_CERTIFICATE_CALLBACK
+#define MBEDTLS_X509_TRUSTED_CERTIFICATE_CALLBACK
 
 /**
  * \def MBEDTLS_X509_CHECK_KEY_USAGE
@@ -2064,7 +2064,7 @@
  *
  * Comment this macro to disallow using RSASSA-PSS in certificates.
  */
-//#define MBEDTLS_X509_RSASSA_PSS_SUPPORT
+#define MBEDTLS_X509_RSASSA_PSS_SUPPORT
 
 /**
  * \def MBEDTLS_ZLIB_SUPPORT
@@ -2413,7 +2413,7 @@
  *
  * This module is used for testing (ssl_client/server).
  */
-//#define MBEDTLS_CERTS_C
+#define MBEDTLS_CERTS_C
 
 /**
  * \def MBEDTLS_CHACHA20_C
@@ -2837,7 +2837,7 @@
  *
  * This modules translates between OIDs and internal values.
  */
-//#define MBEDTLS_OID_C
+#define MBEDTLS_OID_C
 
 /**
  * \def MBEDTLS_PADLOCK_C
@@ -3094,7 +3094,7 @@
  *
  * Requires: MBEDTLS_BIGNUM_C, MBEDTLS_OID_C
  */
-//#define MBEDTLS_RSA_C
+#define MBEDTLS_RSA_C
 
 /**
  * \def MBEDTLS_SHA1_C
@@ -3299,7 +3299,7 @@
  *
  * This module is required for the X.509 parsing modules.
  */
-//#define MBEDTLS_X509_USE_C
+#define MBEDTLS_X509_USE_C
 
 /**
  * \def MBEDTLS_X509_CRT_PARSE_C
@@ -3315,7 +3315,7 @@
  *
  * This module is required for X.509 certificate parsing.
  */
-//#define MBEDTLS_X509_CRT_PARSE_C
+#define MBEDTLS_X509_CRT_PARSE_C
 
 /**
  * \def MBEDTLS_X509_CRL_PARSE_C
@@ -3329,7 +3329,7 @@
  *
  * This module is required for X.509 CRL parsing.
  */
-//#define MBEDTLS_X509_CRL_PARSE_C
+#define MBEDTLS_X509_CRL_PARSE_C
 
 /**
  * \def MBEDTLS_X509_CSR_PARSE_C
@@ -3343,7 +3343,7 @@
  *
  * This module is used for reading X.509 certificate request.
  */
-//#define MBEDTLS_X509_CSR_PARSE_C
+#define MBEDTLS_X509_CSR_PARSE_C
 
 /**
  * \def MBEDTLS_X509_CREATE_C
@@ -3356,7 +3356,7 @@
  *
  * This module is the basis for creating X.509 certificates and CSRs.
  */
-//#define MBEDTLS_X509_CREATE_C
+#define MBEDTLS_X509_CREATE_C
 
 /**
  * \def MBEDTLS_X509_CRT_WRITE_C
@@ -3369,7 +3369,7 @@
  *
  * This module is required for X.509 certificate creation.
  */
-//#define MBEDTLS_X509_CRT_WRITE_C
+#define MBEDTLS_X509_CRT_WRITE_C
 
 /**
  * \def MBEDTLS_X509_CSR_WRITE_C
@@ -3382,7 +3382,7 @@
  *
  * This module is required for X.509 certificate request writing.
  */
-//#define MBEDTLS_X509_CSR_WRITE_C
+#define MBEDTLS_X509_CSR_WRITE_C
 
 /**
  * \def MBEDTLS_XTEA_C
