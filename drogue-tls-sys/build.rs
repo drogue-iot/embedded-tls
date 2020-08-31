@@ -1,5 +1,9 @@
 
 use cmake::Config;
+use std::{
+    env,
+    path::PathBuf,
+};
 
 extern crate bindgen;
 use bindgen::callbacks::{ParseCallbacks, EnumVariantValue};
@@ -37,7 +41,7 @@ impl ParseCallbacks for Callbacks {
 }
 
 fn main() {
-    let target = std::env::var("TARGET").unwrap();
+    let target = env::var("TARGET").unwrap();
 
     let _dst = Config::new("vendor/mbedtls-2.23.0/")
                      .very_verbose(true)
@@ -47,7 +51,7 @@ fn main() {
                      .cflag("--specs=nosys.specs")
                      .build();
 
-    let project_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     println!("cargo:rustc-link-search={}", project_dir); // the "-L" flag
 
     //println!("cargo:rustc-link-lib=tls");
@@ -72,16 +76,21 @@ fn main() {
         .size_t_is_usize(true)
         .prepend_enum_name(false)
         .use_core()
-        .raw_line("#![allow(non_camel_case_types)]")
-        .raw_line("#![allow(non_upper_case_globals)]")
-        .raw_line("#![allow(non_snake_case)]")
-        .raw_line("#![allow(dead_code)]")
+        //.raw_line("#![allow(non_camel_case_types)]")
+        //.raw_line("#![allow(non_upper_case_globals)]")
+        //.raw_line("#![allow(non_snake_case)]")
+        //.raw_line("#![allow(dead_code)]")
         //.parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Unable to generate bindings");
 
-   bindings.write_to_file("src/bindings.rs")
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    bindings
+        .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
+
+   //bindings.write_to_file("src/bindings.rs")
+        //.expect("Couldn't write bindings!");
 
 }
 
