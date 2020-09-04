@@ -1,7 +1,6 @@
-use core::any::Any;
-use drogue_tls_sys::entropy_source_state;
-use drogue_tls_sys::types::{c_void, c_int, c_uchar};
+use drogue_tls_sys::types::{c_int, c_uchar, c_void};
 
+#[allow(non_camel_case_types)]
 pub type entropy_f = unsafe extern "C" fn(
     data: *mut c_void,
     output: *mut c_uchar,
@@ -9,8 +8,7 @@ pub type entropy_f = unsafe extern "C" fn(
     olen: *mut usize,
 ) -> c_int;
 
-pub trait EntropySource
-{
+pub trait EntropySource {
     fn get_f(&self) -> entropy_f;
 }
 
@@ -22,17 +20,19 @@ impl EntropySource for StaticEntropySource {
     }
 }
 
-extern "C" fn f_source(data: *mut c_void, output: *mut c_uchar, len: usize, olen: *mut usize) -> c_int {
+extern "C" fn f_source(
+    _data: *mut c_void,
+    output: *mut c_uchar,
+    len: usize,
+    olen: *mut usize,
+) -> c_int {
     log::info!("asking for entropy");
     for n in 0..len {
         unsafe {
-            *output.offset(n as isize) = b'A';
+            *output.add(n) = b'A';
         }
     }
     unsafe { *olen = len };
-    log::info!("provided {}", unsafe{ *olen } );
+    log::info!("provided {}", unsafe { *olen });
     0
 }
-
-
-

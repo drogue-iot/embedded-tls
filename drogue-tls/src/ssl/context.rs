@@ -1,20 +1,22 @@
-use drogue_tls_sys::{ssl_context, ssl_init, ssl_set_hostname};
-
-use heapless::{
-    String,
-    ArrayLength,
-    consts::*,
+use drogue_tls_sys::{
+    ssl_context, ssl_init, ssl_set_hostname, ERR_SSL_ALLOC_FAILED, ERR_SSL_BAD_INPUT_DATA,
 };
-use core::fmt::Write;
-use drogue_tls_sys::types::c_char;
-use crate::ffi::CStr;
-use core::ptr::slice_from_raw_parts;
-use crate::platform::strlen;
-use core::str::from_utf8;
 
-pub struct SslContext(
-    ssl_context
-);
+use crate::ffi::CStr;
+use crate::platform::strlen;
+use core::ptr::slice_from_raw_parts;
+use core::str::from_utf8;
+use drogue_tls_sys::types::c_char;
+use heapless::consts::*;
+
+pub struct SslContext(ssl_context);
+
+#[derive(Debug)]
+pub enum HostnameError {
+    AllocFailed,
+    BadInputData,
+    Unknown,
+}
 
 impl SslContext {
     pub(crate) fn inner(&self) -> *const ssl_context {
@@ -31,20 +33,25 @@ impl SslContext {
         Self(ctx)
     }
 
-    pub fn set_hostname(&mut self, hostname: &str) {
+    pub fn set_hostname(&mut self, hostname: &str) -> Result<(), HostnameError> {
         let hostname_cstr: CStr<U255> = CStr::new(hostname);
-        let result = unsafe {
-            ssl_set_hostname(
-                self.inner_mut(),
-                hostname_cstr.c_str()
-            )
-        };
+        match unsafe { ssl_set_hostname(self.inner_mut(), hostname_cstr.c_str()) } {
+            0 => Ok(()),
+            ERR_SSL_BAD_INPUT_DATA => Err(HostnameError::BadInputData),
+            ERR_SSL_ALLOC_FAILED => Err(HostnameError::AllocFailed),
+            _ => Err(HostnameError::Unknown),
+        }
     }
 
     pub fn get_hostname(&self) -> &str {
-       let str: *const c_char = unsafe { (*self.inner()).hostname };
-        let slice = unsafe { &(*slice_from_raw_parts( str, strlen(str))) };
-        from_utf8(slice ).unwrap()
+        let str: *const c_char = unsafe { (*self.inner()).hostname };
+        let slice = unsafe { &(*slice_from_raw_parts(str, strlen(str))) };
+        from_utf8(slice).unwrap()
     }
 }
 
+impl Default for SslContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}

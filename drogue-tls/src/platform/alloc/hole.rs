@@ -1,3 +1,4 @@
+#![allow(clippy::clone_on_copy)]
 
 use super::layout::Layout;
 
@@ -182,8 +183,8 @@ fn split_hole(hole: HoleInfo, required_layout: Layout) -> Option<Allocation> {
             addr: aligned_hole.addr,
             size: required_size,
         },
-        front_padding: front_padding,
-        back_padding: back_padding,
+        front_padding,
+        back_padding,
     })
 }
 
@@ -291,7 +292,7 @@ fn deallocate(mut hole: &mut Hole, addr: usize, mut size: usize) {
                 // after:   ___XXX__FFFF___    where F is the freed block
 
                 let new_hole = Hole {
-                    size: size,
+                    size,
                     next: hole.next.take(), // the reference to the Y block (if it exists)
                 };
                 // write the new hole to the freed memory

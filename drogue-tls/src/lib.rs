@@ -1,9 +1,10 @@
+#![allow(dead_code)]
 #![no_std]
 
 extern crate drogue_tls_sys;
 
-mod ffi;
-pub mod ssl;
-pub mod rng;
 pub mod entropy;
+mod ffi;
 pub mod platform;
+pub mod rng;
+pub mod ssl;

@@ -1,10 +1,8 @@
-use drogue_tls_sys::{entropy_context, entropy_init, entropy_source_state, ENTROPY_SOURCE_WEAK, entropy_add_source, ENTROPY_SOURCE_STRONG};
 use crate::entropy::EntropySource;
 use drogue_tls_sys::types::c_int;
+use drogue_tls_sys::{entropy_add_source, entropy_context, entropy_init, ENTROPY_SOURCE_STRONG};
 
-pub struct EntropyContext(
-    entropy_context
-);
+pub struct EntropyContext(entropy_context);
 
 impl EntropyContext {
     pub(crate) fn inner(&self) -> *const entropy_context {
@@ -22,7 +20,8 @@ impl EntropyContext {
     }
 
     pub fn add_source<E>(&mut self, source: E)
-        where E: EntropySource
+    where
+        E: EntropySource,
     {
         unsafe {
             entropy_add_source(
@@ -30,7 +29,14 @@ impl EntropyContext {
                 Some(source.get_f()),
                 0 as _,
                 0,
-                ENTROPY_SOURCE_STRONG as c_int)
+                ENTROPY_SOURCE_STRONG as c_int,
+            )
         };
+    }
+}
+
+impl Default for EntropyContext {
+    fn default() -> Self {
+        Self::new()
     }
 }

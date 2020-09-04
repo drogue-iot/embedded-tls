@@ -1,4 +1,7 @@
-use drogue_tls_sys::{SSL_VERIFY_NONE, SSL_VERIFY_OPTIONAL, SSL_VERIFY_REQUIRED, SSL_VERIFY_UNSET, ssl_config_defaults, ssl_conf_rng, ctr_drbg_random, ssl_conf_dbg, ssl_set_hostname, SSL_MAX_HOST_NAME_LEN};
+use drogue_tls_sys::{
+    ctr_drbg_random, ssl_conf_dbg, ssl_conf_rng, ssl_config_defaults, SSL_VERIFY_NONE,
+    SSL_VERIFY_OPTIONAL, SSL_VERIFY_REQUIRED, SSL_VERIFY_UNSET,
+};
 
 pub enum Verify {
     None = SSL_VERIFY_NONE as isize,
@@ -7,43 +10,32 @@ pub enum Verify {
     Unset = SSL_VERIFY_UNSET as isize,
 }
 
-use drogue_tls_sys::{
-    SSL_IS_SERVER,
-    SSL_IS_CLIENT,
-};
+use drogue_tls_sys::{SSL_IS_CLIENT, SSL_IS_SERVER};
 
 pub enum Endpoint {
     Server = SSL_IS_SERVER as isize,
     Client = SSL_IS_CLIENT as isize,
 }
 
-use drogue_tls_sys::{
-    SSL_TRANSPORT_STREAM,
-    SSL_TRANSPORT_DATAGRAM,
-};
+use drogue_tls_sys::{SSL_TRANSPORT_DATAGRAM, SSL_TRANSPORT_STREAM};
 
 pub enum Transport {
     Stream = SSL_TRANSPORT_STREAM as isize,
     Datagram = SSL_TRANSPORT_DATAGRAM as isize,
 }
 
-use drogue_tls_sys::{
-    SSL_PRESET_DEFAULT,
-    SSL_PRESET_SUITEB,
-};
+use drogue_tls_sys::{SSL_PRESET_DEFAULT, SSL_PRESET_SUITEB};
 
 pub enum Preset {
     Default = SSL_PRESET_DEFAULT as isize,
     SuiteB = SSL_PRESET_SUITEB as isize,
 }
 
-use drogue_tls_sys::{ssl_config, ssl_config_init, ssl_config_free, ssl_conf_authmode};
-use drogue_tls_sys::types::{c_int, c_char, c_void, c_uchar};
 use crate::rng::ctr_drbg::CtrDrbgContext;
+use drogue_tls_sys::types::{c_char, c_int, c_void};
+use drogue_tls_sys::{ssl_conf_authmode, ssl_config, ssl_config_free, ssl_config_init};
 
-pub struct SslConfig(
-    ssl_config
-);
+pub struct SslConfig(ssl_config);
 
 impl SslConfig {
     pub(crate) fn inner(&self) -> &ssl_config {
@@ -66,10 +58,12 @@ impl SslConfig {
         let mut cfg = ssl_config::default();
         unsafe { ssl_config_init(&mut cfg) };
         let result = unsafe {
-            ssl_config_defaults(&mut cfg,
-                                endpoint as c_int,
-                                transport as c_int,
-                                preset as c_int)
+            ssl_config_defaults(
+                &mut cfg,
+                endpoint as c_int,
+                transport as c_int,
+                preset as c_int,
+            )
         };
 
         unsafe {
@@ -99,8 +93,6 @@ impl SslConfig {
         self
     }
 
-
-
     pub fn free(mut self) {
         unsafe { ssl_config_free(&mut self.0) };
     }
@@ -108,9 +100,8 @@ impl SslConfig {
 
 use core::str::{from_utf8, Utf8Error};
 
-
 unsafe extern "C" fn debug(
-    context: *mut c_void,
+    _context: *mut c_void,
     level: c_int,
     file_name: *const c_char,
     line: c_int,
@@ -118,10 +109,16 @@ unsafe extern "C" fn debug(
 ) {
     let file_name = to_str(&file_name);
     let message = to_str(&message);
-    log::info!("{}:{}:{} - {}", level, file_name.unwrap(), line, message.unwrap());
+    log::info!(
+        "{}:{}:{} - {}",
+        level,
+        file_name.unwrap(),
+        line,
+        message.unwrap()
+    );
 }
 
-fn to_str<'a>(str: &'a *const c_char) -> Result<&'a str, Utf8Error> {
+fn to_str(str: &*const c_char) -> Result<&str, Utf8Error> {
     unsafe {
         let len = strlen(*str);
         let str = *str as *const u8;
@@ -133,7 +130,7 @@ fn to_str<'a>(str: &'a *const c_char) -> Result<&'a str, Utf8Error> {
 #[inline]
 unsafe fn strlen(p: *const c_char) -> usize {
     let mut n = 0;
-    while *p.offset(n as isize) != 0 {
+    while *p.add(n) != 0 {
         n += 1;
     }
     n

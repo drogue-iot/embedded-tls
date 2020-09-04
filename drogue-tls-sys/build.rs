@@ -18,9 +18,7 @@ pub struct Callbacks{
 
 impl ParseCallbacks for Callbacks {
     fn item_name(&self, original: &str) -> Option<String> {
-        if original.starts_with( "MBEDTLS_") {
-            Some( String::from(&original[8..original.len()]))
-        } else if original.starts_with( "mbedtls_") {
+        if original.starts_with( "MBEDTLS_") || original.starts_with("mbedtls_") {
             Some(String::from(&original[8..original.len()]))
         } else {
             None
@@ -33,10 +31,8 @@ impl ParseCallbacks for Callbacks {
         original: &str,
         _variant_value: EnumVariantValue
     ) -> Option<String> {
-        if original.starts_with( "MBEDTLS_") {
+        if original.starts_with( "MBEDTLS_") || original.starts_with("mbedtls_") {
             Some( String::from(&original[8..original.len()]))
-        } else if original.starts_with( "mbedtls_") {
-            Some(String::from(&original[8..original.len()]))
         } else {
             None
         }

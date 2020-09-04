@@ -1,7 +1,7 @@
 use core::fmt;
 use core::num::NonZeroUsize;
-use core::{mem, cmp};
 use core::ptr::NonNull;
+use core::{cmp, mem};
 
 const fn size_align<T>() -> (usize, usize) {
     (mem::size_of::<T>(), mem::align_of::<T>())
@@ -72,7 +72,11 @@ impl Layout {
     #[inline]
     pub const unsafe fn from_size_align_unchecked(size: usize, align: usize) -> Self {
         // SAFETY: the caller must ensure that `align` is greater than zero.
-        Layout { size_: size, align_: unsafe { NonZeroUsize::new_unchecked(align) } }
+        Layout {
+            size_: size,
+            //align_: unsafe { NonZeroUsize::new_unchecked(align) },
+            align_: NonZeroUsize::new_unchecked(align),
+        }
     }
 
     /// The minimum size in bytes for a memory block of this layout.
@@ -216,11 +220,18 @@ impl Layout {
         // > must not overflow (i.e., the rounded value must be less than
         // > `usize::MAX`)
         let padded_size = self.size() + self.padding_needed_for(self.align());
-        let alloc_size = padded_size.checked_mul(n).ok_or(LayoutErr { private: () })?;
+        let alloc_size = padded_size
+            .checked_mul(n)
+            .ok_or(LayoutErr { private: () })?;
 
         // SAFETY: self.align is already known to be valid and alloc_size has been
         // padded already.
-        unsafe { Ok((Layout::from_size_align_unchecked(alloc_size, self.align()), padded_size)) }
+        unsafe {
+            Ok((
+                Layout::from_size_align_unchecked(alloc_size, self.align()),
+                padded_size,
+            ))
+        }
     }
 
     /// Creates a layout describing the record for `self` followed by
@@ -273,8 +284,13 @@ impl Layout {
         let new_align = cmp::max(self.align(), next.align());
         let pad = self.padding_needed_for(next.align());
 
-        let offset = self.size().checked_add(pad).ok_or(LayoutErr { private: () })?;
-        let new_size = offset.checked_add(next.size()).ok_or(LayoutErr { private: () })?;
+        let offset = self
+            .size()
+            .checked_add(pad)
+            .ok_or(LayoutErr { private: () })?;
+        let new_size = offset
+            .checked_add(next.size())
+            .ok_or(LayoutErr { private: () })?;
 
         let layout = Layout::from_size_align(new_size, new_align)?;
         Ok((layout, offset))
@@ -294,7 +310,10 @@ impl Layout {
     /// On arithmetic overflow, returns `LayoutErr`.
     #[inline]
     pub fn repeat_packed(&self, n: usize) -> Result<Self, LayoutErr> {
-        let size = self.size().checked_mul(n).ok_or(LayoutErr { private: () })?;
+        let size = self
+            .size()
+            .checked_mul(n)
+            .ok_or(LayoutErr { private: () })?;
         Layout::from_size_align(size, self.align())
     }
 
@@ -306,7 +325,10 @@ impl Layout {
     /// On arithmetic overflow, returns `LayoutErr`.
     #[inline]
     pub fn extend_packed(&self, next: Self) -> Result<Self, LayoutErr> {
-        let new_size = self.size().checked_add(next.size()).ok_or(LayoutErr { private: () })?;
+        let new_size = self
+            .size()
+            .checked_add(next.size())
+            .ok_or(LayoutErr { private: () })?;
         Layout::from_size_align(new_size, self.align())
     }
 

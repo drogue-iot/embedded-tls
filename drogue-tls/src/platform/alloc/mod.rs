@@ -1,6 +1,5 @@
-
-pub(crate) mod layout;
 mod hole;
+pub(crate) mod layout;
 
 use self::layout::Layout;
 use core::mem;
@@ -68,9 +67,7 @@ impl Heap {
             size = HoleList::min_size();
         }
         let size = align_up(size, mem::align_of::<Hole>());
-        let layout = Layout::from_size_align(size, layout.align()).unwrap();
-
-        layout
+        Layout::from_size_align(size, layout.align()).unwrap()
     }
 
     /// Allocates a chunk of the given size with the given alignment. Returns a pointer to the
@@ -138,7 +135,6 @@ impl Heap {
         self.size += by;
     }
 }
-
 
 /// Align downwards. Returns the greatest x with alignment `align`
 /// so that x <= addr. The alignment must be a power of 2.
