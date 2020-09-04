@@ -6,7 +6,10 @@ use std::{
 };
 
 extern crate bindgen;
-use bindgen::callbacks::{ParseCallbacks, EnumVariantValue};
+use bindgen::{
+    EnumVariation,
+    callbacks::{ParseCallbacks, EnumVariantValue}
+};
 
 #[derive(Debug)]
 pub struct Callbacks{
@@ -43,21 +46,27 @@ impl ParseCallbacks for Callbacks {
 fn main() {
     let target = env::var("TARGET").unwrap();
 
-    let _dst = Config::new("vendor/mbedtls-2.23.0/")
+    let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+
+    let include_dir = PathBuf::from(&project_dir).join("include");
+
+    let dst = Config::new("vendor/mbedtls-2.23.0/")
                      .very_verbose(true)
                      .always_configure(true)
                      .define("ENABLE_TESTING", "OFF")
                      .define("ENABLE_PROGRAMS", "OFF")
                      .cflag("--specs=nosys.specs")
+                     .cflag(format!("-I{}", include_dir.display()))
                      .build();
 
-    let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    println!("cargo:rustc-link-search={}", project_dir); // the "-L" flag
+    let search_dir = dst.parent().unwrap().join("out").join("build").join("library");
+    //println!("cargo:rustc-link-search={}", _dst.parent().unwrap().display()); // the "-L" flag
+    println!("cargo:rustc-link-search={}", search_dir.as_path().to_str().unwrap());
 
     //println!("cargo:rustc-link-lib=tls");
-    //println!("cargo:rustc-link-lib=x509");
-    //println!("cargo:rustc-link-lib=crypto");
-    println!("cargo:rustc-link-lib=mbedtls");
+    println!("cargo:rustc-link-lib=static=mbedx509");
+    println!("cargo:rustc-link-lib=static=mbedcrypto");
+    println!("cargo:rustc-link-lib=static=mbedtls");
 
 
     let callbacks = Callbacks{};
@@ -65,6 +74,7 @@ fn main() {
     let bindings = bindgen::Builder::default()
         .clang_arg("--verbose")
         .clang_arg("-I./vendor/mbedtls-2.23.0/include")
+        .clang_arg("-I./include")
         .clang_arg( "-target" )
         .clang_arg( target )
         .header("src/wrapper.h")
@@ -72,6 +82,7 @@ fn main() {
         .parse_callbacks( Box::new( callbacks ) )
         .derive_copy(true)
         .derive_default(true)
+        .default_enum_style(EnumVariation::Rust{ non_exhaustive: false })
         //.blacklist_type("size_t")
         .size_t_is_usize(true)
         .prepend_enum_name(false)
@@ -84,9 +95,9 @@ fn main() {
         .generate()
         .expect("Unable to generate bindings");
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let _out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
-        .write_to_file(out_path.join("bindings.rs"))
+        .write_to_file(PathBuf::from(&project_dir).join("src").join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
    //bindings.write_to_file("src/bindings.rs")

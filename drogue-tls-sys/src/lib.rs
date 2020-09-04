@@ -5,9 +5,9 @@
 #![no_std]
 
 pub mod types;
-//pub mod bindings;
-//pub use bindings::*;
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+pub mod bindings;
+pub use bindings::*;
+//include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 pub const ECDSA_MAX_LEN: u32 = 3 + 2 * ( 2 + 66 );
 

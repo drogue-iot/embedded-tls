@@ -1,2 +1,0 @@
-[workspace]
-members = ["drogue-tls-sys", "drogue-tls"]

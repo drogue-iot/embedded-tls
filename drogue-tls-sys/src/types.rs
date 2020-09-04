@@ -18,7 +18,8 @@ pub type ptrdiff_t = isize;
 pub use raw_types::*;
 
 pub mod raw_types {
-    pub type c_char = i8;
+    //pub type c_char = i8;
+    pub type c_char = u8;
     pub type c_schar = i8;
     pub type c_uchar = u8;
 

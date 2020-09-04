@@ -1,6 +1,7 @@
 
 //#include <stdint.h>
 
+#include <mbedtls/platform.h>
 #include <mbedtls/bignum.h>
 #include <mbedtls/md.h>
 #include <mbedtls/md_internal.h>

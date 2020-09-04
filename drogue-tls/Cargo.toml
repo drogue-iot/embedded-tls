@@ -1,45 +1,50 @@
 [package]
 name = "drogue-tls"
 version = "0.1.0"
-authors = ["Jethro Beekman <jethro@fortanix.com>"]
-build = "build.rs"
+authors = ["Bob McWhirter <bmcwhirt@redhat.com>"]
 edition = "2018"
-license = "Apache-2.0/GPL-2.0+"
-description = """
-Idiomatic Rust wrapper for MbedTLS, allowing you to use MbedTLS with only safe
-code while being able to use such great Rust features like error handling and
-closures.
-
-Building on MbedTLS's focus on embedded use, this crate can be used in a no_std
-environment."""
+license = "Apache-2.0"
+description = "A no_std mbedTLS crate"
 readme = "../README.md"
-repository = "https://github.com/fortanix/rust-mbedtls"
+repository = "https://github.com/drogue-iot/drogue-tls"
 documentation = "https://docs.rs/mbedtls/"
 keywords = ["MbedTLS","mbed","TLS","SSL","cryptography"]
 
+
 [dependencies]
-bitflags = "1"
-chrono = { version = "0.4", optional = true }
+log = "0.4.11"
+cstr_core = "0.2.2"
+#generic-array = "0.14.4"
+heapless = "0.5.5"
+## REMOVE THIS ONE
+cortex-m = "0.6.2"
+
+
+#alloc-cortex-m = "0.4.0"
+
+#bitflags = "1"
+#chrono = { version = "0.4", optional = true }
 #core_io = { version = "0.1", features = ["collections"] }
-spin = { version = "0.4.0", default-features = false, optional = true }
-serde = { version = "1.0.115", default-features = false, features = ["derive"] }
+#spin = { version = "0.4.0", default-features = false, optional = true }
+#serde = { version = "1.0.115", default-features = false, features = ["derive"] }
 #serde_derive = "1.0.115"
-byteorder = { version = "1.0.0", default-features = false }
-yasna = { version = "0.2", optional = true }
-block-modes = { version = "0.3", optional = true }
-rc2 = { version = "0.3", optional = true }
+#byteorder = { version = "1.0.0", default-features = false }
+#yasna = { version = "0.2", optional = true }
+#block-modes = { version = "0.3", optional = true }
+#rc2 = { version = "0.3", optional = true }
+#heapless = "0.5.5"
 
 [dependencies.drogue-tls-sys]
 version = "0.1.0"
 path = "../drogue-tls-sys"
 
-[dev-dependencies]
-libc = "0.2.0"
-rand = "0.4.0"
-#serde_cbor = "0.6"
-hex = "0.3"
-matches = "0.1.8"
+#[dev-dependencies]
+#libc = "0.2.0"
+#rand = "0.4.0"
+##serde_cbor = "0.6"
+#hex = "0.3"
+#matches = "0.1.8"
 
-[build-dependencies]
-cc = "1.0"
+#[build-dependencies]
+#cc = "1.0"
 
