@@ -1,5 +1,3 @@
-//dd#[inline]
-
 mod alloc;
 mod cortex_m_alloc;
 
