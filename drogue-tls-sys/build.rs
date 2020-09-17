@@ -1,26 +1,24 @@
-#[cfg(feature = "generate")]
 use cmake::Config;
 
-#[cfg(feature = "generate")]
 use std::{
     env,
     path::PathBuf,
 };
 
-#[cfg(feature = "generate")]
+#[cfg(feature = "bindgen")]
 extern crate bindgen;
 
-#[cfg(feature = "generate")]
+#[cfg(feature = "bindgen")]
 use bindgen::{
     EnumVariation,
     callbacks::{ParseCallbacks, EnumVariantValue},
 };
 
-#[cfg(feature = "generate")]
+#[cfg(feature = "bindgen")]
 #[derive(Debug)]
 pub struct Callbacks {}
 
-#[cfg(feature = "generate")]
+#[cfg(feature = "bindgen")]
 impl ParseCallbacks for Callbacks {
     fn item_name(&self, original: &str) -> Option<String> {
         if original.starts_with("MBEDTLS_") || original.starts_with("mbedtls_") {
@@ -44,7 +42,6 @@ impl ParseCallbacks for Callbacks {
     }
 }
 
-#[cfg(feature = "generate")]
 fn main() {
     let target = env::var("TARGET").unwrap();
 
@@ -72,6 +69,12 @@ fn main() {
     println!("cargo:rustc-link-lib=static=mbedtls");
 
 
+    #[cfg(feature = "bindgen")]
+    do_bindgen();
+}
+
+#[cfg(feature = "bindgen")]
+fn do_bindgen() {
     let callbacks = Callbacks {};
 
     let bindings = bindgen::Builder::default()
@@ -101,7 +104,3 @@ fn main() {
         .expect("Couldn't write bindings!");
 }
 
-#[cfg(not(feature = "generate"))]
-fn main() {
-    // nothing
-}

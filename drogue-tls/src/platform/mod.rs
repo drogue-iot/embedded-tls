@@ -72,7 +72,6 @@ impl SslPlatform {
 }
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[no_mangle]
 pub extern "C" fn strlen(p: *const c_char) -> usize {
     let mut n = 0;
     unsafe {
