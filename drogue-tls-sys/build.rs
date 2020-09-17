@@ -43,8 +43,6 @@ impl ParseCallbacks for Callbacks {
 }
 
 fn main() {
-    let target = env::var("TARGET").unwrap();
-
     let project_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
     let include_dir = PathBuf::from(&project_dir).join("include");
