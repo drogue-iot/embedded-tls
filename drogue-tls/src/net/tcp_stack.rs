@@ -46,17 +46,17 @@ impl<'stack, DelegateStack: TcpStack> SslTcpStack<'stack, DelegateStack> {
         match self.delegate.write(delegate_socket, buf) {
             Ok(len) => {
                 Ok(len)
-            },
+            }
             Err(e) => {
                 match e {
                     Error::Other(o) => {
                         Err(nb::Error::Other(TcpStackError::Other(o)))
-                    },
+                    }
                     Error::WouldBlock => {
                         Err(nb::Error::WouldBlock)
-                    },
+                    }
                 }
-            },
+            }
         }
     }
 
@@ -64,17 +64,17 @@ impl<'stack, DelegateStack: TcpStack> SslTcpStack<'stack, DelegateStack> {
         match self.delegate.read(delegate_socket, buf) {
             Ok(len) => {
                 Ok(len)
-            },
+            }
             Err(e) => {
                 match e {
                     Error::Other(o) => {
                         Err(nb::Error::Other(TcpStackError::Other(o)))
-                    },
+                    }
                     Error::WouldBlock => {
                         Err(nb::Error::WouldBlock)
-                    },
+                    }
                 }
-            },
+            }
         }
     }
 
@@ -117,7 +117,16 @@ impl<DelegateStack: TcpStack> Default for SslTcpSocketState<DelegateStack> {
 #[derive(Debug)]
 pub struct SslTcpSocket(usize);
 
-use drogue_tls_sys::{ssl_write, ssl_read, ERR_SSL_WANT_READ, ERR_SSL_WANT_WRITE, ERR_SSL_CRYPTO_IN_PROGRESS, ERR_SSL_ASYNC_IN_PROGRESS, ssl_free, ssl_set_bio};
+use drogue_tls_sys::{
+    ssl_write,
+    ssl_read,
+    ERR_SSL_WANT_READ,
+    ERR_SSL_WANT_WRITE,
+    ERR_SSL_CRYPTO_IN_PROGRESS,
+    ERR_SSL_ASYNC_IN_PROGRESS,
+    ERR_SSL_PEER_CLOSE_NOTIFY,
+    ssl_free,
+    ssl_set_bio};
 
 use drogue_tls_sys::types::c_uchar;
 
@@ -217,7 +226,6 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
                 ERR_SSL_ASYNC_IN_PROGRESS => Err(nb::Error::from(TcpStackError::AsyncInProgress)),
                 ERR_SSL_CRYPTO_IN_PROGRESS => Err(nb::Error::from(TcpStackError::CryptoInProgress)),
                 _ => {
-                    log::error!("error from ssl_write {}", result);
                     Err(nb::Error::from(TcpStackError::Unknown(result)))
                 }
             }
@@ -239,13 +247,11 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
                     self.callback_context(socket,
                                           &mut delegate_socket);
                 (*inner_ssl_context).p_bio = &cb as *const _ as *mut _;
-                log::info!("about to ssl_read");
                 ssl_read(ssl_context.inner_mut(),
                          buffer.as_mut_ptr(),
                          buffer.len(),
                 )
             };
-            log::info!("ssl read ret {}", result);
 
             if result >= 0 {
                 return Ok(result as usize);
@@ -256,6 +262,7 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
                 ERR_SSL_WANT_WRITE => Err(nb::Error::Other(TcpStackError::WantWrite)),
                 ERR_SSL_ASYNC_IN_PROGRESS => Err(nb::Error::Other(TcpStackError::AsyncInProgress)),
                 ERR_SSL_CRYPTO_IN_PROGRESS => Err(nb::Error::Other(TcpStackError::CryptoInProgress)),
+                ERR_SSL_PEER_CLOSE_NOTIFY => Err(nb::Error::Other(TcpStackError::SocketNotOpen)),
                 _ => Err(nb::Error::Other(TcpStackError::Unknown(result)))
             }
         } else {
@@ -338,7 +345,6 @@ extern "C" fn send_f<DelegateStack: TcpStack>(ctx: *mut c_void, buf: *const c_uc
 }
 
 extern "C" fn recv_f<DelegateStack: TcpStack>(ctx: *mut c_void, buf: *mut c_uchar, len: usize) -> c_int {
-    log::info!("recv_f {}", len);
     unsafe {
         let mut ctx = &mut *(ctx as *mut CallbackContext<DelegateStack>);
         let mut actual_len = len;

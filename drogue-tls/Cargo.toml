@@ -7,14 +7,11 @@ license = "Apache-2.0"
 description = "A no_std mbedTLS crate"
 readme = "../README.md"
 repository = "https://github.com/drogue-iot/drogue-tls"
-documentation = "https://docs.rs/mbedtls/"
-keywords = ["MbedTLS","mbed","TLS","SSL","cryptography"]
 
 
 [dependencies]
 log = "0.4.11"
 cstr_core = "0.2.2"
-#generic-array = "0.14.4"
 heapless = "0.5.5"
 ## REMOVE THIS ONE
 cortex-m = "0.6.2"
@@ -25,7 +22,4 @@ drogue-ffi-compat = "0.1.0"
 [dependencies.drogue-tls-sys]
 version = "0.1.0"
 path = "../drogue-tls-sys"
-
-[build-dependencies]
-cc = "1.0.59"
 

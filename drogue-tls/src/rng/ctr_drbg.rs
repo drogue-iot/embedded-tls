@@ -31,8 +31,6 @@ impl CtrDrbgContext {
             )
         };
 
-        log::info!("seed result {}", result);
-
         if result == 0 {
             Ok(())
         } else {

@@ -26,13 +26,11 @@ extern "C" fn f_source(
     len: usize,
     olen: *mut usize,
 ) -> c_int {
-    log::info!("asking for entropy");
     for n in 0..len {
         unsafe {
             *output.add(n) = b'A';
         }
     }
     unsafe { *olen = len };
-    log::info!("provided {}", unsafe { *olen });
     0
 }

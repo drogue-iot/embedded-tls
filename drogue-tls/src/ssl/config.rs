@@ -65,7 +65,7 @@ impl SslConfig {
         };
 
         unsafe {
-            debug_set_threshold(3);
+            debug_set_threshold(4);
             ssl_conf_dbg(&mut cfg, Some(debug), 0 as _);
         }
 
@@ -77,8 +77,6 @@ impl SslConfig {
     }
 
     pub fn authmode(&mut self, auth_mode: Verify) -> &mut Self {
-        log::info!("set verify to {}", auth_mode as c_int);
-        //unsafe { ssl_conf_authmode(self.inner_mut(), auth_mode as c_int) };
         unsafe { ssl_conf_authmode(self.inner_mut(), SSL_VERIFY_NONE as c_int); }
         self
     }
@@ -117,13 +115,21 @@ unsafe extern "C" fn debug(
 ) {
     let file_name = to_str(&file_name);
     let message = to_dbg_str(message);
-    log::info!(
-        "{}:{}:{} - {}",
-        level,
-        file_name.unwrap(),
-        line,
-        message,
-    );
+    match level {
+        1 => {
+            log::error!("{}:{}:{}", file_name.unwrap(), line, message);
+        }
+        2 => {
+            log::debug!("{}:{}:{}", file_name.unwrap(), line, message);
+        }
+        3 => {
+            log::debug!("{}:{}:{}", file_name.unwrap(), line, message);
+        }
+        4 => {
+            log::trace!("{}:{}:{}", file_name.unwrap(), line, message);
+        }
+        _ => {}
+    }
 }
 
 use heapless::consts::U512;
