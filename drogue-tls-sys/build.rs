@@ -52,11 +52,12 @@ fn main() {
 
     let include_dir = PathBuf::from(&project_dir).join("include");
 
-    let dst = Config::new("vendor/mbedtls-2.24.0/")
-        .very_verbose(true)
+    let dst = Config::new("vendor/mbedtls/")
+        //.very_verbose(true)
         .always_configure(true)
         .define("ENABLE_TESTING", "OFF")
         .define("ENABLE_PROGRAMS", "OFF")
+        .cflag("-DMBEDTLS_CONFIG_FILE=\\\"drogue_config.h\\\"")
         .cflag(format!("-I{}", include_dir.display()))
         .cflag("--specs=nosys.specs")
         .build();
@@ -75,8 +76,9 @@ fn main() {
 
     let bindings = bindgen::Builder::default()
         .clang_arg("--verbose")
+        .clang_arg("-DMBEDTLS_CONFIG_FILE=\"drogue_config.h\"")
         .clang_arg("-I./include")
-        .clang_arg("-I./vendor/mbedtls-2.24.0/include")
+        .clang_arg("-I./vendor/mbedtls/include")
         .clang_arg("-target")
         .clang_arg(target)
         .header("src/wrapper.h")
@@ -86,16 +88,10 @@ fn main() {
         .derive_default(true)
         .default_enum_style(EnumVariation::Rust { non_exhaustive: false })
         .blacklist_item("__va_list")
-        //.blacklist_type("size_t")
         .size_t_is_usize(true)
         .prepend_enum_name(false)
         .use_core()
         .raw_line("use drogue_ffi_compat::va_list as __va_list;")
-        //.raw_line("#![allow(non_camel_case_types)]")
-        //.raw_line("#![allow(non_upper_case_globals)]")
-        //.raw_line("#![allow(non_snake_case)]")
-        //.raw_line("#![allow(dead_code)]")
-        //.parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Unable to generate bindings");
 
@@ -103,9 +99,6 @@ fn main() {
     bindings
         .write_to_file(PathBuf::from(&project_dir).join("src").join("bindings.rs"))
         .expect("Couldn't write bindings!");
-
-    //bindings.write_to_file("src/bindings.rs")
-    //.expect("Couldn't write bindings!");
 }
 
 #[cfg(not(feature = "generate"))]
