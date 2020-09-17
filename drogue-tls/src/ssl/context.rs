@@ -1,5 +1,5 @@
 use drogue_tls_sys::{
-    ssl_context, ssl_init, ssl_set_hostname, ERR_SSL_ALLOC_FAILED, ERR_SSL_BAD_INPUT_DATA,
+    ssl_context, ssl_init, ssl_set_hostname, ssl_setup, ERR_SSL_ALLOC_FAILED, ERR_SSL_BAD_INPUT_DATA,
 };
 
 use crate::ffi::CStr;
@@ -8,6 +8,7 @@ use core::ptr::slice_from_raw_parts;
 use core::str::from_utf8;
 use drogue_tls_sys::types::c_char;
 use heapless::consts::*;
+use crate::ssl::config::SslConfig;
 
 pub struct SslContext(ssl_context);
 
@@ -31,6 +32,18 @@ impl SslContext {
         let mut ctx = ssl_context::default();
         unsafe { ssl_init(&mut ctx) };
         Self(ctx)
+    }
+
+    pub fn setup(&mut self, config: &SslConfig) -> Result<(), ()> {
+        let result = unsafe {
+            ssl_setup(self.inner_mut(), config.inner())
+        };
+
+        if result != 0 {
+            Err(())
+        } else {
+            Ok(())
+        }
     }
 
     pub fn set_hostname(&mut self, hostname: &str) -> Result<(), HostnameError> {

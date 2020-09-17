@@ -1,24 +1,29 @@
-
+#[cfg(feature = "generate")]
 use cmake::Config;
+
+#[cfg(feature = "generate")]
 use std::{
     env,
     path::PathBuf,
 };
 
+#[cfg(feature = "generate")]
 extern crate bindgen;
+
+#[cfg(feature = "generate")]
 use bindgen::{
     EnumVariation,
-    callbacks::{ParseCallbacks, EnumVariantValue}
+    callbacks::{ParseCallbacks, EnumVariantValue},
 };
 
+#[cfg(feature = "generate")]
 #[derive(Debug)]
-pub struct Callbacks{
+pub struct Callbacks {}
 
-}
-
+#[cfg(feature = "generate")]
 impl ParseCallbacks for Callbacks {
     fn item_name(&self, original: &str) -> Option<String> {
-        if original.starts_with( "MBEDTLS_") || original.starts_with("mbedtls_") {
+        if original.starts_with("MBEDTLS_") || original.starts_with("mbedtls_") {
             Some(String::from(&original[8..original.len()]))
         } else {
             None
@@ -29,16 +34,17 @@ impl ParseCallbacks for Callbacks {
         &self,
         _enum_name: Option<&str>,
         original: &str,
-        _variant_value: EnumVariantValue
+        _variant_value: EnumVariantValue,
     ) -> Option<String> {
-        if original.starts_with( "MBEDTLS_") || original.starts_with("mbedtls_") {
-            Some( String::from(&original[8..original.len()]))
+        if original.starts_with("MBEDTLS_") || original.starts_with("mbedtls_") {
+            Some(String::from(&original[8..original.len()]))
         } else {
             None
         }
     }
 }
 
+#[cfg(feature = "generate")]
 fn main() {
     let target = env::var("TARGET").unwrap();
 
@@ -46,14 +52,14 @@ fn main() {
 
     let include_dir = PathBuf::from(&project_dir).join("include");
 
-    let dst = Config::new("vendor/mbedtls-2.23.0/")
-                     .very_verbose(true)
-                     .always_configure(true)
-                     .define("ENABLE_TESTING", "OFF")
-                     .define("ENABLE_PROGRAMS", "OFF")
-                     .cflag("--specs=nosys.specs")
-                     .cflag(format!("-I{}", include_dir.display()))
-                     .build();
+    let dst = Config::new("vendor/mbedtls-2.24.0/")
+        .very_verbose(true)
+        .always_configure(true)
+        .define("ENABLE_TESTING", "OFF")
+        .define("ENABLE_PROGRAMS", "OFF")
+        .cflag(format!("-I{}", include_dir.display()))
+        .cflag("--specs=nosys.specs")
+        .build();
 
     let search_dir = dst.parent().unwrap().join("out").join("build").join("library");
     //println!("cargo:rustc-link-search={}", _dst.parent().unwrap().display()); // the "-L" flag
@@ -65,24 +71,26 @@ fn main() {
     println!("cargo:rustc-link-lib=static=mbedtls");
 
 
-    let callbacks = Callbacks{};
+    let callbacks = Callbacks {};
 
     let bindings = bindgen::Builder::default()
         .clang_arg("--verbose")
-        .clang_arg("-I./vendor/mbedtls-2.23.0/include")
         .clang_arg("-I./include")
-        .clang_arg( "-target" )
-        .clang_arg( target )
+        .clang_arg("-I./vendor/mbedtls-2.24.0/include")
+        .clang_arg("-target")
+        .clang_arg(target)
         .header("src/wrapper.h")
         .ctypes_prefix("crate::types")
-        .parse_callbacks( Box::new( callbacks ) )
+        .parse_callbacks(Box::new(callbacks))
         .derive_copy(true)
         .derive_default(true)
-        .default_enum_style(EnumVariation::Rust{ non_exhaustive: false })
+        .default_enum_style(EnumVariation::Rust { non_exhaustive: false })
+        .blacklist_item("__va_list")
         //.blacklist_type("size_t")
         .size_t_is_usize(true)
         .prepend_enum_name(false)
         .use_core()
+        .raw_line("use drogue_ffi_compat::va_list as __va_list;")
         //.raw_line("#![allow(non_camel_case_types)]")
         //.raw_line("#![allow(non_upper_case_globals)]")
         //.raw_line("#![allow(non_snake_case)]")
@@ -96,8 +104,11 @@ fn main() {
         .write_to_file(PathBuf::from(&project_dir).join("src").join("bindings.rs"))
         .expect("Couldn't write bindings!");
 
-   //bindings.write_to_file("src/bindings.rs")
-        //.expect("Couldn't write bindings!");
-
+    //bindings.write_to_file("src/bindings.rs")
+    //.expect("Couldn't write bindings!");
 }
 
+#[cfg(not(feature = "generate"))]
+fn main() {
+    // nothing
+}

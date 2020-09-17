@@ -8,3 +8,4 @@ mod ffi;
 pub mod platform;
 pub mod rng;
 pub mod ssl;
+pub mod net;

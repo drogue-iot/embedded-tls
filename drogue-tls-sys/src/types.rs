@@ -32,6 +32,9 @@ pub mod raw_types {
     pub type c_longlong = i64;
     pub type c_ulonglong = u64;
 
+    pub type c_void = core::ffi::c_void;
+    pub type va_list = drogue_ffi_compat::va_list;
+    /*
     #[repr(u8)]
     pub enum c_void {
         #[doc(hidden)]
@@ -39,5 +42,6 @@ pub mod raw_types {
         #[doc(hidden)]
         __variant2,
     }
+     */
 }
 

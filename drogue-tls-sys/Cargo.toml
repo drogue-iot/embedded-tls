@@ -8,7 +8,12 @@ edition = "2018"
 name = "drogue_tls_sys"
 
 [dependencies]
+drogue-ffi-compat = "0.1.0"
 
 [build-dependencies]
-cmake = "0.1.44"
-bindgen = "0.53.1"
+cmake = { version = "0.1.44", optional=true }
+bindgen = { version = "0.53.1", optional=true }
+
+[features]
+default = []
+generate = ["cmake", "bindgen"]

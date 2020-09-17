@@ -138,12 +138,22 @@ fn split_hole(hole: HoleInfo, required_layout: Layout) -> Option<Allocation> {
     let required_size = required_layout.size();
     let required_align = required_layout.align();
 
+    if hole.size > 536940000 {
+        log::info!("******************** splitting hole size: {}", hole.size);
+        log::info!("-- required_size: {}", required_size);
+        log::info!("-- required_align: {}", required_align);
+    }
+
+
     let (aligned_addr, front_padding) = if hole.addr == align_up(hole.addr, required_align) {
         // hole has already the required alignment
         (hole.addr, None)
     } else {
         // the required alignment causes some padding before the allocation
         let aligned_addr = align_up(hole.addr + HoleList::min_size(), required_align);
+        if aligned_addr - hole.addr > 536940000 {
+            log::info!("A new hole {}", aligned_addr - hole.addr);
+        }
         (
             aligned_addr,
             Some(HoleInfo {
@@ -157,6 +167,9 @@ fn split_hole(hole: HoleInfo, required_layout: Layout) -> Option<Allocation> {
         if aligned_addr + required_size > hole.addr + hole.size {
             // hole is too small
             return None;
+        }
+        if hole.size - (aligned_addr - hole.addr) > 536940000 {
+            log::info!("B new hole {}", hole.size - (aligned_addr - hole.addr));
         }
         HoleInfo {
             addr: aligned_addr,
@@ -172,12 +185,18 @@ fn split_hole(hole: HoleInfo, required_layout: Layout) -> Option<Allocation> {
         return None;
     } else {
         // the hole is bigger than necessary, so there is some padding behind the allocation
+        if aligned_hole.size - required_size > 536940000 {
+            log::info!("C new hole {}", aligned_hole.size - required_size);
+        }
         Some(HoleInfo {
             addr: aligned_hole.addr + required_size,
             size: aligned_hole.size - required_size,
         })
     };
 
+    if required_size > 536940000 {
+        log::info!("allocating {}", required_size);
+    }
     Some(Allocation {
         info: HoleInfo {
             addr: aligned_hole.addr,
@@ -200,7 +219,12 @@ fn allocate_first_fit(mut previous: &mut Hole, layout: Layout) -> Result<Allocat
         let allocation: Option<Allocation> = previous
             .next
             .as_mut()
-            .and_then(|current| split_hole(current.info(), layout.clone()));
+            .and_then(|current| {
+                if current.info().size > 536940000 {
+                    log::info!("current {:?}", current.info());
+                }
+                split_hole(current.info(), layout.clone())
+            } );
         match allocation {
             Some(allocation) => {
                 // hole is big enough, so remove it from the list by updating the previous pointer
@@ -237,6 +261,9 @@ fn deallocate(mut hole: &mut Hole, addr: usize, mut size: usize) {
 
         // Each freed block must be handled by the previous hole in memory. Thus the freed
         // address must be always behind the current hole.
+        if ! (hole_addr + hole.size <= addr) {
+            log::warn!("about to panic, freeing {} from {}+{}", addr, hole_addr, hole.size);
+        }
         assert!(
             hole_addr + hole.size <= addr,
             "invalid deallocation (probably a double free)"
@@ -291,6 +318,9 @@ fn deallocate(mut hole: &mut Hole, addr: usize, mut size: usize) {
                 // before:  ___XXX_________    where X is this hole
                 // after:   ___XXX__FFFF___    where F is the freed block
 
+                if size > 536940000 {
+                    log::info!("new_hole {}", size);
+                }
                 let new_hole = Hole {
                     size,
                     next: hole.next.take(), // the reference to the Y block (if it exists)

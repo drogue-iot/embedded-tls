@@ -1,8 +1,6 @@
-use drogue_tls_sys::{
-    ctr_drbg_random, ssl_conf_dbg, ssl_conf_rng, ssl_config_defaults, SSL_VERIFY_NONE,
-    SSL_VERIFY_OPTIONAL, SSL_VERIFY_REQUIRED, SSL_VERIFY_UNSET,
-};
+use drogue_tls_sys::{ctr_drbg_random, ssl_conf_dbg, ssl_conf_rng, ssl_config_defaults, SSL_VERIFY_NONE, SSL_VERIFY_OPTIONAL, SSL_VERIFY_REQUIRED, SSL_VERIFY_UNSET, debug_set_threshold};
 
+#[derive(Copy, Clone)]
 pub enum Verify {
     None = SSL_VERIFY_NONE as isize,
     Optional = SSL_VERIFY_OPTIONAL as isize,
@@ -46,11 +44,11 @@ impl SslConfig {
         &mut self.0
     }
 
-    pub fn client(transport: Transport, preset: Preset) -> Result<Self, ()> {
+    pub(crate) fn client(transport: Transport, preset: Preset) -> Result<Self, ()> {
         Self::new(Endpoint::Client, transport, preset)
     }
 
-    pub fn server(transport: Transport, preset: Preset) -> Result<Self, ()> {
+    pub(crate) fn server(transport: Transport, preset: Preset) -> Result<Self, ()> {
         Self::new(Endpoint::Server, transport, preset)
     }
 
@@ -67,6 +65,7 @@ impl SslConfig {
         };
 
         unsafe {
+            debug_set_threshold(3);
             ssl_conf_dbg(&mut cfg, Some(debug), 0 as _);
         }
 
@@ -78,11 +77,13 @@ impl SslConfig {
     }
 
     pub fn authmode(&mut self, auth_mode: Verify) -> &mut Self {
-        unsafe { ssl_conf_authmode(self.inner_mut(), auth_mode as c_int) };
+        log::info!("set verify to {}", auth_mode as c_int);
+        //unsafe { ssl_conf_authmode(self.inner_mut(), auth_mode as c_int) };
+        unsafe { ssl_conf_authmode(self.inner_mut(), SSL_VERIFY_NONE as c_int); }
         self
     }
 
-    pub fn rng(&mut self, rng_ctx: &mut CtrDrbgContext) -> &mut Self {
+    pub(crate) fn rng(&mut self, rng_ctx: &mut CtrDrbgContext) -> &mut Self {
         unsafe {
             ssl_conf_rng(
                 self.inner_mut(),
@@ -96,9 +97,16 @@ impl SslConfig {
     pub fn free(mut self) {
         unsafe { ssl_config_free(&mut self.0) };
     }
+
+    pub fn new_context(&mut self) -> Result<SslContext,()> {
+        let mut context = SslContext::default();
+        context.setup(self)?;
+        Ok(context)
+    }
 }
 
 use core::str::{from_utf8, Utf8Error};
+use crate::ssl::context::SslContext;
 
 unsafe extern "C" fn debug(
     _context: *mut c_void,
@@ -108,21 +116,35 @@ unsafe extern "C" fn debug(
     message: *const c_char,
 ) {
     let file_name = to_str(&file_name);
-    let message = to_str(&message);
+    let message = to_dbg_str(message);
     log::info!(
         "{}:{}:{} - {}",
         level,
         file_name.unwrap(),
         line,
-        message.unwrap()
+        message,
     );
+}
+
+use heapless::consts::U512;
+
+fn to_dbg_str(str: *const c_char) -> heapless::String<U512> {
+    unsafe {
+        let len = strlen(str);
+        let str = core::slice::from_raw_parts(str, len);
+        let mut str_o = heapless::String::new();
+        for b in str.iter() {
+            str_o.push(*b as char);
+        }
+        str_o
+    }
 }
 
 fn to_str(str: &*const c_char) -> Result<&str, Utf8Error> {
     unsafe {
         let len = strlen(*str);
-        let str = *str as *const u8;
-        let str = core::slice::from_raw_parts(str, len);
+        //let str = *str as *const u8;
+        let str = core::slice::from_raw_parts(*str, len);
         from_utf8(str)
     }
 }
