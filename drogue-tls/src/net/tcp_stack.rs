@@ -1,29 +1,55 @@
-use drogue_network::{TcpStack, SocketAddr, Mode};
+use drogue_network::tcp::{TcpStack, Mode, TcpError, TcpImplError};
+use drogue_network::addr::HostSocketAddr;
 use crate::ssl::config::SslConfig;
 use crate::ssl::context::SslContext;
-use core::cell::{RefCell, Cell};
-
-use heapless::{
-    Vec,
-    consts::U16,
-};
+use core::cell::RefCell;
 
 #[derive(Debug)]
-pub enum TcpStackError<E> {
+pub enum TlsTcpStackError {
     UnableToCreateContext,
-    NoAvailableSockets,
-    SocketNotOpen,
     WantRead,
     WantWrite,
     AsyncInProgress,
     CryptoInProgress,
+    PeerClose,
     Unknown(i32),
-    Other(E),
+    Tcp(TcpError),
 }
 
-impl<E> From<E> for TcpStackError<E> {
-    fn from(error: E) -> Self {
-        TcpStackError::Other(error)
+impl From<TcpError> for TlsTcpStackError {
+    fn from(e: TcpError) -> Self {
+        TlsTcpStackError::Tcp(e)
+    }
+}
+
+impl Into<TcpError> for TlsTcpStackError {
+    fn into(self) -> TcpError {
+        match self {
+            TlsTcpStackError::UnableToCreateContext => {
+                TcpError::Impl(TcpImplError::InitializationError)
+            }
+            TlsTcpStackError::PeerClose => {
+                TcpError::SocketNotOpen
+            }
+            TlsTcpStackError::WantRead => {
+                TcpError::Busy
+            }
+            TlsTcpStackError::WantWrite => {
+                TcpError::Busy
+            }
+            TlsTcpStackError::AsyncInProgress => {
+                TcpError::Busy
+            }
+            TlsTcpStackError::CryptoInProgress => {
+                TcpError::Busy
+            }
+            TlsTcpStackError::Unknown(_) => {
+                TcpError::Impl(TcpImplError::Unknown)
+            }
+            TlsTcpStackError::Tcp(tcp) => {
+                tcp
+            }
+        }
     }
 }
 
@@ -34,7 +60,7 @@ pub struct SslTcpStack<'stack, DelegateStack: TcpStack> {
 }
 
 impl<'stack, DelegateStack: TcpStack> SslTcpStack<'stack, DelegateStack> {
-    pub fn new(mut config: SslConfig, delegate: &'stack DelegateStack) -> Self {
+    pub fn new(config: SslConfig, delegate: &'stack DelegateStack) -> Self {
         Self {
             config: RefCell::new(config),
             delegate,
@@ -42,40 +68,32 @@ impl<'stack, DelegateStack: TcpStack> SslTcpStack<'stack, DelegateStack> {
         }
     }
 
-    fn write_through(&self, socket: usize, delegate_socket: &mut DelegateStack::TcpSocket, buf: &[u8]) -> nb::Result<usize, TcpStackError<DelegateStack::Error>> {
-        match self.delegate.write(delegate_socket, buf) {
-            Ok(len) => {
-                Ok(len)
-            }
-            Err(e) => {
+    fn write_through(&self, delegate_socket: &mut DelegateStack::TcpSocket, buf: &[u8]) -> nb::Result<usize, TlsTcpStackError> {
+        self.delegate.write(delegate_socket, buf)
+            .map_err(|e| {
                 match e {
-                    Error::Other(o) => {
-                        Err(nb::Error::Other(TcpStackError::Other(o)))
+                    nb::Error::Other(inner) => {
+                        Error::from(TlsTcpStackError::from(inner.into()))
                     }
-                    Error::WouldBlock => {
-                        Err(nb::Error::WouldBlock)
+                    nb::Error::WouldBlock => {
+                        Error::WouldBlock
                     }
                 }
-            }
-        }
+            })
     }
 
-    fn read_through(&self, socket: usize, delegate_socket: &mut DelegateStack::TcpSocket, buf: &mut [u8]) -> nb::Result<usize, TcpStackError<DelegateStack::Error>> {
-        match self.delegate.read(delegate_socket, buf) {
-            Ok(len) => {
-                Ok(len)
-            }
-            Err(e) => {
+    fn read_through(&self, delegate_socket: &mut DelegateStack::TcpSocket, buf: &mut [u8]) -> nb::Result<usize, TlsTcpStackError> {
+        self.delegate.read(delegate_socket, buf)
+            .map_err(|e| {
                 match e {
-                    Error::Other(o) => {
-                        Err(nb::Error::Other(TcpStackError::Other(o)))
+                    nb::Error::Other(inner) => {
+                        nb::Error::Other(TlsTcpStackError::from(inner.into()))
                     }
-                    Error::WouldBlock => {
-                        Err(nb::Error::WouldBlock)
+                    nb::Error::WouldBlock => {
+                        Error::WouldBlock
                     }
                 }
-            }
-        }
+            })
     }
 
     fn callback_context<'a>(&self, socket: &SslTcpSocket, delegate_socket: &'a mut DelegateStack::TcpSocket) -> CallbackContext<'a, DelegateStack> {
@@ -135,11 +153,10 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
         DelegateStack: TcpStack,
 {
     type TcpSocket = SslTcpSocket;
-    type Error = TcpStackError<DelegateStack::Error>;
+    type Error = TlsTcpStackError;
 
     fn open(&self, mode: Mode) -> Result<Self::TcpSocket, Self::Error> {
-        let mut ssl_context = self.config.borrow_mut().new_context().map_err(|_| TcpStackError::UnableToCreateContext)?;
-        ssl_context.set_hostname("rsa2048.badssl.com");
+        let ssl_context = self.config.borrow_mut().new_context().map_err(|_| TlsTcpStackError::UnableToCreateContext)?;
 
         if let Some((index, socket)) = self.sockets
             .borrow_mut()
@@ -147,25 +164,29 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
             .enumerate()
             .find(|(_, e)| matches!( *e.ssl_context.borrow(), None)) {
             let ssl_socket = SslTcpSocket(index);
-            let delegate_socket = self.delegate.open(mode).map_err(|e| TcpStackError::Other(e))?;
+            let delegate_socket = self.delegate.open(mode).map_err(|e| TlsTcpStackError::from(e.into()))?;
 
             socket.delegate_socket.replace(delegate_socket);
             socket.ssl_context.borrow_mut().replace(ssl_context);
             Ok(ssl_socket)
         } else {
-            Err(TcpStackError::NoAvailableSockets)
+            Err(TlsTcpStackError::Tcp(TcpError::NoAvailableSockets))
         }
     }
 
-    fn connect(&self, socket: Self::TcpSocket, remote: SocketAddr) -> Result<Self::TcpSocket, Self::Error> {
+    fn connect(&self, socket: Self::TcpSocket, remote: HostSocketAddr) -> Result<Self::TcpSocket, Self::Error> {
         let socket_state = &mut self.sockets.borrow_mut()[socket.0];
         let result = if let Some(ref mut ssl_context) = *socket_state.ssl_context.borrow_mut() {
+            if let Some(hostname) = remote.addr().hostname() {
+                ssl_context.set_hostname(hostname.as_ref()).map_err(|_| TlsTcpStackError::Tcp(TcpError::Impl(TcpImplError::InitializationError)))?;
+            }
+
             let delegate_socket = self.delegate.connect(
                 socket_state
                     .delegate_socket
                     .take()
                     .unwrap(),
-                remote)?;
+                remote).map_err(|e| TlsTcpStackError::from(e.into()))?;
 
             socket_state.delegate_socket.replace(delegate_socket);
             //let bio_ptr = &socket as *const _ as *mut c_void;
@@ -183,7 +204,7 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
 
             Ok(socket)
         } else {
-            Err(TcpStackError::SocketNotOpen)
+            Err(Tcp(TcpError::SocketNotOpen))
         };
 
         result
@@ -196,12 +217,12 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
                 .delegate_socket
                 .as_ref()
                 .unwrap()
-        ).map_err(|e| TcpStackError::Other(e))
+        ).map_err(|e| TlsTcpStackError::from(e.into()))
     }
 
     fn write(&self, socket: &mut Self::TcpSocket, buffer: &[u8]) -> nb::Result<usize, Self::Error> {
         let mut sockets = self.sockets.borrow_mut();
-        let mut socket_state = &mut sockets[socket.0];
+        let socket_state = &mut sockets[socket.0];
         let result = if let Some(ref mut ssl_context) = *socket_state.ssl_context.borrow_mut() {
             let inner_ssl_context = ssl_context.inner_mut();
             let result = unsafe {
@@ -221,16 +242,16 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
             }
 
             match result {
-                ERR_SSL_WANT_READ => Err(nb::Error::from(TcpStackError::WantRead)),
-                ERR_SSL_WANT_WRITE => Err(nb::Error::from(TcpStackError::WantWrite)),
-                ERR_SSL_ASYNC_IN_PROGRESS => Err(nb::Error::from(TcpStackError::AsyncInProgress)),
-                ERR_SSL_CRYPTO_IN_PROGRESS => Err(nb::Error::from(TcpStackError::CryptoInProgress)),
+                ERR_SSL_WANT_READ => Err(nb::Error::from(TlsTcpStackError::WantRead)),
+                ERR_SSL_WANT_WRITE => Err(nb::Error::from(TlsTcpStackError::WantWrite)),
+                ERR_SSL_ASYNC_IN_PROGRESS => Err(nb::Error::from(TlsTcpStackError::AsyncInProgress)),
+                ERR_SSL_CRYPTO_IN_PROGRESS => Err(nb::Error::from(TlsTcpStackError::CryptoInProgress)),
                 _ => {
-                    Err(nb::Error::from(TcpStackError::Unknown(result)))
+                    Err(nb::Error::from(TlsTcpStackError::Unknown(result)))
                 }
             }
         } else {
-            Err(nb::Error::from(TcpStackError::SocketNotOpen))
+            Err(nb::Error::from(TlsTcpStackError::from(TcpError::SocketNotOpen)))
         };
 
         result
@@ -258,15 +279,15 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
             }
 
             match result {
-                ERR_SSL_WANT_READ => Err(nb::Error::Other(TcpStackError::WantRead)),
-                ERR_SSL_WANT_WRITE => Err(nb::Error::Other(TcpStackError::WantWrite)),
-                ERR_SSL_ASYNC_IN_PROGRESS => Err(nb::Error::Other(TcpStackError::AsyncInProgress)),
-                ERR_SSL_CRYPTO_IN_PROGRESS => Err(nb::Error::Other(TcpStackError::CryptoInProgress)),
-                ERR_SSL_PEER_CLOSE_NOTIFY => Err(nb::Error::Other(TcpStackError::SocketNotOpen)),
-                _ => Err(nb::Error::Other(TcpStackError::Unknown(result)))
+                ERR_SSL_WANT_READ => Err(nb::Error::Other(TlsTcpStackError::WantRead)),
+                ERR_SSL_WANT_WRITE => Err(nb::Error::Other(TlsTcpStackError::WantWrite)),
+                ERR_SSL_ASYNC_IN_PROGRESS => Err(nb::Error::Other(TlsTcpStackError::AsyncInProgress)),
+                ERR_SSL_CRYPTO_IN_PROGRESS => Err(nb::Error::Other(TlsTcpStackError::CryptoInProgress)),
+                ERR_SSL_PEER_CLOSE_NOTIFY => Err(nb::Error::Other(TlsTcpStackError::PeerClose)),
+                _ => Err(nb::Error::Other(TlsTcpStackError::Unknown(result)))
             }
         } else {
-            Err(nb::Error::from(TcpStackError::SocketNotOpen))
+            Err(nb::Error::from(TlsTcpStackError::from(TcpError::SocketNotOpen)))
         };
 
         result
@@ -276,12 +297,15 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
         let mut sockets = self.sockets.borrow_mut();
         let socket_state = &mut sockets[socket.0];
 
-        let result = self.delegate.close(
+        self.delegate.close(
             socket_state
                 .delegate_socket
                 .take()
                 .unwrap()
-        ).map_err(|e| TcpStackError::Other(e));
+        ).map_err(|e| {
+            //let tcpe = e.into();
+            TlsTcpStackError::from(e.into())
+        })?;
 
         let mut opt = socket_state.ssl_context.borrow_mut();
         match *opt {
@@ -293,7 +317,7 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
                 opt.take();
             }
         }
-        result
+        Ok(())
     }
 }
 
@@ -301,11 +325,10 @@ use drogue_tls_sys::types::{
     c_void,
     c_int,
 };
-use core::{slice, fmt};
+use core::slice;
 use nb::Error;
-use core::intrinsics::transmute;
-use core::fmt::{Debug, Formatter};
-use core::borrow::BorrowMut;
+use core::fmt::Debug;
+use crate::net::tcp_stack::TlsTcpStackError::Tcp;
 
 
 struct Bio<'a, DelegateStack: TcpStack> {
@@ -315,13 +338,12 @@ struct Bio<'a, DelegateStack: TcpStack> {
 
 extern "C" fn send_f<DelegateStack: TcpStack>(ctx: *mut c_void, buf: *const c_uchar, len: usize) -> c_int {
     unsafe {
-        let mut ctx = &mut *(ctx as *mut CallbackContext<DelegateStack>);
+        let ctx = &mut *(ctx as *mut CallbackContext<DelegateStack>);
         let stack = &*(ctx.stack as *const _ as *const SslTcpStack<DelegateStack>);
 
         let slice = slice::from_raw_parts(buf, len);
 
         let result = stack.write_through(
-            ctx.socket,
             &mut ctx.delegate_socket,
             slice,
         );
@@ -346,17 +368,16 @@ extern "C" fn send_f<DelegateStack: TcpStack>(ctx: *mut c_void, buf: *const c_uc
 
 extern "C" fn recv_f<DelegateStack: TcpStack>(ctx: *mut c_void, buf: *mut c_uchar, len: usize) -> c_int {
     unsafe {
-        let mut ctx = &mut *(ctx as *mut CallbackContext<DelegateStack>);
-        let mut actual_len = len;
-        if actual_len > 500 {
-            actual_len = 500;
-        }
+        let ctx = &mut *(ctx as *mut CallbackContext<DelegateStack>);
+        //let mut actual_len = len;
+        //if actual_len > 500 {
+            //actual_len = 500;
+        //}
         let stack = &*(ctx.stack as *const _ as *const SslTcpStack<DelegateStack>);
 
-        let slice = slice::from_raw_parts_mut(buf, actual_len);
+        let slice = slice::from_raw_parts_mut(buf, len);
 
         let result = stack.read_through(
-            ctx.socket,
             &mut ctx.delegate_socket,
             slice,
         );

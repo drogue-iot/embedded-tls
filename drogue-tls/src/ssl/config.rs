@@ -77,7 +77,7 @@ impl SslConfig {
     }
 
     pub fn authmode(&mut self, auth_mode: Verify) -> &mut Self {
-        unsafe { ssl_conf_authmode(self.inner_mut(), SSL_VERIFY_NONE as c_int); }
+        unsafe { ssl_conf_authmode(self.inner_mut(), auth_mode as c_int); }
         self
     }
 
@@ -113,20 +113,20 @@ unsafe extern "C" fn debug(
     line: c_int,
     message: *const c_char,
 ) {
-    let file_name = to_str(&file_name);
+    let file_name = to_str(&file_name).unwrap();
     let message = to_dbg_str(message);
     match level {
         1 => {
-            log::error!("{}:{}:{}", file_name.unwrap(), line, message);
+            log::error!("{}:{}:{}", file_name, line, message);
         }
         2 => {
-            log::debug!("{}:{}:{}", file_name.unwrap(), line, message);
+            log::debug!("{}:{}:{}", file_name, line, message);
         }
         3 => {
-            log::debug!("{}:{}:{}", file_name.unwrap(), line, message);
+            log::debug!("{}:{}:{}", file_name, line, message);
         }
         4 => {
-            log::trace!("{}:{}:{}", file_name.unwrap(), line, message);
+            log::trace!("{}:{}:{}", file_name, line, message);
         }
         _ => {}
     }
@@ -140,7 +140,7 @@ fn to_dbg_str(str: *const c_char) -> heapless::String<U512> {
         let str = core::slice::from_raw_parts(str, len);
         let mut str_o = heapless::String::new();
         for b in str.iter() {
-            str_o.push(*b as char);
+            str_o.push(*b as char).unwrap();
         }
         str_o
     }

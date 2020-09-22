@@ -8,9 +8,7 @@ use drogue_tls_sys::types::{c_char, c_int};
 use core::ffi::c_void;
 use crate::entropy::EntropyContext;
 use crate::rng::ctr_drbg::CtrDrbgContext;
-use crate::ssl::context::SslContext;
-use crate::ssl::config::{SslConfig, Endpoint, Transport, Preset};
-use core::str::from_utf8;
+use crate::ssl::config::{SslConfig, Transport, Preset};
 
 use drogue_ffi_compat::{vsnprintf, snprintf};
 use core::mem::size_of;
@@ -34,7 +32,7 @@ impl SslPlatform {
         unsafe {
             platform_set_vsnprintf(Some(vsnprintf));
             platform_set_snprintf(Some(snprintf));
-            if let Some(_) = ALLOCATOR {
+            if ALLOCATOR.is_some() {
                 // Allocator already setup, only a singleton of the SslPlatform
                 // is allowed, someone else has it.
                 return None;
@@ -102,7 +100,7 @@ extern "C" fn platform_calloc_f(count: usize, size: usize) -> *mut c_void {
             *ptr = layout.align();
             ptr = ptr.add(1);
             let mut zeroing = ptr as *mut u8;
-            for n in 0..requested_size {
+            for _ in 0..requested_size {
                 zeroing.write(0);
                 zeroing = zeroing.add(1);
             }
@@ -132,23 +130,3 @@ extern "C" fn platform_free_f(ptr: *mut c_void) {
     }
 }
 
-/*
-#[no_mangle]
-extern "C" fn platform_vsnprintf(
-    s: *mut c_char,
-    n: usize,
-    format: *const c_char,
-    arg: va_list,
-) -> c_int {
-    let format_len = strlen(format);
-    unsafe {
-        let str = core::slice::from_raw_parts(format, format_len);
-        for (index, b) in str.iter().enumerate() {
-            *(s.add(index)) = *b;
-        }
-        *s.add(format_len) = 0;
-        let s_slice = core::slice::from_raw_parts_mut(s, format_len);
-        format_len as c_int
-    }
-}
- */

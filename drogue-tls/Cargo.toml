@@ -15,7 +15,7 @@ cstr_core = "0.2.2"
 heapless = "0.5.5"
 ## REMOVE THIS ONE
 cortex-m = "0.6.2"
-drogue-network = "0.1.0"
+drogue-network = { version = "0.2.0", path = "../../drogue-network" }
 nb = "0.1.2"
 drogue-ffi-compat = "0.1.0"
 
