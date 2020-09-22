@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "drogue-tls",
+    "drogue-tls-sys",
+]

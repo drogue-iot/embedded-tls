@@ -1,17 +1,14 @@
 use cmake::Config;
 
-use std::{
-    env,
-    path::PathBuf,
-};
+use std::{env, path::PathBuf};
 
 #[cfg(feature = "bindgen")]
 extern crate bindgen;
 
 #[cfg(feature = "bindgen")]
 use bindgen::{
+    callbacks::{EnumVariantValue, ParseCallbacks},
     EnumVariation,
-    callbacks::{ParseCallbacks, EnumVariantValue},
 };
 
 #[cfg(feature = "bindgen")]
@@ -52,20 +49,27 @@ fn main() {
         .always_configure(true)
         .define("ENABLE_TESTING", "OFF")
         .define("ENABLE_PROGRAMS", "OFF")
+        .define("CMAKE_TRY_COMPILE_TARGET_TYPE", "STATIC_LIBRARY")
         .cflag("-DMBEDTLS_CONFIG_FILE=\\\"drogue_config.h\\\"")
         .cflag(format!("-I{}", include_dir.display()))
-        .cflag("--specs=nosys.specs")
         .build();
 
-    let search_dir = dst.parent().unwrap().join("out").join("build").join("library");
+    let search_dir = dst
+        .parent()
+        .unwrap()
+        .join("out")
+        .join("build")
+        .join("library");
     //println!("cargo:rustc-link-search={}", _dst.parent().unwrap().display()); // the "-L" flag
-    println!("cargo:rustc-link-search={}", search_dir.as_path().to_str().unwrap());
+    println!(
+        "cargo:rustc-link-search={}",
+        search_dir.as_path().to_str().unwrap()
+    );
 
     //println!("cargo:rustc-link-lib=tls");
     println!("cargo:rustc-link-lib=static=mbedx509");
     println!("cargo:rustc-link-lib=static=mbedcrypto");
     println!("cargo:rustc-link-lib=static=mbedtls");
-
 
     #[cfg(feature = "bindgen")]
     do_bindgen();
@@ -87,7 +91,9 @@ fn do_bindgen() {
         .parse_callbacks(Box::new(callbacks))
         .derive_copy(true)
         .derive_default(true)
-        .default_enum_style(EnumVariation::Rust { non_exhaustive: false })
+        .default_enum_style(EnumVariation::Rust {
+            non_exhaustive: false,
+        })
         .blacklist_item("__va_list")
         .size_t_is_usize(true)
         .prepend_enum_name(false)
@@ -101,4 +107,3 @@ fn do_bindgen() {
         .write_to_file(PathBuf::from(&project_dir).join("src").join("bindings.rs"))
         .expect("Couldn't write bindings!");
 }
-
