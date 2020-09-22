@@ -52,3 +52,17 @@ Clang 10 is required to re-generate the bindings.  This is not done during a nor
 ```shell
 cargo build --features=generate
 ```
+
+### Fedora
+
+You will need to install:
+
+~~~shell
+sudo dnf install clang lld
+~~~
+
+When you build, use:
+
+~~~
+env CC=/usr/bin/clang cargo embed --release 
+~~~
