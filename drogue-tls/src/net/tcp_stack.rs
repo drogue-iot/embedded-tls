@@ -1,8 +1,9 @@
 use drogue_network::tcp::{TcpStack, Mode, TcpError, TcpImplError};
-use drogue_network::addr::HostSocketAddr;
+use drogue_network::addr::{HostSocketAddr, IpAddr, HostAddr};
 use crate::ssl::config::SslConfig;
 use crate::ssl::context::SslContext;
 use core::cell::RefCell;
+use heapless::consts;
 
 #[derive(Debug)]
 pub enum TlsTcpStackError {
@@ -53,19 +54,27 @@ impl Into<TcpError> for TlsTcpStackError {
     }
 }
 
-pub struct SslTcpStack<'stack, DelegateStack: TcpStack> {
+pub struct SslTcpStack<DelegateStack: TcpStack> {
     config: RefCell<SslConfig>,
-    delegate: &'stack DelegateStack,
+    delegate: DelegateStack,
     sockets: RefCell<[SslTcpSocketState<DelegateStack>; 16]>,
 }
 
-impl<'stack, DelegateStack: TcpStack> SslTcpStack<'stack, DelegateStack> {
-    pub fn new(config: SslConfig, delegate: &'stack DelegateStack) -> Self {
+impl<DelegateStack: TcpStack> SslTcpStack<DelegateStack> {
+    pub fn new(config: SslConfig, delegate: DelegateStack) -> Self {
         Self {
             config: RefCell::new(config),
             delegate,
             sockets: RefCell::new(Default::default()),
         }
+    }
+
+    pub fn delegate(&self) -> &DelegateStack {
+        &self.delegate
+    }
+
+    pub fn delegate_mut(&mut self) -> &mut DelegateStack {
+        &mut self.delegate
     }
 
     fn write_through(&self, delegate_socket: &mut DelegateStack::TcpSocket, buf: &[u8]) -> nb::Result<usize, TlsTcpStackError> {
@@ -105,9 +114,25 @@ impl<'stack, DelegateStack: TcpStack> SslTcpStack<'stack, DelegateStack> {
     }
 }
 
-impl<'stack, DelegateStack: TcpStack> Drop for SslTcpStack<'stack, DelegateStack> {
+impl<DelegateStack: TcpStack> Drop for SslTcpStack<DelegateStack> {
     fn drop(&mut self) {
         unimplemented!()
+    }
+}
+
+/// If the delegate stack implements Dns, then so do we.
+impl <D> Dns for SslTcpStack<D>
+where
+    D:TcpStack + Dns
+{
+    type Error = <D as Dns>::Error;
+
+    fn gethostbyname(&self, hostname: &str, addr_type: AddrType) -> Result<HostAddr, Self::Error> {
+        self.delegate.gethostbyname(hostname, addr_type)
+    }
+
+    fn gethostbyaddr(&self, addr: IpAddr) -> Result<String<consts::U256>, Self::Error> {
+        self.delegate.gethostbyaddr(addr)
     }
 }
 
@@ -148,7 +173,7 @@ use drogue_tls_sys::{
 
 use drogue_tls_sys::types::c_uchar;
 
-impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
+impl<DelegateStack> TcpStack for SslTcpStack<DelegateStack>
     where
         DelegateStack: TcpStack,
 {
@@ -329,6 +354,9 @@ use core::slice;
 use nb::Error;
 use core::fmt::Debug;
 use crate::net::tcp_stack::TlsTcpStackError::Tcp;
+use drogue_network::dns::{Dns, AddrType};
+use core::ops::Deref;
+use heapless::String;
 
 
 struct Bio<'a, DelegateStack: TcpStack> {
