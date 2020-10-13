@@ -297,15 +297,7 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
         let mut sockets = self.sockets.borrow_mut();
         let socket_state = &mut sockets[socket.0];
 
-        self.delegate.close(
-            socket_state
-                .delegate_socket
-                .take()
-                .unwrap()
-        ).map_err(|e| {
-            //let tcpe = e.into();
-            TlsTcpStackError::from(e.into())
-        })?;
+        // close local resources first
 
         let mut opt = socket_state.ssl_context.borrow_mut();
         match *opt {
@@ -317,6 +309,21 @@ impl<'stack, DelegateStack> TcpStack for SslTcpStack<'stack, DelegateStack>
                 opt.take();
             }
         }
+
+        // try delegated resources next
+
+        self.delegate.close(
+            socket_state
+                .delegate_socket
+                .take()
+                .unwrap()
+        ).map_err(|e| {
+            //let tcpe = e.into();
+            TlsTcpStackError::from(e.into())
+        })?;
+
+        // done
+
         Ok(())
     }
 }
