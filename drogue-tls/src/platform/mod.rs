@@ -106,6 +106,7 @@ extern "C" fn platform_calloc_f(count: usize, size: usize) -> *mut c_void {
             }
             ptr as *mut c_void
         } else {
+            log::error!("No allocator");
             core::ptr::null_mut::<c_void>()
         }
     }
