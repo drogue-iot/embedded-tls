@@ -20,3 +20,18 @@ bindgen = { version = "0.53.1", optional=true }
 [features]
 default = []
 generate = ["bindgen"]
+
+# mirror features from drogue-tls
+fewer-tables = []
+
+out-buffer-1k = []
+out-buffer-2k = []
+out-buffer-4k = []
+out-buffer-8k = []
+out-buffer-16k = []
+
+in-buffer-1k = []
+in-buffer-2k = []
+in-buffer-4k = []
+in-buffer-8k = []
+in-buffer-16k = []
