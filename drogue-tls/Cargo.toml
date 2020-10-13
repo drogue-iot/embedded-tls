@@ -8,7 +8,6 @@ description = "A no_std mbedTLS crate"
 readme = "../README.md"
 repository = "https://github.com/drogue-iot/drogue-tls"
 
-
 [dependencies]
 log = "0.4.11"
 cstr_core = "0.2.2"
@@ -18,11 +17,39 @@ cortex-m = "0.6.2"
 drogue-network = { version = "0.2.0" }
 nb = "0.1.2"
 drogue-ffi-compat = "0.1.0"
+drogue-tls-sys = "0.1.0"
 
-[dependencies.drogue-tls-sys]
-version = "0.1.0"
-path = "../drogue-tls-sys"
+[features]
+
+# Maps to the `MBEDTLS_AES_FEWER_TABLES` flag
+fewer-tables = [ "drogue-tls-sys/fewer-tables" ]
+
+# Configure the outbound buffer size
+
+out-buffer-1k = ["drogue-tls-sys/out-buffer-1k"]
+out-buffer-2k = ["drogue-tls-sys/out-buffer-2k"]
+out-buffer-4k = ["drogue-tls-sys/out-buffer-4k"]
+out-buffer-8k = ["drogue-tls-sys/out-buffer-8k"]
+out-buffer-16k = ["drogue-tls-sys/out-buffer-16k"]
+
+# Configure the inbound buffer size
+
+# *Note:* By default a TLS client must be capable of receiving fragments of 2^14 bytes (16KiB).
+# While it is possible to choose a smaller sending buffer, the server side will still try to send
+# fragments larger than the choose inbound buffer, which this client then can no longer handle.
+#
+# It is possible to communicate remote peer the wish to reduce the maximum fragment length, when connecting
+# (RFC6066 - Section 4: https://tools.ietf.org/html/rfc6066#section-4). Whever this extension may
+# be unsupported by the remote peer.
+
+in-buffer-1k = ["drogue-tls-sys/in-buffer-1k"]
+in-buffer-2k = ["drogue-tls-sys/in-buffer-2k"]
+in-buffer-4k = ["drogue-tls-sys/in-buffer-4k"]
+in-buffer-8k = ["drogue-tls-sys/in-buffer-8k"]
+in-buffer-16k = ["drogue-tls-sys/in-buffer-16k"]
 
 [patch.crates-io]
+#drogue-tls-sys = { path = "../drogue-tls-sys" }
+
 #drogue-network = { path = "../../drogue-network" }
 #drogue-network = { git = "https://github.com/drogue-iot/drogue-network.git" }
