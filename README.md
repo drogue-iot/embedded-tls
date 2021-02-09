@@ -61,8 +61,9 @@ You will need to install:
 sudo dnf install clang lld
 ~~~
 
-When you build, use:
+When you build, use the clang compiler and specify your desired target
+platform, like so:
 
 ~~~
-env CC=/usr/bin/clang cargo embed --release 
+env CC=/usr/bin/clang cargo build --release --target thumbv7em-none-eabi
 ~~~
