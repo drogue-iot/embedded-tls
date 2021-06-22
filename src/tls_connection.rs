@@ -25,7 +25,7 @@ enum State {
     Encrypted,
 }
 
-pub struct TlsConnection<RNG, Socket, CipherSuite, TxBufLen, RxBufLen>
+pub struct TlsConnection<'a, RNG, Socket, CipherSuite, TxBufLen, RxBufLen>
 where
     RNG: CryptoRng + RngCore + Copy + 'static,
     Socket: AsyncRead + AsyncWrite + 'static,
@@ -34,7 +34,7 @@ where
     RxBufLen: ArrayLength<u8>,
 {
     delegate: Socket,
-    config: &'static Config<RNG, CipherSuite>,
+    config: &'a Config<RNG, CipherSuite>,
     state: State,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     tx_buf: Vec<u8, TxBufLen>,
@@ -42,8 +42,8 @@ where
     queue: Queue<ServerRecord<<CipherSuite::Hash as FixedOutput>::OutputSize>, U4>,
 }
 
-impl<RNG, Socket, CipherSuite, TxBufLen, RxBufLen>
-    TlsConnection<RNG, Socket, CipherSuite, TxBufLen, RxBufLen>
+impl<'a, RNG, Socket, CipherSuite, TxBufLen, RxBufLen>
+    TlsConnection<'a, RNG, Socket, CipherSuite, TxBufLen, RxBufLen>
 where
     RNG: CryptoRng + RngCore + Copy + 'static,
     Socket: AsyncRead + AsyncWrite + 'static,
@@ -51,7 +51,7 @@ where
     TxBufLen: ArrayLength<u8>,
     RxBufLen: ArrayLength<u8>,
 {
-    pub fn new(config: &'static Config<RNG, CipherSuite>, delegate: Socket) -> Self {
+    pub fn new(config: &'a Config<RNG, CipherSuite>, delegate: Socket) -> Self {
         Self {
             delegate,
             config,

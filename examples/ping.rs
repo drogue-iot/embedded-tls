@@ -2,15 +2,11 @@
 #![allow(incomplete_features)]
 #![feature(generic_associated_types)]
 #![feature(min_type_alias_impl_trait)]
-#![feature(impl_trait_in_bindings)]
-#![feature(type_alias_impl_trait)]
-#![feature(concat_idents)]
 
 use core::future::Future;
 use drogue_tls::{config::*, tls_connection::*, AsyncRead, AsyncWrite, TlsError};
 use heapless::consts;
 use rand::rngs::OsRng;
-use rand_core::{CryptoRng, RngCore};
 use std::error::Error;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -18,19 +14,13 @@ use tokio::time::{sleep, Duration};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
-        .format_timestamp_nanos()
-        .init();
-
-    //    let mut stream = TcpStream::connect("http.sandbox.drogue.cloud:443").await?;
     let mut stream = TcpStream::connect("127.0.0.1:12345").await?;
     let socket = Socket { stream };
 
     log::info!("Connected");
-    let tlsConfig: Config<OsRng, Aes128GcmSha256> = Config::new(OsRng);
+    let tls_config: Config<OsRng, Aes128GcmSha256> = Config::new(OsRng);
     let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, consts::U32768, consts::U32768> =
-        TlsConnection::new(unsafe { core::mem::transmute(&tlsConfig) }, socket);
+        TlsConnection::new(&tls_config, socket);
     let result = tls.handshake().await;
     match result {
         Ok(_) => {
