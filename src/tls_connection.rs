@@ -63,7 +63,6 @@ where
         &self,
         buf: &mut Vec<u8, N>,
     ) -> Result<ApplicationData, TlsError> {
-        //unimplemented!()
         let client_key = self.key_schedule.get_client_key();
         let nonce = &self.key_schedule.get_client_nonce();
         info!("encrypt key {:02x?}", client_key);
@@ -106,19 +105,15 @@ where
         &mut self,
         record: &ClientRecord<'_, RNG, CipherSuite>,
     ) -> Result<(), TlsError> {
-        info!("TRANSMIT");
         self.tx_buf.clear();
         let range = record.encode(&mut self.tx_buf)?;
         if let Some(range) = range {
-            info!("Update range {:?}", range);
             Digest::update(self.key_schedule.transcript_hash(), &self.tx_buf[range]);
         }
-        info!(
+        trace!(
             "**** transmit, hash={:x?}",
             self.key_schedule.transcript_hash().clone().finalize()
         );
-
-        info!("Writing record: {:x?}", &self.tx_buf);
 
         self.delegate.write(&self.tx_buf).await.map(|_| ())?;
 
@@ -130,7 +125,6 @@ where
     async fn receive(
         &mut self,
     ) -> Result<ServerRecord<<CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError> {
-        info!("RECEIVE");
         if let Some(queued) = self.queue.dequeue() {
             return Ok(queued);
         }
@@ -138,19 +132,13 @@ where
         let mut record =
             ServerRecord::read(&mut self.delegate, self.key_schedule.transcript_hash()).await?;
 
-        //if let State::Handhshaking = self.state {
-        /*if let ServerRecord::Handshake(ServerHandshake::ServerHello(_)) = record {
-            info!("Got sever hello handshake record");
-            return Ok(record);
-        }*/
-
         if let State::Encrypted = self.state {
             if let ServerRecord::ApplicationData(ApplicationData { header, mut data }) = record {
-                info!("decrypting {:x?} with {}", &header, data.len());
+                trace!("decrypting {:x?} with {}", &header, data.len());
                 //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
                 let crypto = CipherSuite::Cipher::new(&self.key_schedule.get_server_key());
                 let nonce = &self.key_schedule.get_server_nonce();
-                info!("server write nonce {:x?}", nonce);
+                trace!("server write nonce {:x?}", nonce);
                 crypto
                     .decrypt_in_place(
                         &self.key_schedule.get_server_nonce(),
@@ -158,14 +146,14 @@ where
                         &mut CryptoBuffer::wrap(&mut data),
                     )
                     .map_err(|_| TlsError::CryptoError)?;
-                info!("decrypted with padding {:x?}", data);
+                trace!("decrypted with padding {:x?}", data);
 
                 let padding = data.iter().enumerate().rfind(|(index, b)| **b != 0);
                 if let Some((index, _)) = padding {
                     data.truncate(index + 1);
                 }
 
-                info!("decrypted {:x?}", data);
+                trace!("decrypted {:x?}", data);
 
                 let content_type =
                     ContentType::of(*data.last().unwrap()).ok_or(TlsError::InvalidRecord)?;
