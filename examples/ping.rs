@@ -14,6 +14,7 @@ use tokio::time::{sleep, Duration};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
     let mut stream = TcpStream::connect("127.0.0.1:12345").await?;
     let socket = Socket { stream };
 
