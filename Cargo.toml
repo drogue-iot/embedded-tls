@@ -1,0 +1,28 @@
+[package]
+name = "bobtls"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+p256 = { version = "0.8.0-pre", default-features = false, features = [ "ecdh", "arithmetic" ] }
+rand_core = { version = "0.6.2", default-features = false }
+hkdf = "0.10.0"
+hmac = "0.10.1"
+sha2 = { version = "0.9.3", default-features = false }
+aes-gcm = { version = "0.8.0", default-features = false, features = ["aes"] }
+digest = { version = "0.9.0", default-features = false }
+typenum = "1.13.0"
+heapless = "0.6"
+
+[dev-dependencies]
+env_logger = "0.8"
+
+[features]
+defmt-default = [ ]
+defmt-trace = [ ]
+defmt-debug = [ ]
+defmt-info = [ ]
+defmt-warn = [ ]
+defmt-error = [ ]
