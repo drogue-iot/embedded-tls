@@ -41,7 +41,7 @@ pub enum ExtensionType {
 
 impl ExtensionType {
     pub fn of(num: u16) -> Option<Self> {
-        log::info!("extension type of {:x}", num);
+        info!("extension type of {:x}", num);
         match num {
             0 => Some(Self::ServerName),
             1 => Some(Self::MaxFragmentLength),
@@ -110,13 +110,13 @@ impl ClientExtension {
     pub fn encode<N: ArrayLength<u8>>(&self, buf: &mut Vec<u8, N>) {
         buf.extend_from_slice(&self.extension_type());
         let extension_length_marker = buf.len();
-        log::info!("marker at {}", extension_length_marker);
+        info!("marker at {}", extension_length_marker);
         buf.push(0);
         buf.push(0);
 
         match self {
             ClientExtension::SupportedVersions { versions } => {
-                log::info!("supported versions ext");
+                info!("supported versions ext");
                 buf.push(versions.len() as u8 * 2);
                 for v in versions {
                     buf.extend_from_slice(&v.to_be_bytes());
@@ -125,7 +125,7 @@ impl ClientExtension {
             ClientExtension::SignatureAlgorithms {
                 supported_signature_algorithms,
             } => {
-                log::info!("supported sig algo ext");
+                info!("supported sig algo ext");
                 buf.extend_from_slice(
                     &(supported_signature_algorithms.len() as u16 * 2).to_be_bytes(),
                 );
@@ -137,7 +137,7 @@ impl ClientExtension {
             ClientExtension::SignatureAlgorithmsCert {
                 supported_signature_algorithms,
             } => {
-                log::info!("supported sig algo cert ext");
+                info!("supported sig algo cert ext");
                 buf.extend_from_slice(
                     &(supported_signature_algorithms.len() as u16 * 2).to_be_bytes(),
                 );
@@ -147,7 +147,7 @@ impl ClientExtension {
                 }
             }
             ClientExtension::SupportedGroups { supported_groups } => {
-                log::info!("supported groups ext");
+                info!("supported groups ext");
                 buf.extend_from_slice(&(supported_groups.len() as u16 * 2).to_be_bytes());
 
                 for g in supported_groups {
@@ -155,7 +155,7 @@ impl ClientExtension {
                 }
             }
             ClientExtension::KeyShare { group, opaque } => {
-                log::info!("key_share ext");
+                info!("key_share ext");
                 buf.extend_from_slice(&(2 + 2 as u16 + opaque.len() as u16).to_be_bytes());
                 // one key-share
                 buf.extend_from_slice(&(*group as u16).to_be_bytes());
@@ -163,14 +163,14 @@ impl ClientExtension {
                 buf.extend_from_slice(opaque.as_ref());
             }
             ClientExtension::MaxFragmentLength(len) => {
-                log::info!("max fragment length");
+                info!("max fragment length");
                 buf.push(*len as u8);
             }
         }
 
-        log::info!("tail at {}", buf.len());
+        info!("tail at {}", buf.len());
         let extension_length = (buf.len() as u16 - extension_length_marker as u16) - 2;
-        log::info!("len: {}", extension_length);
+        info!("len: {}", extension_length);
         buf[extension_length_marker] = extension_length.to_be_bytes()[0];
         buf[extension_length_marker + 1] = extension_length.to_be_bytes()[1];
     }

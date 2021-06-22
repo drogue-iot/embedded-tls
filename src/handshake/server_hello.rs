@@ -26,7 +26,7 @@ impl ServerHello {
         content_length: usize,
         digest: &mut D,
     ) -> Result<ServerHello, TlsError> {
-        log::info!("parsing ServerHello");
+        info!("parsing ServerHello");
 
         let mut buf = Vec::<u8, U1024>::new();
         buf.resize(content_length, 0);
@@ -39,7 +39,7 @@ impl ServerHello {
             }
         }
 
-        log::info!("server hello hash [{:x?}]", &buf[0..content_length]);
+        info!("server hello hash [{:x?}]", &buf[0..content_length]);
         digest.update(&buf);
         Self::parse(&mut ParseBuffer::new(&mut buf))
     }
@@ -57,33 +57,33 @@ impl ServerHello {
             .read_u8()
             .map_err(|_| TlsError::InvalidSessionIdLength)?;
 
-        //log::info!("sh 1");
+        //info!("sh 1");
 
         let mut session_id = Vec::<u8, U32>::new();
         buf.copy(&mut session_id, session_id_length as usize)
             .map_err(|_| TlsError::InvalidSessionIdLength)?;
-        //log::info!("sh 2");
+        //info!("sh 2");
 
         let cipher_suite = buf.read_u16().map_err(|_| TlsError::InvalidCipherSuite)?;
         let cipher_suite = CipherSuite::of(cipher_suite).ok_or(TlsError::InvalidCipherSuite)?;
 
-        ////log::info!("sh 3");
+        ////info!("sh 3");
         // skip compression method, it's 0.
         buf.read_u8();
 
-        //log::info!("sh 4");
+        //info!("sh 4");
         let extensions_length = buf
             .read_u16()
             .map_err(|_| TlsError::InvalidExtensionsLength)?;
-        //log::info!("sh 5 {}", extensions_length);
+        //info!("sh 5 {}", extensions_length);
 
         let extensions = ServerExtension::parse_vector(buf)?;
-        //log::info!("sh 6");
+        //info!("sh 6");
 
-        log::info!("server random {:x?}", random);
-        log::info!("server session-id {:x?}", session_id);
-        log::info!("server cipher_suite {:x?}", cipher_suite);
-        log::info!("server extensions {:?}", extensions);
+        info!("server random {:x?}", random);
+        info!("server session-id {:x?}", session_id);
+        info!("server cipher_suite {:x?}", cipher_suite);
+        info!("server extensions {:?}", extensions);
 
         Ok(Self {
             random,

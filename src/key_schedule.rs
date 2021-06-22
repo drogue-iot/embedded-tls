@@ -127,29 +127,29 @@ where
     }
 
     pub fn verify_server_finished(&self, finished: &Finished<D::OutputSize>) -> bool {
-        //log::info!("verify server finished: {:x?}", finished.verify);
+        //info!("verify server finished: {:x?}", finished.verify);
         //self.client_traffic_secret.as_ref().unwrap().expand()
-        //log::info!("size ===> {}", D::OutputSize::to_u16());
+        //info!("size ===> {}", D::OutputSize::to_u16());
         let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
             self.server_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16()),
         );
-        log::info!("hmac sign key {:x?}", key);
+        info!("hmac sign key {:x?}", key);
         let mut hmac = Hmac::<D>::new_varkey(&key).unwrap();
-        log::info!("CHECK HASH {:x?}", &finished.hash.as_ref().unwrap());
+        info!("CHECK HASH {:x?}", &finished.hash.as_ref().unwrap());
         hmac.update(finished.hash.as_ref().unwrap());
         //let code = hmac.clone().finalize().into_bytes();
         hmac.verify(&finished.verify).is_ok()
-        //log::info!("verified {:?}", verified);
+        //info!("verified {:?}", verified);
         //unimplemented!()
     }
 
     fn get_nonce(&self, counter: u64, iv: &GenericArray<u8, IvLen>) -> GenericArray<u8, IvLen> {
-        //log::info!("counter = {} {:x?}", counter, &counter.to_be_bytes(),);
+        //info!("counter = {} {:x?}", counter, &counter.to_be_bytes(),);
         let counter = Self::pad::<IvLen>(&counter.to_be_bytes());
 
-        //log::info!("counter = {:x?}", counter);
-        log::info!("iv = {:x?}", iv);
+        //info!("counter = {:x?}", counter);
+        info!("iv = {:x?}", iv);
 
         let mut nonce = GenericArray::default();
 
@@ -161,16 +161,16 @@ where
             nonce[index] = l ^ r
         }
 
-        //log::debug!("nonce {:x?}", nonce);
+        //debug!("nonce {:x?}", nonce);
 
         nonce
     }
 
     fn pad<N: ArrayLength<u8>>(input: &[u8]) -> GenericArray<u8, N> {
-        log::info!("padding input = {:x?}", input);
+        info!("padding input = {:x?}", input);
         let mut padded = GenericArray::default();
         for (index, byte) in input.iter().rev().enumerate() {
-            log::info!(
+            info!(
                 "{} pad {}={:x?}",
                 index,
                 ((N::to_usize() - index) - 1),
@@ -213,16 +213,16 @@ where
         self.hkdf.replace(hkdf);
 
         let context = self.transcript_hash.as_ref().unwrap().clone().finalize();
-        log::info!("Derive keys, hash: {:x?}", context);
+        info!("Derive keys, hash: {:x?}", context);
 
         let client_secret = self.derive_secret(b"c ap traffic", ContextType::TranscriptHash);
         self.client_traffic_secret
             .replace(Hkdf::from_prk(&client_secret).unwrap());
-        log::info!("c traffic secret {:x?}", client_secret);
+        info!("c traffic secret {:x?}", client_secret);
         let server_secret = self.derive_secret(b"s ap traffic", ContextType::TranscriptHash);
         self.server_traffic_secret
             .replace(Hkdf::from_prk(&server_secret).unwrap());
-        log::info!("s traffic secret {:x?}", server_secret);
+        info!("s traffic secret {:x?}", server_secret);
         self.read_counter = 0;
         self.write_counter = 0;
 
@@ -233,11 +233,11 @@ where
         let client_secret = self.derive_secret(b"c hs traffic", ContextType::TranscriptHash);
         self.client_traffic_secret
             .replace(Hkdf::from_prk(&client_secret).unwrap());
-        log::info!("c traffic secret {:x?}", client_secret);
+        info!("c traffic secret {:x?}", client_secret);
         let server_secret = self.derive_secret(b"s hs traffic", ContextType::TranscriptHash);
         self.server_traffic_secret
             .replace(Hkdf::from_prk(&server_secret).unwrap());
-        log::info!("s traffic secret {:x?}", server_secret);
+        info!("s traffic secret {:x?}", server_secret);
         self.read_counter = 0;
         self.write_counter = 0;
     }
@@ -257,14 +257,14 @@ where
         label: &[u8],
     ) -> GenericArray<u8, N> {
         let mut okm: GenericArray<u8, N> = Default::default();
-        //log::info!("label {:x?}", label);
+        //info!("label {:x?}", label);
         hkdf.expand(label, &mut okm);
-        //log::info!("expand {:x?}", okm);
+        //info!("expand {:x?}", okm);
         okm
     }
 
     fn make_hkdf_label(&self, label: &[u8], context_type: ContextType, len: u16) -> Vec<u8, U512> {
-        //log::info!("make label {:?} {}", label, len);
+        //info!("make label {:?} {}", label, len);
         let mut hkdf_label = Vec::new();
         hkdf_label.extend_from_slice(&len.to_be_bytes());
 

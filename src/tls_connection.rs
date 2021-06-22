@@ -70,14 +70,14 @@ where
         //unimplemented!()
         let client_key = self.key_schedule.get_client_key();
         let nonce = &self.key_schedule.get_client_nonce();
-        log::info!("encrypt key {:02x?}", client_key);
-        log::info!("encrypt nonce {:02x?}", nonce);
-        log::info!("plaintext {} {:02x?}", buf.len(), buf);
+        info!("encrypt key {:02x?}", client_key);
+        info!("encrypt nonce {:02x?}", nonce);
+        info!("plaintext {} {:02x?}", buf.len(), buf);
         //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
         let crypto = CipherSuite::Cipher::new(&client_key);
         let initial_len = buf.len();
         let len = (buf.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize());
-        log::info!(
+        info!(
             "output size {}",
             <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize()
         );
@@ -92,9 +92,9 @@ where
         crypto
             .encrypt_in_place(nonce, &additional_data, &mut CryptoBuffer::wrap(buf))
             .map_err(|_| TlsError::InvalidApplicationData)?;
-        log::info!("aad {:x?}", additional_data);
-        log::info!("encrypted data: {:x?}", &buf[..initial_len]);
-        log::info!("ciphertext ## {} ## {:x?}", buf.len(), buf);
+        info!("aad {:x?}", additional_data);
+        info!("encrypted data: {:x?}", &buf[..initial_len]);
+        info!("ciphertext ## {} ## {:x?}", buf.len(), buf);
         //Ok(())
         let mut header = Vec::new();
         header.extend_from_slice(&additional_data);
@@ -110,19 +110,19 @@ where
         &mut self,
         record: &ClientRecord<'_, RNG, CipherSuite>,
     ) -> Result<(), TlsError> {
-        log::info!("TRANSMIT");
+        info!("TRANSMIT");
         self.tx_buf.clear();
         let range = record.encode(&mut self.tx_buf)?;
         if let Some(range) = range {
-            log::info!("Update range {:?}", range);
+            info!("Update range {:?}", range);
             Digest::update(self.key_schedule.transcript_hash(), &self.tx_buf[range]);
         }
-        log::info!(
+        info!(
             "**** transmit, hash={:x?}",
             self.key_schedule.transcript_hash().clone().finalize()
         );
 
-        log::info!("Writing record: {:x?}", &self.tx_buf);
+        info!("Writing record: {:x?}", &self.tx_buf);
 
         self.delegate.write(&self.tx_buf).await.map(|_| ())?;
 
@@ -134,7 +134,7 @@ where
     async fn receive(
         &mut self,
     ) -> Result<ServerRecord<<CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError> {
-        log::info!("RECEIVE");
+        info!("RECEIVE");
         if let Some(queued) = self.queue.dequeue() {
             return Ok(queued);
         }
@@ -144,17 +144,17 @@ where
 
         //if let State::Handhshaking = self.state {
         /*if let ServerRecord::Handshake(ServerHandshake::ServerHello(_)) = record {
-            log::info!("Got sever hello handshake record");
+            info!("Got sever hello handshake record");
             return Ok(record);
         }*/
 
         if let State::Encrypted = self.state {
             if let ServerRecord::ApplicationData(ApplicationData { header, mut data }) = record {
-                log::info!("decrypting {:x?} with {}", &header, data.len());
+                info!("decrypting {:x?} with {}", &header, data.len());
                 //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
                 let crypto = CipherSuite::Cipher::new(&self.key_schedule.get_server_key());
                 let nonce = &self.key_schedule.get_server_nonce();
-                log::info!("server write nonce {:x?}", nonce);
+                info!("server write nonce {:x?}", nonce);
                 crypto
                     .decrypt_in_place(
                         &self.key_schedule.get_server_nonce(),
@@ -162,14 +162,14 @@ where
                         &mut CryptoBuffer::wrap(&mut data),
                     )
                     .map_err(|_| TlsError::CryptoError)?;
-                log::info!("decrypted with padding {:x?}", data);
+                info!("decrypted with padding {:x?}", data);
 
                 let padding = data.iter().enumerate().rfind(|(index, b)| **b != 0);
                 if let Some((index, _)) = padding {
                     data.truncate(index + 1);
                 }
 
-                log::info!("decrypted {:x?}", data);
+                info!("decrypted {:x?}", data);
 
                 let content_type =
                     ContentType::of(*data.last().unwrap()).ok_or(TlsError::InvalidRecord)?;
@@ -180,19 +180,19 @@ where
                         while buf.remaining() > 1 {
                             let mut inner = ServerHandshake::parse(&mut buf);
                             if let Ok(ServerHandshake::Finished(ref mut finished)) = inner {
-                                log::info!("Server finished hash: {:x?}", finished.hash);
+                                info!("Server finished hash: {:x?}", finished.hash);
                                 finished.hash.replace(
                                     self.key_schedule.transcript_hash().clone().finalize(),
                                 );
                             }
-                            log::info!("===> inner ==> {:?}", inner);
+                            info!("===> inner ==> {:?}", inner);
                             record = ServerRecord::Handshake(inner.unwrap());
                             //if hash_later {
                             Digest::update(
                                 self.key_schedule.transcript_hash(),
                                 &data[..data.len() - 1],
                             );
-                            log::info!("hash {:02x?}", &data[..data.len() - 1]);
+                            info!("hash {:02x?}", &data[..data.len() - 1]);
                             self.queue.enqueue(record);
                         }
                         //}
@@ -202,7 +202,7 @@ where
                         while buf.remaining() > 1 {
                             let inner = ApplicationData::parse(&mut buf)?;
                             record = ServerRecord::ApplicationData(inner);
-                            log::info!("Enqueued some data");
+                            info!("Enqueued some data");
                             self.queue.enqueue(record);
                         }
                     }
@@ -210,16 +210,16 @@ where
                         return Err(TlsError::InvalidHandshake);
                     }
                 }
-                //log::debug!("decrypted {:?} --> {:x?}", content_type, data);
+                //debug!("decrypted {:?} --> {:x?}", content_type, data);
                 self.key_schedule.increment_read_counter();
             } else {
                 return Ok(record);
             }
         } else {
-            log::info!("NOt encrypted state record");
+            info!("NOt encrypted state record");
             return Ok(record);
         }
-        log::info!(
+        info!(
             "**** receive, hash={:02x?}",
             self.key_schedule.transcript_hash().clone().finalize()
         );
@@ -235,7 +235,7 @@ where
         self.key_schedule.initialize_early_secret();
         let client_hello = ClientRecord::client_hello(&self.config);
         self.transmit(&client_hello).await;
-        log::info!("sent client hello");
+        info!("sent client hello");
 
         loop {
             let record = self.receive().await?;
@@ -243,7 +243,7 @@ where
             match record {
                 ServerRecord::Handshake(handshake) => match handshake {
                     ServerHandshake::ServerHello(server_hello) => {
-                        log::info!("********* ServerHello");
+                        info!("********* ServerHello");
                         if let ClientRecord::Handshake(ClientHandshake::ClientHello(
                             ref client_hello,
                         )) = client_hello
@@ -262,10 +262,10 @@ where
                     ServerHandshake::Certificate(_) => {}
                     ServerHandshake::CertificateVerify(_) => {}
                     ServerHandshake::Finished(finished) => {
-                        log::info!("************* Finished");
+                        info!("************* Finished");
                         let verified = self.key_schedule.verify_server_finished(&finished);
                         if verified {
-                            log::info!("FINISHED! server verified {}", verified);
+                            info!("FINISHED! server verified {}", verified);
                             let client_finished = self
                                 .key_schedule
                                 .create_client_finished()
@@ -283,14 +283,14 @@ where
                             let client_finished = self.encrypt(&mut buf)?;
                             let client_finished = ClientRecord::ApplicationData(client_finished);
 
-                            log::info!(
+                            info!(
                                 "sending client FINISH. current hash {:02x?}",
                                 self.key_schedule.transcript_hash().clone().finalize()
                             );
                             self.transmit(&client_finished).await?;
                             /*
                             self.key_schedule.replace_transcript_hash(next_hash);
-                            log::info!(
+                            info!(
                                 "sending client FINISH. updated hash {:02x?}",
                                 self.key_schedule.transcript_hash().clone().finalize()
                             );*/
@@ -306,10 +306,10 @@ where
                     /*
                     match application_data {
                         ApplicationData { header, mut data } => {
-                            log::info!("decrypting {:x?}", &header);
+                            info!("decrypting {:x?}", &header);
                             let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
                             let nonce = &self.key_schedule.get_server_nonce();
-                            log::info!("server write nonce {:x?}", nonce);
+                            info!("server write nonce {:x?}", nonce);
                             let result = crypto.decrypt_in_place(
                                 &self.key_schedule.get_server_nonce(),
                                 &header,
@@ -327,12 +327,12 @@ where
                                     let mut buf = ParseBuffer::new(&data[..data.len() - 1]);
                                     //let inner = ServerHandshake::parse(&data[..data.len() - 1]);
                                     let inner = ServerHandshake::parse(&mut buf);
-                                    log::debug!("===> inner ==> {:?}", inner);
+                                    debug!("===> inner ==> {:?}", inner);
                                 }
                                 ContentType::ApplicationData => {}
                             }
-                            log::debug!("decrypt result {:?}", result);
-                            log::debug!("decrypted {:?} --> {:x?}", content_type, data);
+                            debug!("decrypt result {:?}", result);
+                            debug!("decrypted {:?} --> {:x?}", content_type, data);
                         }
                     }
                     self.key_schedule.increment_read_counter();
@@ -348,13 +348,13 @@ where
     }
 
     pub async fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
-        log::info!("Writing {} bytes", buf.len());
+        info!("Writing {} bytes", buf.len());
 
         let mut v: Vec<u8, U4096> = Vec::new();
         v.extend_from_slice(buf);
         v.push(ContentType::ApplicationData as u8);
         let data = self.encrypt(&mut v)?;
-        log::info!("Encrypted data: {:02x?}", data);
+        info!("Encrypted data: {:02x?}", data);
         self.transmit(&ClientRecord::ApplicationData(data)).await?;
         Ok(buf.len())
     }
@@ -363,9 +363,9 @@ where
         let record = self.receive().await?;
         match record {
             ServerRecord::ApplicationData(ApplicationData { header, data }) => {
-                log::info!("Got application data record");
+                info!("Got application data record");
                 if buf.len() < data.len() {
-                    log::warn!("Passed buffer is too small");
+                    warn!("Passed buffer is too small");
                     return Err(TlsError::IoError);
                 } else {
                     buf[0..data.len()].copy_from_slice(&data[0..data.len()]);

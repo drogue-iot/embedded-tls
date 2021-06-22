@@ -99,12 +99,12 @@ where
         // ----------------------------------------
 
         for e in extensions {
-            log::info!("encode extension");
+            info!("encode extension");
             e.encode(buf);
         }
 
         let extensions_length = (buf.len() as u16 - extension_length_marker as u16) - 2;
-        log::info!("extensions length: {:x?}", extensions_length.to_be_bytes());
+        info!("extensions length: {:x?}", extensions_length.to_be_bytes());
         buf[extension_length_marker] = extensions_length.to_be_bytes()[0];
         buf[extension_length_marker + 1] = extensions_length.to_be_bytes()[1];
 

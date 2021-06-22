@@ -36,7 +36,7 @@ impl CertificateEntry {
         let mut entries = Vec::new();
         loop {
             let entry_len = buf.read_u24().map_err(|_| TlsError::InvalidCertificate)?;
-            log::info!("cert len: {}", entry_len);
+            info!("cert len: {}", entry_len);
             let cert = buf
                 .slice(entry_len as usize)
                 .map_err(|_| TlsError::InvalidCertificate)?;

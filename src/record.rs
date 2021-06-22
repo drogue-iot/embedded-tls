@@ -60,7 +60,7 @@ where
         let range = match self {
             ClientRecord::Handshake(handshake) => Some(handshake.encode(buf)?),
             ClientRecord::ApplicationData(application_data) => {
-                log::info!("Enoding record data {:?}", application_data.data);
+                info!("Enoding record data {:?}", application_data.data);
                 buf.extend(application_data.data.iter());
                 None
             }
@@ -68,7 +68,7 @@ where
 
         let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
 
-        log::info!("record len {}", record_length);
+        info!("record len {}", record_length);
 
         buf[record_length_marker] = record_length.to_be_bytes()[0];
         buf[record_length_marker + 1] = record_length.to_be_bytes()[1];
@@ -99,7 +99,7 @@ impl<N: ArrayLength<u8>> ServerRecord<N> {
             }
         }
 
-        log::info!("receive header {:x?}", &header);
+        info!("receive header {:x?}", &header);
 
         match ContentType::of(header[0]) {
             None => Err(TlsError::InvalidRecord),

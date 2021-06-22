@@ -20,7 +20,7 @@ impl ApplicationData {
         len: u16,
         header: &[u8],
     ) -> Result<Self, TlsError> {
-        log::info!("application data of len={}", len);
+        info!("application data of len={}", len);
         //let mut buf: [u8; 8192] = [0; 8192];
         let mut buf = Vec::<u8, U32768>::new();
         buf.resize(len as usize, 0);
@@ -28,7 +28,7 @@ impl ApplicationData {
         let mut num_read = 0;
 
         loop {
-            log::info!(
+            info!(
                 "Reading {} bytes of app data from socket",
                 len as usize - num_read
             );
@@ -36,14 +36,14 @@ impl ApplicationData {
                 .read(&mut buf[num_read..len as usize])
                 .await
                 .map_err(|e| {
-                    log::error!("Read socket error: {:?}", e);
+                    error!("Read socket error: {:?}", e);
                     TlsError::InvalidApplicationData
                 })?;
 
-            log::info!("READ app data");
+            info!("READ app data");
 
             if num_read == len as usize {
-                log::info!("read application data fully");
+                info!("read application data fully");
                 break;
             }
         }

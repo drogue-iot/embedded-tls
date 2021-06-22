@@ -15,7 +15,7 @@ impl EncryptedExtensions {
         let extensions_len = buf
             .read_u16()
             .map_err(|_| TlsError::InvalidExtensionsLength)?;
-        log::info!("extensions length: {}", extensions_len);
+        info!("extensions length: {}", extensions_len);
         let extensions =
             ServerExtension::parse_vector(&mut buf.slice(extensions_len as usize).unwrap())?;
         Ok(Self { extensions })

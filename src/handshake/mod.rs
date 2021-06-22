@@ -60,7 +60,7 @@ pub enum HandshakeType {
 
 impl HandshakeType {
     pub fn of(num: u8) -> Option<Self> {
-        log::info!("find handshake type of {}", num);
+        info!("find handshake type of {}", num);
         match num {
             1 => Some(HandshakeType::ClientHello),
             2 => Some(HandshakeType::ServerHello),
@@ -120,7 +120,7 @@ where
         buf[content_length_marker + 1] = content_length.to_be_bytes()[2];
         buf[content_length_marker + 2] = content_length.to_be_bytes()[3];
 
-        log::info!("hash [{:x?}]", &buf[content_marker..]);
+        info!("hash [{:x?}]", &buf[content_marker..]);
         //digest.update(&buf[content_marker..]);
 
         Ok(content_marker..buf.len())
@@ -169,7 +169,7 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
                 match handshake_type {
                     HandshakeType::ClientHello => Err(TlsError::Unimplemented),
                     HandshakeType::ServerHello => {
-                        log::info!("hash [{:x?}]", &header);
+                        info!("hash [{:x?}]", &header);
                         digest.update(&header);
                         Ok(ServerHandshake::ServerHello(
                             ServerHello::read(socket, length as usize, digest).await?,

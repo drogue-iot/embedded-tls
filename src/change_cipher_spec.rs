@@ -7,7 +7,7 @@ pub struct ChangeCipherSpec {}
 
 impl ChangeCipherSpec {
     pub async fn read<T: AsyncRead>(socket: &mut T, len: u16) -> Result<Self, TlsError> {
-        log::info!("application data of len={}", len);
+        info!("application data of len={}", len);
         let mut buf: [u8; 2048] = [0; 2048];
 
         let mut num_read = 0;
@@ -19,7 +19,7 @@ impl ChangeCipherSpec {
                 .map_err(|_| TlsError::InvalidRecord)?;
 
             if num_read == len as usize {
-                log::info!("read change cipher spec fully");
+                info!("read change cipher spec fully");
                 break;
             }
         }

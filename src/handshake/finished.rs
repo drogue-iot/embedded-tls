@@ -21,7 +21,7 @@ impl<N: ArrayLength<u8>> Debug for Finished<N> {
 
 impl<N: ArrayLength<u8>> Finished<N> {
     pub fn parse(buf: &mut ParseBuffer, len: u32) -> Result<Self, TlsError> {
-        log::info!("finished len: {}", len);
+        info!("finished len: {}", len);
         let mut verify = GenericArray::default();
         buf.fill(&mut verify);
         //let hash = GenericArray::from_slice()
@@ -29,9 +29,9 @@ impl<N: ArrayLength<u8>> Finished<N> {
         //.slice(len as usize)
         //.map_err(|_| TlsError::InvalidHandshake)?
         //.into();
-        log::info!("hash {:?}", verify);
+        info!("hash {:?}", verify);
         //let hash = hash.map_err(|_| TlsError::InvalidHandshake)?;
-        log::info!("hash ng {:?}", verify);
+        info!("hash ng {:?}", verify);
         Ok(Self { verify, hash: None })
     }
 

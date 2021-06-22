@@ -18,16 +18,20 @@ digest = { version = "0.9.0", default-features = false }
 typenum = "1.13.0"
 heapless = "0.6"
 generic-array = "0.14"
-log = "0.4"
 nom = { version = "6.1.2", default-features = false }
+
+# Logging alternatives
+log = { version = "0.4", optional = true }
+defmt = { version = "0.2", optional = true }
 
 [dev-dependencies]
 env_logger = "0.8"
 tokio = { version = "1.7", features = ["full"] }
 rand = "0.8"
+log = "0.4"
 
 [features]
-defmt-default = [ ]
+default = ["log"]
 defmt-trace = [ ]
 defmt-debug = [ ]
 defmt-info = [ ]

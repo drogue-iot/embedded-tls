@@ -47,13 +47,13 @@ impl ServerExtension {
                 ExtensionType::of(buf.read_u16().map_err(|_| TlsError::UnknownExtensionType)?)
                     .ok_or(TlsError::UnknownExtensionType)?;
 
-            log::info!("extension type {:?}", extension_type);
+            info!("extension type {:?}", extension_type);
 
             let extension_length = buf
                 .read_u16()
                 .map_err(|_| TlsError::InvalidExtensionsLength)?;
 
-            log::info!("extension length {}", extension_length);
+            info!("extension length {}", extension_length);
 
             match extension_type {
                 ExtensionType::SupportedVersions => {
