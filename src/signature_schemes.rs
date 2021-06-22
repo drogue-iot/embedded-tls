@@ -1,4 +1,4 @@
-use crate::drivers::tls::signature_schemes::SignatureScheme::{
+use crate::signature_schemes::SignatureScheme::{
     Ed25519, RsaPssRsaeSha256, RsaPssRsaeSha384, RsaPssRsaeSha512,
 };
 

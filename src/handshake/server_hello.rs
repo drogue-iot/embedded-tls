@@ -1,13 +1,13 @@
 use heapless::{consts::*, ArrayLength, Vec};
 
-use crate::drivers::tls::cipher_suites::CipherSuite;
-use crate::drivers::tls::crypto_engine::CryptoEngine;
-use crate::drivers::tls::extensions::common::KeyShareEntry;
-use crate::drivers::tls::extensions::server::ServerExtension;
-use crate::drivers::tls::handshake::Random;
-use crate::drivers::tls::named_groups::NamedGroup;
-use crate::drivers::tls::parse_buffer::ParseBuffer;
-use crate::drivers::tls::{AsyncRead, AsyncWrite, TlsError};
+use crate::cipher_suites::CipherSuite;
+use crate::crypto_engine::CryptoEngine;
+use crate::extensions::common::KeyShareEntry;
+use crate::extensions::server::ServerExtension;
+use crate::handshake::Random;
+use crate::named_groups::NamedGroup;
+use crate::parse_buffer::ParseBuffer;
+use crate::{AsyncRead, AsyncWrite, TlsError};
 use p256::ecdh::{EphemeralSecret, SharedSecret};
 use p256::PublicKey;
 use sha2::Digest;

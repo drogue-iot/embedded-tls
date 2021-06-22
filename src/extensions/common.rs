@@ -1,5 +1,5 @@
-use crate::drivers::tls::named_groups::NamedGroup;
-use crate::drivers::tls::parse_buffer::{ParseBuffer, ParseError};
+use crate::named_groups::NamedGroup;
+use crate::parse_buffer::{ParseBuffer, ParseError};
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]
@@ -31,9 +31,9 @@ impl KeyShareEntry {
 mod tests {
     extern crate std;
 
-    use crate::drivers::tls::extensions::common::KeyShareEntry;
-    use crate::drivers::tls::named_groups::NamedGroup;
-    use crate::drivers::tls::parse_buffer::ParseBuffer;
+    use crate::extensions::common::KeyShareEntry;
+    use crate::named_groups::NamedGroup;
+    use crate::parse_buffer::ParseBuffer;
     use std::sync::Once;
 
     static INIT: Once = Once::new();

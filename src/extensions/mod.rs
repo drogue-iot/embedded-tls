@@ -1,14 +1,14 @@
 pub mod common;
 pub mod server;
 
-use crate::drivers::tls::signature_schemes::SignatureScheme;
+use crate::signature_schemes::SignatureScheme;
 
-use crate::drivers::tls::extensions::ClientExtension::KeyShare;
-use crate::drivers::tls::extensions::ExtensionType::SupportedVersions;
-use crate::drivers::tls::max_fragment_length::MaxFragmentLength;
-use crate::drivers::tls::named_groups::NamedGroup;
-use crate::drivers::tls::supported_versions::{ProtocolVersion, ProtocolVersions};
-use crate::drivers::tls::TlsError;
+use crate::extensions::ClientExtension::KeyShare;
+use crate::extensions::ExtensionType::SupportedVersions;
+use crate::max_fragment_length::MaxFragmentLength;
+use crate::named_groups::NamedGroup;
+use crate::supported_versions::{ProtocolVersion, ProtocolVersions};
+use crate::TlsError;
 use generic_array::ArrayLength;
 use heapless::{consts::*, Vec};
 use nom::number::complete::u16;

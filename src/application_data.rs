@@ -1,8 +1,6 @@
-use crate::drivers::tls::parse_buffer::ParseBuffer;
-use crate::drivers::tls::{AsyncRead, AsyncWrite, TlsError};
-use crate::traits::tcp::{TcpSocket, TcpStack};
+use crate::parse_buffer::ParseBuffer;
+use crate::{AsyncRead, AsyncWrite, TlsError};
 use core::fmt::{Debug, Formatter};
-use embassy::io::{AsyncBufReadExt, AsyncWriteExt};
 use heapless::{consts::*, Vec};
 
 pub struct ApplicationData {

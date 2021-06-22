@@ -1,7 +1,7 @@
-use crate::drivers::tls::extensions::server::ServerExtension;
+use crate::extensions::server::ServerExtension;
 
-use crate::drivers::tls::parse_buffer::ParseBuffer;
-use crate::drivers::tls::TlsError;
+use crate::parse_buffer::ParseBuffer;
+use crate::TlsError;
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]

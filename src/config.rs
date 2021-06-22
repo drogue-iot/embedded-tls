@@ -1,7 +1,7 @@
-use crate::drivers::tls::cipher_suites::CipherSuite;
-use crate::drivers::tls::max_fragment_length::MaxFragmentLength;
-use crate::drivers::tls::named_groups::NamedGroup;
-use crate::drivers::tls::signature_schemes::SignatureScheme;
+use crate::cipher_suites::CipherSuite;
+use crate::max_fragment_length::MaxFragmentLength;
+use crate::named_groups::NamedGroup;
+use crate::signature_schemes::SignatureScheme;
 use aes_gcm::{AeadInPlace, Aes128Gcm, NewAead};
 use core::marker::PhantomData;
 use digest::{BlockInput, Digest, FixedOutput, Reset, Update};

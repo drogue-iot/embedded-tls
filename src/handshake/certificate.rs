@@ -1,6 +1,6 @@
-use crate::drivers::tls::certificate_types::CertificateType;
-use crate::drivers::tls::parse_buffer::ParseBuffer;
-use crate::drivers::tls::TlsError;
+use crate::certificate_types::CertificateType;
+use crate::parse_buffer::ParseBuffer;
+use crate::TlsError;
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]

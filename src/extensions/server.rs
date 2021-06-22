@@ -1,10 +1,10 @@
-use crate::drivers::tls::extensions::common::KeyShareEntry;
-use crate::drivers::tls::extensions::ExtensionType;
-use crate::drivers::tls::extensions::ExtensionType::SupportedVersions;
-use crate::drivers::tls::named_groups::NamedGroup;
-use crate::drivers::tls::parse_buffer::{ParseBuffer, ParseError};
-use crate::drivers::tls::supported_versions::ProtocolVersion;
-use crate::drivers::tls::TlsError;
+use crate::extensions::common::KeyShareEntry;
+use crate::extensions::ExtensionType;
+use crate::extensions::ExtensionType::SupportedVersions;
+use crate::named_groups::NamedGroup;
+use crate::parse_buffer::{ParseBuffer, ParseError};
+use crate::supported_versions::ProtocolVersion;
+use crate::TlsError;
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]

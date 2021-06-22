@@ -1,5 +1,5 @@
-use crate::drivers::tls::parse_buffer::ParseBuffer;
-use crate::drivers::tls::{AsyncRead, AsyncWrite, TlsError};
+use crate::parse_buffer::ParseBuffer;
+use crate::{AsyncRead, AsyncWrite, TlsError};
 use heapless::{ArrayLength, Vec};
 
 #[derive(Debug, Copy, Clone)]

@@ -1,4 +1,4 @@
-use crate::drivers::tls::cipher_suites::CipherSuite::{
+use crate::cipher_suites::CipherSuite::{
     TlsAes128Ccm8Sha256, TlsAes128CcmSha256, TlsAes128GcmSha256, TlsAes256GcmSha384,
     TlsChacha20Poly1305Sha256,
 };

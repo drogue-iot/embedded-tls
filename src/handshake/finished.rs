@@ -1,5 +1,5 @@
-use crate::drivers::tls::parse_buffer::ParseBuffer;
-use crate::drivers::tls::TlsError;
+use crate::parse_buffer::ParseBuffer;
+use crate::TlsError;
 use core::fmt::{Debug, Formatter};
 //use digest::generic_array::{ArrayLength, GenericArray};
 use digest::Digest;

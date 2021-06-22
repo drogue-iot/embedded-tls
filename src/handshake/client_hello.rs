@@ -3,16 +3,15 @@ use p256::ecdh::EphemeralSecret;
 use p256::elliptic_curve::rand_core::{CryptoRng, RngCore};
 use p256::EncodedPoint;
 
-use crate::drivers::tls::config::{Config, TlsCipherSuite};
-use crate::drivers::tls::content_types::ContentType;
-use crate::drivers::tls::extensions::common::KeyShareEntry;
-use crate::drivers::tls::extensions::ClientExtension;
-use crate::drivers::tls::handshake::{HandshakeType, Random, LEGACY_VERSION};
-use crate::drivers::tls::named_groups::NamedGroup;
-use crate::drivers::tls::signature_schemes::SignatureScheme;
-use crate::drivers::tls::supported_versions::{ProtocolVersion, TLS13};
-use crate::drivers::tls::TlsError;
-use crate::traits::tcp::{TcpError, TcpSocket, TcpStack};
+use crate::config::{Config, TlsCipherSuite};
+use crate::content_types::ContentType;
+use crate::extensions::common::KeyShareEntry;
+use crate::extensions::ClientExtension;
+use crate::handshake::{HandshakeType, Random, LEGACY_VERSION};
+use crate::named_groups::NamedGroup;
+use crate::signature_schemes::SignatureScheme;
+use crate::supported_versions::{ProtocolVersion, TLS13};
+use crate::TlsError;
 use sha2::Digest;
 
 pub struct ClientHello<'config, RNG, CipherSuite>

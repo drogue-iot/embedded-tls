@@ -1,7 +1,7 @@
-use crate::drivers::tls::extensions::ClientExtension::SignatureAlgorithms;
-use crate::drivers::tls::parse_buffer::ParseBuffer;
-use crate::drivers::tls::signature_schemes::SignatureScheme;
-use crate::drivers::tls::TlsError;
+use crate::extensions::ClientExtension::SignatureAlgorithms;
+use crate::parse_buffer::ParseBuffer;
+use crate::signature_schemes::SignatureScheme;
+use crate::TlsError;
 
 use heapless::{consts::*, Vec};
 

@@ -1,4 +1,4 @@
-use crate::drivers::tls::TlsError;
+use crate::TlsError;
 use heapless::{ArrayLength, Vec};
 
 #[derive(Debug, Copy, Clone)]

@@ -7,10 +7,7 @@
 #![feature(concat_idents)]
 
 use core::future::Future;
-use drogue_device::{
-    drivers::tls::{config::*, tls_connection::*, *},
-    traits::tcp::TcpError,
-};
+use drogue_tls::{config::*, tls_connection::*, AsyncRead, AsyncWrite, TlsError};
 use heapless::consts;
 use rand::rngs::OsRng;
 use rand_core::{CryptoRng, RngCore};
@@ -61,16 +58,22 @@ pub struct Socket {
 
 impl AsyncWrite for Socket {
     #[rustfmt::skip]
-    type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TcpError>> + 'm;
+    type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
     fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-        async move { Ok(self.stream.write(buf).await?) }
+        async move {
+            Ok(self
+                .stream
+                .write(buf)
+                .await
+                .map_err(|_| TlsError::IoError)?)
+        }
     }
 }
 
 impl AsyncRead for Socket {
     #[rustfmt::skip]
-    type ReadFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TcpError>> + 'm;
+    type ReadFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
     fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-        async move { Ok(self.stream.read(buf).await?) }
+        async move { Ok(self.stream.read(buf).await.map_err(|_| TlsError::IoError)?) }
     }
 }

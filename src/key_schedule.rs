@@ -1,4 +1,4 @@
-use crate::drivers::tls::handshake::finished::Finished;
+use crate::handshake::finished::Finished;
 use core::marker::PhantomData;
 use digest::generic_array::ArrayLength;
 use digest::{BlockInput, FixedOutput, Reset, Update};
