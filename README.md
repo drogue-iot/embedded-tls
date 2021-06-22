@@ -5,8 +5,10 @@
 [![docs.rs](https://docs.rs/drogue-tls/badge.svg)](https://docs.rs/drogue-tls)
 [![Matrix](https://img.shields.io/matrix/drogue-iot:matrix.org)](https://matrix.to/#/#drogue-iot:matrix.org)
 
-Drogue-TLS is an async Rust-native TLS 1.3 implementation that works in a no-std environment. The
+Drogue-TLS is an async Rust-native TLS 1.3 implementation that aims to work in a no-std environment. The
 implementation is work in progress, but the example client should work against the [rustls](https://github.com/ctz/rustls) echo server.
+
+NOTE: Don't use this in production as it may leak keys to the standard output
 
 ## Community
 

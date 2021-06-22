@@ -1,23 +1,19 @@
 use crate::config::{Config, TlsCipherSuite};
-use crate::handshake::{ClientHandshake, HandshakeType, ServerHandshake};
+use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
 use crate::{AsyncRead, AsyncWrite, TlsError};
 use digest::generic_array::typenum::Unsigned;
 use heapless::{consts::*, ArrayLength, Vec};
-use hkdf::Hkdf;
-use hmac::Hmac;
 use rand_core::{CryptoRng, RngCore};
-use sha2::{Digest, Sha256};
+use sha2::Digest;
 
 use crate::application_data::ApplicationData;
 use crate::buffer::CryptoBuffer;
 use crate::content_types::ContentType;
-use crate::handshake::HandshakeType::Finished;
 use crate::parse_buffer::ParseBuffer;
-use aes_gcm::aead::{generic_array::GenericArray, AeadInPlace, Buffer, NewAead};
-use aes_gcm::Error;
-use digest::{BlockInput, FixedOutput, Reset, Update};
+use aes_gcm::aead::{AeadInPlace, NewAead};
+use digest::FixedOutput;
 use heapless::spsc::Queue;
 
 enum State {
