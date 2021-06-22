@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     log::info!("Connected");
     let tls_config: Config<OsRng, Aes128GcmSha256> = Config::new(OsRng);
-    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, consts::U32768, consts::U32768> =
+    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, consts::U4096, consts::U4096> =
         TlsConnection::new(&tls_config, socket);
     let result = tls.handshake().await;
     match result {
@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tls.write(b"ping").await.expect("error writing data");
 
-    let mut rx_buf = [0; 16384];
+    let mut rx_buf = [0; 4096];
     let sz = tls.read(&mut rx_buf).await.expect("error reading data");
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
 
