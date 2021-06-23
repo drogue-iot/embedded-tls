@@ -29,6 +29,7 @@ pub mod tls_connection;
 #[derive(Debug, Copy, Clone)]
 pub enum TlsError {
     Unimplemented,
+    MissingHandshake,
     IoError,
     InvalidRecord,
     UnknownContentType,
