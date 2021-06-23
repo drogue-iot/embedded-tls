@@ -84,8 +84,8 @@ where
         &self,
         buf: &mut Vec<u8, N>,
     ) -> Result<ApplicationData, TlsError> {
-        let client_key = self.key_schedule.get_client_key();
-        let nonce = &self.key_schedule.get_client_nonce();
+        let client_key = self.key_schedule.get_client_key()?;
+        let nonce = &self.key_schedule.get_client_nonce()?;
         info!("encrypt key {:02x?}", client_key);
         info!("encrypt nonce {:02x?}", nonce);
         info!("plaintext {} {:02x?}", buf.len(), buf);
@@ -113,7 +113,9 @@ where
         info!("ciphertext ## {} ## {:x?}", buf.len(), buf);
         //Ok(())
         let mut header = Vec::new();
-        header.extend_from_slice(&additional_data);
+        header
+            .extend_from_slice(&additional_data)
+            .map_err(|_| TlsError::IoError)?;
         let mut data = Vec::new();
         data.extend(buf.iter());
         Ok(ApplicationData { header, data })
@@ -158,19 +160,19 @@ where
             if let ServerRecord::ApplicationData(ApplicationData { header, mut data }) = record {
                 trace!("decrypting {:x?} with {}", &header, data.len());
                 //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
-                let crypto = CipherSuite::Cipher::new(&self.key_schedule.get_server_key());
+                let crypto = CipherSuite::Cipher::new(&self.key_schedule.get_server_key()?);
                 let nonce = &self.key_schedule.get_server_nonce();
                 trace!("server write nonce {:x?}", nonce);
                 crypto
                     .decrypt_in_place(
-                        &self.key_schedule.get_server_nonce(),
+                        &self.key_schedule.get_server_nonce()?,
                         &header,
                         &mut CryptoBuffer::wrap(&mut data),
                     )
                     .map_err(|_| TlsError::CryptoError)?;
                 trace!("decrypted with padding {:x?}", data);
 
-                let padding = data.iter().enumerate().rfind(|(index, b)| **b != 0);
+                let padding = data.iter().enumerate().rfind(|(_, b)| **b != 0);
                 if let Some((index, _)) = padding {
                     data.truncate(index + 1);
                 }
@@ -199,7 +201,7 @@ where
                                 &data[..data.len() - 1],
                             );
                             info!("hash {:02x?}", &data[..data.len() - 1]);
-                            self.queue.enqueue(record);
+                            self.queue.enqueue(record).map_err(|_| TlsError::IoError)?;
                         }
                         //}
                     }
@@ -209,7 +211,7 @@ where
                             let inner = ApplicationData::parse(&mut buf)?;
                             record = ServerRecord::ApplicationData(inner);
                             info!("Enqueued some data");
-                            self.queue.enqueue(record);
+                            self.queue.enqueue(record).map_err(|_| TlsError::IoError)?;
                         }
                     }
                     _ => {
@@ -219,21 +221,20 @@ where
                 //debug!("decrypted {:?} --> {:x?}", content_type, data);
                 self.key_schedule.increment_read_counter();
             } else {
-                return Ok(record);
+                self.queue.enqueue(record).map_err(|_| TlsError::IoError)?;
             }
         } else {
-            return Ok(record);
+            self.queue.enqueue(record).map_err(|_| TlsError::IoError)?;
         }
         info!(
             "**** receive, hash={:02x?}",
             self.key_schedule.transcript_hash().clone().finalize()
         );
         if let Some(queued) = self.queue.dequeue() {
-            return Ok(queued);
+            Ok(queued)
         } else {
             Err(TlsError::InvalidApplicationData)
         }
-        //Ok(record)
     }
 
     pub async fn open(&mut self) -> Result<(), TlsError> {
@@ -305,7 +306,7 @@ where
                 ServerRecord::Handshake(handshake) => match handshake {
                     ServerHandshake::Finished(finished) => {
                         info!("************* Finished");
-                        let verified = self.key_schedule.verify_server_finished(&finished);
+                        let verified = self.key_schedule.verify_server_finished(&finished)?;
                         if verified {
                             info!("FINISHED! server verified {}", verified);
                             Ok(State::ClientFinished)
@@ -349,14 +350,15 @@ where
                 info!("Writing {} bytes", buf.len());
 
                 let mut v: Vec<u8, U4096> = Vec::new();
-                v.extend_from_slice(buf);
-                v.push(ContentType::ApplicationData as u8);
+                v.extend_from_slice(buf).map_err(|_| TlsError::IoError)?;
+                v.push(ContentType::ApplicationData as u8)
+                    .map_err(|_| TlsError::IoError)?;
                 let data = self.encrypt(&mut v)?;
                 info!("Encrypted data: {:02x?}", data);
                 self.transmit(&ClientRecord::ApplicationData(data)).await?;
                 Ok(buf.len())
             }
-            _ => return Err(TlsError::MissingHandshake),
+            _ => Err(TlsError::MissingHandshake),
         }
     }
 
@@ -370,16 +372,16 @@ where
                         info!("Got application data record");
                         if buf.len() < data.len() {
                             warn!("Passed buffer is too small");
-                            return Err(TlsError::IoError);
+                            Err(TlsError::IoError)
                         } else {
                             buf[0..data.len()].copy_from_slice(&data[0..data.len()]);
-                            return Ok(data.len());
+                            Ok(data.len())
                         }
                     }
-                    _ => return Err(TlsError::InvalidApplicationData),
+                    _ => Err(TlsError::InvalidApplicationData),
                 }
             }
-            _ => return Err(TlsError::MissingHandshake),
+            _ => Err(TlsError::MissingHandshake),
         }
     }
 

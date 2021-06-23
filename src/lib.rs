@@ -31,6 +31,7 @@ pub enum TlsError {
     Unimplemented,
     MissingHandshake,
     IoError,
+    InternalError,
     InvalidRecord,
     UnknownContentType,
     UnknownExtensionType,

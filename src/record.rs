@@ -44,18 +44,22 @@ where
     ) -> Result<Option<Range<usize>>, TlsError> {
         match self {
             ClientRecord::Handshake(_) => {
-                buf.push(ContentType::Handshake as u8);
-                buf.extend_from_slice(&[0x03, 0x01]);
+                buf.push(ContentType::Handshake as u8)
+                    .map_err(|_| TlsError::IoError)?;
+                buf.extend_from_slice(&[0x03, 0x01])
+                    .map_err(|_| TlsError::IoError)?;
             }
             ClientRecord::ApplicationData(_) => {
-                buf.push(ContentType::ApplicationData as u8);
-                buf.extend_from_slice(&[0x03, 0x03]);
+                buf.push(ContentType::ApplicationData as u8)
+                    .map_err(|_| TlsError::IoError)?;
+                buf.extend_from_slice(&[0x03, 0x03])
+                    .map_err(|_| TlsError::IoError)?;
             }
         }
 
         let record_length_marker = buf.len();
-        buf.push(0);
-        buf.push(0);
+        buf.push(0).map_err(|_| TlsError::IoError)?;
+        buf.push(0).map_err(|_| TlsError::IoError)?;
 
         let range = match self {
             ClientRecord::Handshake(handshake) => Some(handshake.encode(buf)?),

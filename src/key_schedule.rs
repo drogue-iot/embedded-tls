@@ -1,4 +1,5 @@
 use crate::handshake::finished::Finished;
+use crate::TlsError;
 use core::marker::PhantomData;
 use digest::generic_array::ArrayLength;
 use digest::{BlockInput, FixedOutput, Reset, Update};
@@ -77,69 +78,72 @@ where
         self.write_counter = 0;
     }
 
-    pub(crate) fn get_server_nonce(&self) -> GenericArray<u8, IvLen> {
-        self.get_nonce(self.read_counter, &self.get_server_iv())
+    pub(crate) fn get_server_nonce(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
+        Ok(self.get_nonce(self.read_counter, &self.get_server_iv()?))
     }
 
-    pub(crate) fn get_client_nonce(&self) -> GenericArray<u8, IvLen> {
-        self.get_nonce(self.write_counter, &self.get_client_iv())
+    pub(crate) fn get_client_nonce(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
+        Ok(self.get_nonce(self.write_counter, &self.get_client_iv()?))
     }
 
-    pub(crate) fn get_server_key(&self) -> GenericArray<u8, KeyLen> {
+    pub(crate) fn get_server_key(&self) -> Result<GenericArray<u8, KeyLen>, TlsError> {
         self.hkdf_expand_label(
             &self.server_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16()),
         )
     }
 
-    pub(crate) fn get_client_key(&self) -> GenericArray<u8, KeyLen> {
+    pub(crate) fn get_client_key(&self) -> Result<GenericArray<u8, KeyLen>, TlsError> {
         self.hkdf_expand_label(
             &self.client_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16()),
         )
     }
 
-    fn get_server_iv(&self) -> GenericArray<u8, IvLen> {
-        self.hkdf_expand_label(
+    fn get_server_iv(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
+        Ok(self.hkdf_expand_label(
             &self.server_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16()),
-        )
+        )?)
     }
 
-    fn get_client_iv(&self) -> GenericArray<u8, IvLen> {
-        self.hkdf_expand_label(
+    fn get_client_iv(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
+        Ok(self.hkdf_expand_label(
             &self.client_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16()),
-        )
+        )?)
     }
 
-    pub fn create_client_finished(&self) -> Result<Finished<D::OutputSize>, ()> {
+    pub fn create_client_finished(&self) -> Result<Finished<D::OutputSize>, TlsError> {
         let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
             self.client_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16()),
-        );
+        )?;
 
-        let mut hmac = Hmac::<D>::new_varkey(&key).map_err(|_| ())?;
+        let mut hmac = Hmac::<D>::new_varkey(&key).map_err(|_| TlsError::CryptoError)?;
         hmac.update(&self.transcript_hash.as_ref().unwrap().clone().finalize());
         let verify = hmac.finalize().into_bytes();
 
         Ok(Finished { verify, hash: None })
     }
 
-    pub fn verify_server_finished(&self, finished: &Finished<D::OutputSize>) -> bool {
+    pub fn verify_server_finished(
+        &self,
+        finished: &Finished<D::OutputSize>,
+    ) -> Result<bool, TlsError> {
         //info!("verify server finished: {:x?}", finished.verify);
         //self.client_traffic_secret.as_ref().unwrap().expand()
         //info!("size ===> {}", D::OutputSize::to_u16());
         let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
             self.server_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16()),
-        );
+        )?;
         info!("hmac sign key {:x?}", key);
         let mut hmac = Hmac::<D>::new_varkey(&key).unwrap();
         info!("CHECK HASH {:x?}", &finished.hash.as_ref().unwrap());
         hmac.update(finished.hash.as_ref().unwrap());
         //let code = hmac.clone().finalize().into_bytes();
-        hmac.verify(&finished.verify).is_ok()
+        Ok(hmac.verify(&finished.verify).is_ok())
         //info!("verified {:?}", verified);
         //unimplemented!()
     }
@@ -185,28 +189,29 @@ where
         GenericArray::default()
     }
 
-    fn derived(&mut self) {
-        self.secret = self.derive_secret(b"derived", ContextType::EmptyHash);
+    fn derived(&mut self) -> Result<(), TlsError> {
+        self.secret = self.derive_secret(b"derived", ContextType::EmptyHash)?;
+        Ok(())
     }
 
-    pub fn initialize_early_secret(&mut self) {
+    pub fn initialize_early_secret(&mut self) -> Result<(), TlsError> {
         let (secret, hkdf) =
             Hkdf::<D>::extract(Some(self.secret.as_ref()), Self::zero().as_slice());
         self.hkdf.replace(hkdf);
         self.secret = secret;
         // no right-hand jaunts (yet)
-        self.derived();
+        self.derived()
     }
 
-    pub fn initialize_handshake_secret(&mut self, ikm: &[u8]) {
+    pub fn initialize_handshake_secret(&mut self, ikm: &[u8]) -> Result<(), TlsError> {
         let (secret, hkdf) = Hkdf::<D>::extract(Some(self.secret.as_ref()), ikm);
         self.secret = secret;
         self.hkdf.replace(hkdf);
-        self.calculate_traffic_secrets();
-        self.derived();
+        self.calculate_traffic_secrets(b"c hs traffic", b"s hs traffic")?;
+        self.derived()
     }
 
-    pub fn initialize_master_secret(&mut self) {
+    pub fn initialize_master_secret(&mut self) -> Result<(), TlsError> {
         let (secret, hkdf) =
             Hkdf::<D>::extract(Some(self.secret.as_ref()), Self::zero().as_slice());
         self.secret = secret;
@@ -215,52 +220,48 @@ where
         let context = self.transcript_hash.as_ref().unwrap().clone().finalize();
         info!("Derive keys, hash: {:x?}", context);
 
-        let client_secret = self.derive_secret(b"c ap traffic", ContextType::TranscriptHash);
-        self.client_traffic_secret
-            .replace(Hkdf::from_prk(&client_secret).unwrap());
-        info!("c traffic secret {:x?}", client_secret);
-        let server_secret = self.derive_secret(b"s ap traffic", ContextType::TranscriptHash);
-        self.server_traffic_secret
-            .replace(Hkdf::from_prk(&server_secret).unwrap());
-        info!("s traffic secret {:x?}", server_secret);
-        self.read_counter = 0;
-        self.write_counter = 0;
-
-        self.derived();
+        self.calculate_traffic_secrets(b"c ap traffic", b"s ap traffic")?;
+        self.derived()
     }
 
-    fn calculate_traffic_secrets(&mut self) {
-        let client_secret = self.derive_secret(b"c hs traffic", ContextType::TranscriptHash);
+    fn calculate_traffic_secrets(
+        &mut self,
+        client_label: &[u8],
+        server_label: &[u8],
+    ) -> Result<(), TlsError> {
+        let client_secret = self.derive_secret(client_label, ContextType::TranscriptHash)?;
         self.client_traffic_secret
             .replace(Hkdf::from_prk(&client_secret).unwrap());
-        info!("c traffic secret {:x?}", client_secret);
-        let server_secret = self.derive_secret(b"s hs traffic", ContextType::TranscriptHash);
+        // info!("c traffic secret {:x?}", client_secret);
+        let server_secret = self.derive_secret(server_label, ContextType::TranscriptHash)?;
         self.server_traffic_secret
             .replace(Hkdf::from_prk(&server_secret).unwrap());
-        info!("s traffic secret {:x?}", server_secret);
+        // info!("s traffic secret {:x?}", server_secret);
         self.read_counter = 0;
         self.write_counter = 0;
+        Ok(())
     }
 
     fn derive_secret(
         &mut self,
         label: &[u8],
         context_type: ContextType,
-    ) -> GenericArray<u8, D::OutputSize> {
+    ) -> Result<GenericArray<u8, D::OutputSize>, TlsError> {
         let label = self.make_hkdf_label(label, context_type, D::OutputSize::to_u16());
-        self.hkdf_expand_label(self.hkdf.as_ref().unwrap(), &label)
+        Ok(self.hkdf_expand_label(self.hkdf.as_ref().unwrap(), &label)?)
     }
 
     pub fn hkdf_expand_label<N: ArrayLength<u8>>(
         &self,
         hkdf: &Hkdf<D>,
         label: &[u8],
-    ) -> GenericArray<u8, N> {
+    ) -> Result<GenericArray<u8, N>, TlsError> {
         let mut okm: GenericArray<u8, N> = Default::default();
         //info!("label {:x?}", label);
-        hkdf.expand(label, &mut okm);
+        hkdf.expand(label, &mut okm)
+            .map_err(|_| TlsError::CryptoError);
         //info!("expand {:x?}", okm);
-        okm
+        Ok(okm)
     }
 
     fn make_hkdf_label(&self, label: &[u8], context_type: ContextType, len: u16) -> Vec<u8, U512> {
