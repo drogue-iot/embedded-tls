@@ -44,21 +44,21 @@ where
         match self {
             ClientRecord::Handshake(_) => {
                 buf.push(ContentType::Handshake as u8)
-                    .map_err(|_| TlsError::IoError)?;
+                    .map_err(|_| TlsError::EncodeError)?;
                 buf.extend_from_slice(&[0x03, 0x01])
-                    .map_err(|_| TlsError::IoError)?;
+                    .map_err(|_| TlsError::EncodeError)?;
             }
             ClientRecord::ApplicationData(_) => {
                 buf.push(ContentType::ApplicationData as u8)
-                    .map_err(|_| TlsError::IoError)?;
+                    .map_err(|_| TlsError::EncodeError)?;
                 buf.extend_from_slice(&[0x03, 0x03])
-                    .map_err(|_| TlsError::IoError)?;
+                    .map_err(|_| TlsError::EncodeError)?;
             }
         }
 
         let record_length_marker = buf.len();
-        buf.push(0).map_err(|_| TlsError::IoError)?;
-        buf.push(0).map_err(|_| TlsError::IoError)?;
+        buf.push(0).map_err(|_| TlsError::EncodeError)?;
+        buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
         let range = match self {
             ClientRecord::Handshake(handshake) => Some(handshake.encode(buf)?),

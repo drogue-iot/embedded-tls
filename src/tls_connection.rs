@@ -115,7 +115,7 @@ where
         let mut header = Vec::new();
         header
             .extend_from_slice(&additional_data)
-            .map_err(|_| TlsError::IoError)?;
+            .map_err(|_| TlsError::EncodeError)?;
         let mut data = Vec::new();
         data.extend(buf.iter());
         Ok(ApplicationData { header, data })
@@ -331,7 +331,7 @@ where
                 let _ = client_finished.encode(&mut buf)?;
 
                 buf.push(ContentType::Handshake as u8)
-                    .map_err(|_| TlsError::IoError)?;
+                    .map_err(|_| TlsError::EncodeError)?;
                 let client_finished = self.encrypt(&mut buf)?;
                 let client_finished = ClientRecord::ApplicationData(client_finished);
 
@@ -350,9 +350,10 @@ where
                 info!("Writing {} bytes", buf.len());
 
                 let mut v: Vec<u8, U4096> = Vec::new();
-                v.extend_from_slice(buf).map_err(|_| TlsError::IoError)?;
+                v.extend_from_slice(buf)
+                    .map_err(|_| TlsError::EncodeError)?;
                 v.push(ContentType::ApplicationData as u8)
-                    .map_err(|_| TlsError::IoError)?;
+                    .map_err(|_| TlsError::EncodeError)?;
                 let data = self.encrypt(&mut v)?;
                 info!("Encrypted data: {:02x?}", data);
                 self.transmit(&ClientRecord::ApplicationData(data)).await?;
@@ -372,7 +373,7 @@ where
                         info!("Got application data record");
                         if buf.len() < data.len() {
                             warn!("Passed buffer is too small");
-                            Err(TlsError::IoError)
+                            Err(TlsError::EncodeError)
                         } else {
                             buf[0..data.len()].copy_from_slice(&data[0..data.len()]);
                             Ok(data.len())
