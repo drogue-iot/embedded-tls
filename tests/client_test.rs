@@ -7,13 +7,10 @@ use drogue_tls::{config::*, tls_connection::*, AsyncRead, AsyncWrite, TlsError};
 use heapless::consts;
 use mio::net::TcpListener;
 use rand::rngs::OsRng;
-use rustls::{NoClientAuth, ServerConfig};
-use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Once;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::time::{sleep, Duration};
 
 mod tlsserver;
 
@@ -24,9 +21,9 @@ fn setup() -> std::io::Result<SocketAddr> {
         env_logger::init();
     });
 
-    let mut addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
 
-    let mut listener = TcpListener::bind(addr).expect("cannot listen on port");
+    let listener = TcpListener::bind(addr).expect("cannot listen on port");
     let addr = listener.local_addr()?;
 
     std::thread::spawn(move || {
@@ -38,7 +35,7 @@ fn setup() -> std::io::Result<SocketAddr> {
 #[tokio::test]
 async fn test_ping() {
     let addr = setup().expect("error initializing test");
-    let mut stream = TcpStream::connect(addr)
+    let stream = TcpStream::connect(addr)
         .await
         .expect("error connecting to server");
     let socket = Socket { stream };
@@ -66,13 +63,7 @@ impl AsyncWrite for Socket {
     #[rustfmt::skip]
     type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
     fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-        async move {
-            Ok(self
-                .stream
-                .write(buf)
-                .await
-                .map_err(|_| TlsError::IoError)?)
-        }
+        async move { self.stream.write(buf).await.map_err(|_| TlsError::IoError) }
     }
 }
 
@@ -80,6 +71,6 @@ impl AsyncRead for Socket {
     #[rustfmt::skip]
     type ReadFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
     fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-        async move { Ok(self.stream.read(buf).await.map_err(|_| TlsError::IoError)?) }
+        async move { self.stream.read(buf).await.map_err(|_| TlsError::IoError) }
     }
 }

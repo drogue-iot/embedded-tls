@@ -1,5 +1,5 @@
 use crate::parse_buffer::ParseBuffer;
-use crate::{AsyncRead, AsyncWrite, TlsError};
+use crate::{AsyncRead, TlsError};
 use core::fmt::{Debug, Formatter};
 use heapless::{consts::*, Vec};
 
