@@ -6,7 +6,7 @@ use crate::extensions::common::KeyShareEntry;
 use crate::extensions::server::ServerExtension;
 use crate::handshake::Random;
 use crate::parse_buffer::ParseBuffer;
-use crate::{AsyncRead, TlsError};
+use crate::TlsError;
 use p256::ecdh::{EphemeralSecret, SharedSecret};
 use p256::PublicKey;
 use sha2::Digest;
@@ -20,26 +20,8 @@ pub struct ServerHello {
 }
 
 impl ServerHello {
-    pub async fn read<D: Digest, T: AsyncRead>(
-        socket: &mut T,
-        content_length: usize,
-        digest: &mut D,
-    ) -> Result<ServerHello, TlsError> {
-        info!("parsing ServerHello");
-
-        let mut buf = Vec::<u8, U1024>::new();
-        buf.resize(content_length, 0)
-            .map_err(|_| TlsError::DecodeError)?;
-        let mut pos = 0;
-
-        loop {
-            pos += socket.read(&mut buf[pos..content_length as usize]).await?;
-            if pos == content_length {
-                break;
-            }
-        }
-
-        info!("server hello hash [{:x?}]", &buf[0..content_length]);
+    pub async fn read<D: Digest>(buf: &[u8], digest: &mut D) -> Result<ServerHello, TlsError> {
+        info!("server hello hash [{:x?}]", &buf[..]);
         digest.update(&buf);
         Self::parse(&mut ParseBuffer::new(&buf))
     }

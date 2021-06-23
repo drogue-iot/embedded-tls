@@ -37,6 +37,7 @@ pub enum TlsError {
     InvalidRecord,
     UnknownContentType,
     UnknownExtensionType,
+    InsufficientSpace,
     InvalidHandshake,
     InvalidCipherSuite,
     InvalidSignatureScheme,

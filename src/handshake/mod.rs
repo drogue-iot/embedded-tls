@@ -10,7 +10,7 @@ use crate::handshake::encrypted_extensions::EncryptedExtensions;
 use crate::handshake::finished::Finished;
 use crate::handshake::server_hello::ServerHello;
 use crate::parse_buffer::ParseBuffer;
-use crate::{AsyncRead, AsyncWrite, TlsError};
+use crate::TlsError;
 use core::fmt::{Debug, Formatter};
 use core::ops::Range;
 use sha2::Digest;
@@ -138,31 +138,19 @@ impl<N: ArrayLength<u8>> Debug for ServerHandshake<N> {
 }
 
 impl<N: ArrayLength<u8>> ServerHandshake<N> {
-    pub async fn read<T: AsyncRead + AsyncWrite, D: Digest>(
-        socket: &mut T,
-        _: u16,
-        digest: &mut D,
-    ) -> Result<Self, TlsError> {
-        let mut header = [0; 4];
-        let mut pos = 0;
-        loop {
-            pos += socket.read(&mut header).await?;
-            if pos == header.len() {
-                break;
-            }
-        }
-
+    pub async fn read<D: Digest>(rx_buf: &mut [u8], digest: &mut D) -> Result<Self, TlsError> {
+        let header = &rx_buf[0..4];
         match HandshakeType::of(header[0]) {
             None => Err(TlsError::InvalidHandshake),
             Some(handshake_type) => {
-                let length = u32::from_be_bytes([0, header[1], header[2], header[3]]);
+                let length = u32::from_be_bytes([0, header[1], header[2], header[3]]) as usize;
                 match handshake_type {
                     HandshakeType::ClientHello => Err(TlsError::Unimplemented),
                     HandshakeType::ServerHello => {
                         info!("hash [{:x?}]", &header);
                         digest.update(&header);
                         Ok(ServerHandshake::ServerHello(
-                            ServerHello::read(socket, length as usize, digest).await?,
+                            ServerHello::read(&rx_buf[4..length], digest).await?,
                         ))
                     }
                     HandshakeType::NewSessionTicket => Err(TlsError::Unimplemented),

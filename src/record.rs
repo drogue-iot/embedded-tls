@@ -17,7 +17,7 @@ where
     CipherSuite: TlsCipherSuite,
 {
     Handshake(ClientHandshake<'config, R, CipherSuite>),
-    ApplicationData(ApplicationData),
+    ApplicationData(ApplicationData<'config>),
 }
 
 impl<'config, RNG, CipherSuite> ClientRecord<'config, RNG, CipherSuite>
@@ -81,23 +81,24 @@ where
 }
 
 #[derive(Debug)]
-pub enum ServerRecord<N: ArrayLength<u8>> {
+pub enum ServerRecord<'a, N: ArrayLength<u8>> {
     Handshake(ServerHandshake<N>),
     ChangeCipherSpec(ChangeCipherSpec),
     Alert,
-    ApplicationData(ApplicationData),
+    ApplicationData(ApplicationData<'a>),
 }
 
-impl<N: ArrayLength<u8>> ServerRecord<N> {
+impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
     pub async fn read<T: AsyncWrite + AsyncRead, D: Digest>(
         socket: &mut T,
+        rx_buf: &'a mut [u8],
         digest: &mut D,
-    ) -> Result<Self, TlsError> {
-        let mut header = [0; 5];
-        let mut pos = 0;
+    ) -> Result<ServerRecord<'a, N>, TlsError> {
+        let mut pos: usize = 0;
+        let mut header: [u8; 5] = [0; 5];
         loop {
-            pos += socket.read(&mut header[pos..]).await?;
-            if pos == header.len() {
+            pos += socket.read(&mut header[pos..5]).await?;
+            if pos == 5 {
                 break;
             }
         }
@@ -107,18 +108,31 @@ impl<N: ArrayLength<u8>> ServerRecord<N> {
         match ContentType::of(header[0]) {
             None => Err(TlsError::InvalidRecord),
             Some(content_type) => {
-                let content_length = u16::from_be_bytes([header[3], header[4]]);
+                let content_length = u16::from_be_bytes([header[3], header[4]]) as usize;
+                if content_length > rx_buf.len() - pos {
+                    return Err(TlsError::InsufficientSpace);
+                }
+
+                let rx_buf = &mut rx_buf[pos..];
+                let mut pos = 0;
+                while pos < content_length {
+                    pos += socket
+                        .read(&mut rx_buf[pos..content_length])
+                        .await
+                        .map_err(|_| TlsError::InvalidRecord)?;
+                }
+
                 match content_type {
                     ContentType::Invalid => Err(TlsError::Unimplemented),
                     ContentType::ChangeCipherSpec => Ok(ServerRecord::ChangeCipherSpec(
-                        ChangeCipherSpec::read(socket, content_length).await?,
+                        ChangeCipherSpec::read(&mut rx_buf[..content_length]).await?,
                     )),
                     ContentType::Alert => Err(TlsError::Unimplemented),
                     ContentType::Handshake => Ok(ServerRecord::Handshake(
-                        ServerHandshake::read(socket, content_length, digest).await?,
+                        ServerHandshake::read(&mut rx_buf[..content_length], digest).await?,
                     )),
                     ContentType::ApplicationData => Ok(ServerRecord::ApplicationData(
-                        ApplicationData::read(socket, content_length, &header).await?,
+                        ApplicationData::new(&mut rx_buf[..content_length], header),
                     )),
                 }
             }

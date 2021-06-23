@@ -1,28 +1,14 @@
 use crate::parse_buffer::ParseBuffer;
-use crate::{AsyncRead, TlsError};
+use crate::TlsError;
 use heapless::ArrayLength;
 
 #[derive(Debug, Copy, Clone)]
 pub struct ChangeCipherSpec {}
 
 impl ChangeCipherSpec {
-    pub async fn read<T: AsyncRead>(socket: &mut T, len: u16) -> Result<Self, TlsError> {
-        info!("application data of len={}", len);
-        let mut buf: [u8; 2048] = [0; 2048];
-
-        let mut num_read = 0;
-
-        loop {
-            num_read += socket
-                .read(&mut buf[num_read..len as usize])
-                .await
-                .map_err(|_| TlsError::InvalidRecord)?;
-
-            if num_read == len as usize {
-                info!("read change cipher spec fully");
-                break;
-            }
-        }
+    pub async fn read(rx_buf: &mut [u8]) -> Result<Self, TlsError> {
+        info!("change cipher spec of len={}", rx_buf.len());
+        // TODO: Decode data
         Ok(Self {})
     }
 
