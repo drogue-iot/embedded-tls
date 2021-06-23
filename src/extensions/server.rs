@@ -1,7 +1,5 @@
 use crate::extensions::common::KeyShareEntry;
 use crate::extensions::ExtensionType;
-use crate::extensions::ExtensionType::SupportedVersions;
-use crate::named_groups::NamedGroup;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::supported_versions::ProtocolVersion;
 use crate::TlsError;
@@ -57,24 +55,28 @@ impl ServerExtension {
 
             match extension_type {
                 ExtensionType::SupportedVersions => {
-                    extensions.push(ServerExtension::SupportedVersion(
-                        SupportedVersion::parse(
-                            &mut buf
-                                .slice(extension_length as usize)
-                                .map_err(|_| TlsError::InvalidExtensionsLength)?,
-                        )
-                        .map_err(|_| TlsError::InvalidSupportedVersions)?,
-                    ));
+                    extensions
+                        .push(ServerExtension::SupportedVersion(
+                            SupportedVersion::parse(
+                                &mut buf
+                                    .slice(extension_length as usize)
+                                    .map_err(|_| TlsError::InvalidExtensionsLength)?,
+                            )
+                            .map_err(|_| TlsError::InvalidSupportedVersions)?,
+                        ))
+                        .map_err(|_| TlsError::DecodeError)?;
                 }
                 ExtensionType::KeyShare => {
-                    extensions.push(ServerExtension::KeyShare(
-                        KeyShare::parse(
-                            &mut buf
-                                .slice(extension_length as usize)
-                                .map_err(|_| TlsError::InvalidExtensionsLength)?,
-                        )
-                        .map_err(|_| TlsError::InvalidKeyShare)?,
-                    ));
+                    extensions
+                        .push(ServerExtension::KeyShare(
+                            KeyShare::parse(
+                                &mut buf
+                                    .slice(extension_length as usize)
+                                    .map_err(|_| TlsError::InvalidExtensionsLength)?,
+                            )
+                            .map_err(|_| TlsError::InvalidKeyShare)?,
+                        ))
+                        .map_err(|_| TlsError::DecodeError)?;
                 }
                 ExtensionType::SupportedGroups => {
                     let _ = buf.slice(extension_length as usize);

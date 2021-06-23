@@ -257,7 +257,7 @@ where
     async fn handshake(&mut self, state: &State) -> Result<State, TlsError> {
         match state {
             State::ClientHello => {
-                self.key_schedule.initialize_early_secret();
+                self.key_schedule.initialize_early_secret()?;
                 let client_hello = ClientRecord::client_hello(&self.config);
                 self.transmit(&client_hello).await?;
                 info!("sent client hello");
@@ -278,7 +278,7 @@ where
                             .ok_or(TlsError::InvalidKeyShare)?;
 
                         self.key_schedule
-                            .initialize_handshake_secret(shared.as_bytes());
+                            .initialize_handshake_secret(shared.as_bytes())?;
 
                         Ok(State::ServerCert)
                     }
@@ -336,7 +336,7 @@ where
                 let client_finished = ClientRecord::ApplicationData(client_finished);
 
                 self.transmit(&client_finished).await?;
-                self.key_schedule.initialize_master_secret();
+                self.key_schedule.initialize_master_secret()?;
                 Ok(State::ApplicationData)
             }
             State::ApplicationData => Ok(State::ApplicationData),
@@ -368,7 +368,7 @@ where
                 self.state.replace(State::ApplicationData);
                 let record = self.next_record(true).await?;
                 match record {
-                    ServerRecord::ApplicationData(ApplicationData { header, data }) => {
+                    ServerRecord::ApplicationData(ApplicationData { header: _, data }) => {
                         info!("Got application data record");
                         if buf.len() < data.len() {
                             warn!("Passed buffer is too small");

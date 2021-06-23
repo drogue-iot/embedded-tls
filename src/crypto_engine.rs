@@ -12,5 +12,5 @@ impl CryptoEngine {
         Self { group, shared }
     }
 
-    pub fn decrypt(&self, record: &ApplicationData) {}
+    pub fn decrypt(&self, _: &ApplicationData) {}
 }

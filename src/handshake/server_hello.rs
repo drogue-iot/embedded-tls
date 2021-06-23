@@ -1,13 +1,12 @@
-use heapless::{consts::*, ArrayLength, Vec};
+use heapless::{consts::*, Vec};
 
 use crate::cipher_suites::CipherSuite;
 use crate::crypto_engine::CryptoEngine;
 use crate::extensions::common::KeyShareEntry;
 use crate::extensions::server::ServerExtension;
 use crate::handshake::Random;
-use crate::named_groups::NamedGroup;
 use crate::parse_buffer::ParseBuffer;
-use crate::{AsyncRead, AsyncWrite, TlsError};
+use crate::{AsyncRead, TlsError};
 use p256::ecdh::{EphemeralSecret, SharedSecret};
 use p256::PublicKey;
 use sha2::Digest;
@@ -29,7 +28,8 @@ impl ServerHello {
         info!("parsing ServerHello");
 
         let mut buf = Vec::<u8, U1024>::new();
-        buf.resize(content_length, 0);
+        buf.resize(content_length, 0)
+            .map_err(|_| TlsError::DecodeError)?;
         let mut pos = 0;
 
         loop {
@@ -41,17 +41,17 @@ impl ServerHello {
 
         info!("server hello hash [{:x?}]", &buf[0..content_length]);
         digest.update(&buf);
-        Self::parse(&mut ParseBuffer::new(&mut buf))
+        Self::parse(&mut ParseBuffer::new(&buf))
     }
 
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, TlsError> {
         //let mut buf = ParseBuffer::new(&buf[0..content_length]);
         //let mut buf = ParseBuffer::new(&buf);
 
-        let version = buf.read_u16().map_err(|_| TlsError::InvalidHandshake)?;
+        let _version = buf.read_u16().map_err(|_| TlsError::InvalidHandshake)?;
 
         let mut random = [0; 32];
-        buf.fill(&mut random);
+        buf.fill(&mut random)?;
 
         let session_id_length = buf
             .read_u8()
@@ -69,10 +69,10 @@ impl ServerHello {
 
         ////info!("sh 3");
         // skip compression method, it's 0.
-        buf.read_u8();
+        buf.read_u8()?;
 
         //info!("sh 4");
-        let extensions_length = buf
+        let _extensions_length = buf
             .read_u16()
             .map_err(|_| TlsError::InvalidExtensionsLength)?;
         //info!("sh 5 {}", extensions_length);

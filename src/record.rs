@@ -1,13 +1,12 @@
 use crate::application_data::ApplicationData;
 use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::config::{Config, TlsCipherSuite};
-use crate::content_types;
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
-use crate::handshake::{ClientHandshake, HandshakeType, ServerHandshake};
+use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::{AsyncRead, AsyncWrite, TlsError};
 use core::ops::Range;
-use heapless::{consts::*, ArrayLength, Vec};
+use heapless::{ArrayLength, Vec};
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
 

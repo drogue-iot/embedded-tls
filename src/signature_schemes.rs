@@ -1,7 +1,3 @@
-use crate::signature_schemes::SignatureScheme::{
-    Ed25519, RsaPssRsaeSha256, RsaPssRsaeSha384, RsaPssRsaeSha512,
-};
-
 #[derive(Copy, Clone, Debug)]
 pub enum SignatureScheme {
     /* RSASSA-PKCS1-v1_5 algorithms */

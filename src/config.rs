@@ -4,7 +4,7 @@ use crate::named_groups::NamedGroup;
 use crate::signature_schemes::SignatureScheme;
 use aes_gcm::{AeadInPlace, Aes128Gcm, NewAead};
 use core::marker::PhantomData;
-use digest::{BlockInput, Digest, FixedOutput, Reset, Update};
+use digest::{BlockInput, FixedOutput, Reset, Update};
 use generic_array::ArrayLength;
 use heapless::{consts::*, Vec};
 use rand_core::{CryptoRng, RngCore};
@@ -64,15 +64,18 @@ where
 
         config
             .signature_schemes
-            .push(SignatureScheme::RsaPssRsaeSha256);
+            .push(SignatureScheme::RsaPssRsaeSha256)
+            .unwrap();
         config
             .signature_schemes
-            .push(SignatureScheme::RsaPssRsaeSha384);
+            .push(SignatureScheme::RsaPssRsaeSha384)
+            .unwrap();
         config
             .signature_schemes
-            .push(SignatureScheme::RsaPssRsaeSha512);
+            .push(SignatureScheme::RsaPssRsaeSha512)
+            .unwrap();
 
-        config.named_groups.push(NamedGroup::Secp256r1);
+        config.named_groups.push(NamedGroup::Secp256r1).unwrap();
 
         config
     }

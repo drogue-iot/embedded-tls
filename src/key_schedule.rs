@@ -89,35 +89,35 @@ where
     pub(crate) fn get_server_key(&self) -> Result<GenericArray<u8, KeyLen>, TlsError> {
         self.hkdf_expand_label(
             &self.server_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16()),
+            &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16())?,
         )
     }
 
     pub(crate) fn get_client_key(&self) -> Result<GenericArray<u8, KeyLen>, TlsError> {
         self.hkdf_expand_label(
             &self.client_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16()),
+            &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16())?,
         )
     }
 
     fn get_server_iv(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
-        Ok(self.hkdf_expand_label(
+        self.hkdf_expand_label(
             &self.server_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16()),
-        )?)
+            &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16())?,
+        )
     }
 
     fn get_client_iv(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
-        Ok(self.hkdf_expand_label(
+        self.hkdf_expand_label(
             &self.client_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16()),
-        )?)
+            &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16())?,
+        )
     }
 
     pub fn create_client_finished(&self) -> Result<Finished<D::OutputSize>, TlsError> {
         let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
             self.client_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16()),
+            &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16())?,
         )?;
 
         let mut hmac = Hmac::<D>::new_varkey(&key).map_err(|_| TlsError::CryptoError)?;
@@ -136,7 +136,7 @@ where
         //info!("size ===> {}", D::OutputSize::to_u16());
         let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
             self.server_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16()),
+            &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16())?,
         )?;
         info!("hmac sign key {:x?}", key);
         let mut hmac = Hmac::<D>::new_varkey(&key).unwrap();
@@ -247,7 +247,7 @@ where
         label: &[u8],
         context_type: ContextType,
     ) -> Result<GenericArray<u8, D::OutputSize>, TlsError> {
-        let label = self.make_hkdf_label(label, context_type, D::OutputSize::to_u16());
+        let label = self.make_hkdf_label(label, context_type, D::OutputSize::to_u16())?;
         Ok(self.hkdf_expand_label(self.hkdf.as_ref().unwrap(), &label)?)
     }
 
@@ -259,36 +259,57 @@ where
         let mut okm: GenericArray<u8, N> = Default::default();
         //info!("label {:x?}", label);
         hkdf.expand(label, &mut okm)
-            .map_err(|_| TlsError::CryptoError);
+            .map_err(|_| TlsError::CryptoError)?;
         //info!("expand {:x?}", okm);
         Ok(okm)
     }
 
-    fn make_hkdf_label(&self, label: &[u8], context_type: ContextType, len: u16) -> Vec<u8, U512> {
+    fn make_hkdf_label(
+        &self,
+        label: &[u8],
+        context_type: ContextType,
+        len: u16,
+    ) -> Result<Vec<u8, U512>, TlsError> {
         //info!("make label {:?} {}", label, len);
         let mut hkdf_label = Vec::new();
-        hkdf_label.extend_from_slice(&len.to_be_bytes());
+        hkdf_label
+            .extend_from_slice(&len.to_be_bytes())
+            .map_err(|_| TlsError::InternalError)?;
 
         let label_len = 6 + label.len() as u8;
-        hkdf_label.extend_from_slice(&(label_len as u8).to_be_bytes());
-        hkdf_label.extend_from_slice(b"tls13 ");
-        hkdf_label.extend_from_slice(label);
+        hkdf_label
+            .extend_from_slice(&(label_len as u8).to_be_bytes())
+            .map_err(|_| TlsError::InternalError)?;
+        hkdf_label
+            .extend_from_slice(b"tls13 ")
+            .map_err(|_| TlsError::InternalError)?;
+        hkdf_label
+            .extend_from_slice(label)
+            .map_err(|_| TlsError::InternalError)?;
 
         match context_type {
             ContextType::None => {
-                hkdf_label.push(0);
+                hkdf_label.push(0).map_err(|_| TlsError::InternalError)?;
             }
             ContextType::TranscriptHash => {
                 let context = self.transcript_hash.as_ref().unwrap().clone().finalize();
-                hkdf_label.extend_from_slice(&(context.len() as u8).to_be_bytes());
-                hkdf_label.extend_from_slice(&context);
+                hkdf_label
+                    .extend_from_slice(&(context.len() as u8).to_be_bytes())
+                    .map_err(|_| TlsError::InternalError)?;
+                hkdf_label
+                    .extend_from_slice(&context)
+                    .map_err(|_| TlsError::InternalError)?;
             }
             ContextType::EmptyHash => {
                 let context = D::new().chain(&[]).finalize();
-                hkdf_label.extend_from_slice(&(context.len() as u8).to_be_bytes());
-                hkdf_label.extend_from_slice(&context);
+                hkdf_label
+                    .extend_from_slice(&(context.len() as u8).to_be_bytes())
+                    .map_err(|_| TlsError::InternalError)?;
+                hkdf_label
+                    .extend_from_slice(&context)
+                    .map_err(|_| TlsError::InternalError)?;
             }
         }
-        hkdf_label
+        Ok(hkdf_label)
     }
 }

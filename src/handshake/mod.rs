@@ -1,27 +1,15 @@
-use heapless::{consts::*, ArrayLength, Vec};
-use p256::ecdh::EphemeralSecret;
-use p256::{EncodedPoint, NistP256};
+use heapless::{ArrayLength, Vec};
 use rand_core::{CryptoRng, RngCore};
 
-use crate::cipher_suites::CipherSuite;
 //use p256::elliptic_curve::AffinePoint;
-use crate::config::{Config, TlsCipherSuite};
-use crate::content_types::ContentType;
-use crate::content_types::ContentType::Handshake;
-use crate::extensions::ClientExtension;
-use crate::extensions::ExtensionType::SupportedVersions;
+use crate::config::TlsCipherSuite;
 use crate::handshake::certificate::Certificate;
 use crate::handshake::certificate_verify::CertificateVerify;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::encrypted_extensions::EncryptedExtensions;
 use crate::handshake::finished::Finished;
 use crate::handshake::server_hello::ServerHello;
-use crate::max_fragment_length::MaxFragmentLength;
-use crate::named_groups::NamedGroup;
 use crate::parse_buffer::ParseBuffer;
-use crate::signature_schemes::SignatureScheme;
-use crate::supported_versions::{ProtocolVersion, TLS13};
-use crate::TlsError::InvalidHandshake;
 use crate::{AsyncRead, AsyncWrite, TlsError};
 use core::fmt::{Debug, Formatter};
 use core::ops::Range;
@@ -99,17 +87,19 @@ where
         let content_marker = buf.len();
         match self {
             ClientHandshake::ClientHello(_) => {
-                buf.push(HandshakeType::ClientHello as u8);
+                buf.push(HandshakeType::ClientHello as u8)
+                    .map_err(|_| TlsError::EncodeError)?;
             }
             ClientHandshake::Finished(_) => {
-                buf.push(HandshakeType::Finished as u8);
+                buf.push(HandshakeType::Finished as u8)
+                    .map_err(|_| TlsError::EncodeError)?;
             }
         }
 
         let content_length_marker = buf.len();
-        buf.push(0);
-        buf.push(0);
-        buf.push(0);
+        buf.push(0).map_err(|_| TlsError::EncodeError)?;
+        buf.push(0).map_err(|_| TlsError::EncodeError)?;
+        buf.push(0).map_err(|_| TlsError::EncodeError)?;
         match self {
             ClientHandshake::ClientHello(inner) => inner.encode(buf)?,
             ClientHandshake::Finished(inner) => inner.encode(buf)?,
@@ -150,7 +140,7 @@ impl<N: ArrayLength<u8>> Debug for ServerHandshake<N> {
 impl<N: ArrayLength<u8>> ServerHandshake<N> {
     pub async fn read<T: AsyncRead + AsyncWrite, D: Digest>(
         socket: &mut T,
-        len: u16,
+        _: u16,
         digest: &mut D,
     ) -> Result<Self, TlsError> {
         let mut header = [0; 4];

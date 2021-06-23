@@ -1,4 +1,3 @@
-use crate::extensions::ClientExtension::SignatureAlgorithms;
 use crate::parse_buffer::ParseBuffer;
 use crate::signature_schemes::SignatureScheme;
 use crate::TlsError;

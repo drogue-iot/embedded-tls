@@ -3,15 +3,12 @@ pub mod server;
 
 use crate::signature_schemes::SignatureScheme;
 
-use crate::extensions::ClientExtension::KeyShare;
-use crate::extensions::ExtensionType::SupportedVersions;
 use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
-use crate::supported_versions::{ProtocolVersion, ProtocolVersions};
+use crate::supported_versions::ProtocolVersions;
 use crate::TlsError;
 use generic_array::ArrayLength;
 use heapless::{consts::*, Vec};
-use nom::number::complete::u16;
 
 #[derive(Debug)]
 pub enum ExtensionType {
@@ -107,19 +104,22 @@ impl ClientExtension {
         .to_be_bytes()
     }
 
-    pub fn encode<N: ArrayLength<u8>>(&self, buf: &mut Vec<u8, N>) {
-        buf.extend_from_slice(&self.extension_type());
+    pub fn encode<N: ArrayLength<u8>>(&self, buf: &mut Vec<u8, N>) -> Result<(), TlsError> {
+        buf.extend_from_slice(&self.extension_type())
+            .map_err(|_| TlsError::EncodeError)?;
         let extension_length_marker = buf.len();
         info!("marker at {}", extension_length_marker);
-        buf.push(0);
-        buf.push(0);
+        buf.push(0).map_err(|_| TlsError::EncodeError)?;
+        buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
         match self {
             ClientExtension::SupportedVersions { versions } => {
                 info!("supported versions ext");
-                buf.push(versions.len() as u8 * 2);
+                buf.push(versions.len() as u8 * 2)
+                    .map_err(|_| TlsError::EncodeError)?;
                 for v in versions {
-                    buf.extend_from_slice(&v.to_be_bytes());
+                    buf.extend_from_slice(&v.to_be_bytes())
+                        .map_err(|_| TlsError::EncodeError)?;
                 }
             }
             ClientExtension::SignatureAlgorithms {
@@ -128,10 +128,12 @@ impl ClientExtension {
                 info!("supported sig algo ext");
                 buf.extend_from_slice(
                     &(supported_signature_algorithms.len() as u16 * 2).to_be_bytes(),
-                );
+                )
+                .map_err(|_| TlsError::EncodeError)?;
 
                 for a in supported_signature_algorithms {
-                    buf.extend_from_slice(&(*a as u16).to_be_bytes());
+                    buf.extend_from_slice(&(*a as u16).to_be_bytes())
+                        .map_err(|_| TlsError::EncodeError)?;
                 }
             }
             ClientExtension::SignatureAlgorithmsCert {
@@ -140,31 +142,39 @@ impl ClientExtension {
                 info!("supported sig algo cert ext");
                 buf.extend_from_slice(
                     &(supported_signature_algorithms.len() as u16 * 2).to_be_bytes(),
-                );
+                )
+                .map_err(|_| TlsError::EncodeError)?;
 
                 for a in supported_signature_algorithms {
-                    buf.extend_from_slice(&(*a as u16).to_be_bytes());
+                    buf.extend_from_slice(&(*a as u16).to_be_bytes())
+                        .map_err(|_| TlsError::EncodeError)?;
                 }
             }
             ClientExtension::SupportedGroups { supported_groups } => {
                 info!("supported groups ext");
-                buf.extend_from_slice(&(supported_groups.len() as u16 * 2).to_be_bytes());
+                buf.extend_from_slice(&(supported_groups.len() as u16 * 2).to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
 
                 for g in supported_groups {
-                    buf.extend_from_slice(&(*g as u16).to_be_bytes());
+                    buf.extend_from_slice(&(*g as u16).to_be_bytes())
+                        .map_err(|_| TlsError::EncodeError)?;
                 }
             }
             ClientExtension::KeyShare { group, opaque } => {
                 info!("key_share ext");
-                buf.extend_from_slice(&(2 + 2 as u16 + opaque.len() as u16).to_be_bytes());
+                buf.extend_from_slice(&(2 + 2 as u16 + opaque.len() as u16).to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
                 // one key-share
-                buf.extend_from_slice(&(*group as u16).to_be_bytes());
-                buf.extend_from_slice(&(opaque.len() as u16).to_be_bytes());
-                buf.extend_from_slice(opaque.as_ref());
+                buf.extend_from_slice(&(*group as u16).to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
+                buf.extend_from_slice(&(opaque.len() as u16).to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
+                buf.extend_from_slice(opaque.as_ref())
+                    .map_err(|_| TlsError::EncodeError)?;
             }
             ClientExtension::MaxFragmentLength(len) => {
                 info!("max fragment length");
-                buf.push(*len as u8);
+                buf.push(*len as u8).map_err(|_| TlsError::EncodeError)?;
             }
         }
 
@@ -173,5 +183,6 @@ impl ClientExtension {
         info!("len: {}", extension_length);
         buf[extension_length_marker] = extension_length.to_be_bytes()[0];
         buf[extension_length_marker + 1] = extension_length.to_be_bytes()[1];
+        Ok(())
     }
 }

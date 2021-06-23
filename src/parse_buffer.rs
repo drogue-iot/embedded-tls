@@ -127,3 +127,9 @@ impl<'b> ParseBuffer<'b> {
         }
     }
 }
+
+impl From<ParseError> for TlsError {
+    fn from(e: ParseError) -> Self {
+        TlsError::ParseError(e)
+    }
+}

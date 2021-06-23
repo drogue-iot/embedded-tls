@@ -5,6 +5,8 @@
 #![feature(generic_associated_types)]
 use core::future::Future;
 
+use parse_buffer::ParseError;
+
 pub(crate) mod fmt;
 
 pub mod application_data;
@@ -46,7 +48,10 @@ pub enum TlsError {
     InvalidKeyShare,
     InvalidCertificate,
     UnableToInitializeCryptoEngine,
+    ParseError(ParseError),
     CryptoError,
+    EncodeError,
+    DecodeError,
 }
 
 pub trait AsyncWrite {

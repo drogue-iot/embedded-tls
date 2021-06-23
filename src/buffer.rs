@@ -25,8 +25,7 @@ impl<'b, N: ArrayLength<u8>> AsMut<[u8]> for CryptoBuffer<'b, N> {
 
 impl<'b, N: ArrayLength<u8>> Buffer for CryptoBuffer<'b, N> {
     fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), Error> {
-        (&mut *self.0).extend_from_slice(other);
-        Ok(())
+        (&mut *self.0).extend_from_slice(other).map_err(|_| Error)
     }
 
     fn truncate(&mut self, len: usize) {

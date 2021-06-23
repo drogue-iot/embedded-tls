@@ -1,6 +1,6 @@
 use crate::parse_buffer::ParseBuffer;
-use crate::{AsyncRead, AsyncWrite, TlsError};
-use heapless::{ArrayLength, Vec};
+use crate::{AsyncRead, TlsError};
+use heapless::ArrayLength;
 
 #[derive(Debug, Copy, Clone)]
 pub struct ChangeCipherSpec {}
@@ -26,7 +26,7 @@ impl ChangeCipherSpec {
         Ok(Self {})
     }
 
-    pub fn parse<N: ArrayLength<u8>>(buf: &mut ParseBuffer) -> Result<Self, TlsError> {
+    pub fn parse<N: ArrayLength<u8>>(_: &mut ParseBuffer) -> Result<Self, TlsError> {
         Ok(Self {})
     }
 }
