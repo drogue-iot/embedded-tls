@@ -92,7 +92,7 @@ where
         //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
         let crypto = CipherSuite::Cipher::new(&client_key);
         let initial_len = buf.len();
-        let len = (buf.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize());
+        let len = buf.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize();
         info!(
             "output size {}",
             <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize()
