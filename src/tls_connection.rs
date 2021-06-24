@@ -96,11 +96,12 @@ where
             Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
         }
         trace!(
-            "**** transmit, hash={:x?}",
+            "**** transmit {} bytes, hash={:x?}",
+            len,
             key_schedule.transcript_hash().clone().finalize()
         );
 
-        delegate.write(&tx_buf[..len]).await.map(|_| ())?;
+        delegate.write(&tx_buf[..len]).await?;
 
         key_schedule.increment_write_counter();
         Ok(())
@@ -112,9 +113,9 @@ where
     ) -> Result<usize, TlsError> {
         let client_key = key_schedule.get_client_key()?;
         let nonce = &key_schedule.get_client_nonce()?;
-        info!("encrypt key {:02x?}", client_key);
-        info!("encrypt nonce {:02x?}", nonce);
-        info!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
+        trace!("encrypt key {:02x?}", client_key);
+        trace!("encrypt nonce {:02x?}", nonce);
+        trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
         //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
         let crypto = CipherSuite::Cipher::new(&client_key);
         let len = buf.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize();
@@ -123,7 +124,7 @@ where
             return Err(TlsError::InsufficientSpace);
         }
 
-        info!(
+        trace!(
             "output size {}",
             <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize()
         );
@@ -191,15 +192,15 @@ where
                     while buf.remaining() > 1 {
                         let mut inner = ServerHandshake::parse(&mut buf);
                         if let Ok(ServerHandshake::Finished(ref mut finished)) = inner {
-                            info!("Server finished hash: {:x?}", finished.hash);
+                            trace!("Server finished hash: {:x?}", finished.hash);
                             finished
                                 .hash
                                 .replace(key_schedule.transcript_hash().clone().finalize());
                         }
-                        info!("===> inner ==> {:?}", inner);
+                        trace!("===> inner ==> {:?}", inner);
                         //if hash_later {
                         Digest::update(key_schedule.transcript_hash(), &data[..data.len()]);
-                        info!("hash {:02x?}", &data[..data.len()]);
+                        trace!("hash {:02x?}", &data[..data.len()]);
                         processor(key_schedule, ServerRecord::Handshake(inner.unwrap()))?;
                     }
                     //}
@@ -226,7 +227,6 @@ where
         rx_buf: &'m mut [u8],
         key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     ) -> Result<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError> {
-        info!("Fetch record with rx buf len {}", rx_buf.len());
         Ok(ServerRecord::read(delegate, rx_buf, key_schedule.transcript_hash()).await?)
     }
 
@@ -239,8 +239,6 @@ where
         let client_hello = ClientRecord::client_hello(&self.config);
 
         self.transmit(&client_hello).await?;
-
-        info!("sent client hello");
 
         // Expecting server hello
         self.state = State::ServerHello;
@@ -275,8 +273,6 @@ where
                 break;
             }
 
-            log::info!("Processing handshake in state {:?}", self.state);
-
             // Handle encrypted traffic with coaleced records
             let state = &mut self.state;
             let rx_buf = &mut self.rx_buf;
@@ -307,7 +303,7 @@ where
                                 info!("************* Finished");
                                 let verified = key_schedule.verify_server_finished(&finished)?;
                                 if verified {
-                                    info!("FINISHED! server verified {}", verified);
+                                    debug!("server verified {}", verified);
                                     Ok(State::ClientFinished)
                                 } else {
                                     Err(TlsError::InvalidSignature)
@@ -319,13 +315,12 @@ where
                     },
                     state => Ok(state),
                 }?;
-                log::info!("State {:?} -> {:?}", *state, next_state);
+                debug!("State {:?} -> {:?}", *state, next_state);
                 *state = next_state;
                 Ok(())
             })?;
         }
 
-        log::info!("Sending client finish");
         let client_finished = self
             .key_schedule
             .create_client_finished()
@@ -347,7 +342,6 @@ where
 
         self.key_schedule.initialize_master_secret()?;
         self.state = State::ApplicationData;
-        log::info!("Handshake complete!");
         Ok(())
     }
 

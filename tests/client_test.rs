@@ -45,6 +45,7 @@ async fn test_ping() {
         TlsConnection::new(&tls_config, socket);
 
     tls.open().await.expect("error establishing TLS connection");
+
     tls.write(b"ping").await.expect("error writing data");
 
     let mut rx_buf = [0; 4096];
@@ -62,7 +63,12 @@ impl AsyncWrite for Socket {
     #[rustfmt::skip]
     type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
     fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-        async move { self.stream.write(buf).await.map_err(|_| TlsError::IoError) }
+        async move {
+            self.stream.write(buf).await.map_err(|e| {
+                log::info!("Err: {:?}", e);
+                TlsError::IoError
+            })
+        }
     }
 }
 
@@ -70,6 +76,11 @@ impl AsyncRead for Socket {
     #[rustfmt::skip]
     type ReadFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
     fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-        async move { self.stream.read(buf).await.map_err(|_| TlsError::IoError) }
+        async move {
+            self.stream.read(buf).await.map_err(|e| {
+                log::info!("RErr: {:?}", e);
+                TlsError::IoError
+            })
+        }
     }
 }
