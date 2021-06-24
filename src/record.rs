@@ -69,7 +69,6 @@ where
         }
 
         let record_length_marker = buf.len();
-        log::info!("Record length marker: {}", record_length_marker);
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
@@ -79,42 +78,18 @@ where
                 (Some(range), buf)
             }
             ClientRecord::EncryptedHandshake(handshake) => {
-                info!("Encoding encrypted handshake");
-                let pos = buf.len();
-                /*
-                let mut wrapped = buf.offset(pos);*/
-                buf.release();
-                let mut wrapped = CryptoBuffer::wrap(&mut enc_buf[pos..]); //buf.offset(len);
-                let wrlen = wrapped.len();
-                info!(
-                    "offset({}) len({}) -> offset({}) len({})",
-                    0,
-                    pos,
-                    pos,
-                    wrapped.len()
-                );
+                let mut wrapped = buf.forward();
 
                 handshake.encode(&mut wrapped)?;
                 wrapped
                     .push(ContentType::Handshake as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
-                let enc_len = encrypt_fn(&mut wrapped)?;
-                info!(
-                    "offset({}) len({}) -> offset({}) len({})",
-                    pos,
-                    wrlen,
-                    0,
-                    pos + enc_len
-                );
-                (None, CryptoBuffer::wrap_with_pos(enc_buf, pos + enc_len))
-
-                //                (None, wrapped.offset(0))
+                let _ = encrypt_fn(&mut wrapped)?;
+                (None, wrapped.rewind())
             }
             ClientRecord::ApplicationData(data) => {
-                info!("Encoding application data");
-                let pos = buf.len();
-                let mut wrapped = buf.offset(pos);
+                let mut wrapped = buf.forward();
                 wrapped
                     .extend_from_slice(data)
                     .map_err(|_| TlsError::EncodeError)?;
@@ -122,17 +97,14 @@ where
                     .push(ContentType::ApplicationData as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
-                let enc_len = encrypt_fn(&mut wrapped)?;
-                info!("Encoded length {}", enc_len);
-                (None, wrapped.offset(0))
+                let _ = encrypt_fn(&mut wrapped)?;
+                (None, wrapped.rewind())
             }
         };
 
-        info!("But length is : {}", buf.len());
-
         let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
 
-        info!("record len {}", record_length);
+        trace!("record len {}", record_length);
 
         buf.set(record_length_marker, record_length.to_be_bytes()[0])
             .map_err(|_| TlsError::EncodeError)?;
@@ -172,7 +144,7 @@ impl<N: ArrayLength<u8>> ServerRecord<'_, N> {
             None => Err(TlsError::InvalidRecord),
             Some(content_type) => {
                 let content_length = u16::from_be_bytes([header[3], header[4]]) as usize;
-                info!(
+                trace!(
                     "Content length: {}, rx_buf: {}, pos: {}",
                     content_length,
                     rx_buf.len(),
@@ -190,6 +162,7 @@ impl<N: ArrayLength<u8>> ServerRecord<'_, N> {
                         .await
                         .map_err(|_| TlsError::InvalidRecord)?;
                 }
+                trace!("Read {} bytes", content_length);
 
                 match content_type {
                     ContentType::Invalid => Err(TlsError::Unimplemented),

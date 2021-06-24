@@ -91,7 +91,16 @@ impl<'b> CryptoBuffer<'b> {
         self.capacity
     }
 
-    pub fn offset(self, offset: usize) -> CryptoBuffer<'b> {
+    pub fn forward(self) -> CryptoBuffer<'b> {
+        let len = self.len;
+        self.offset(len)
+    }
+
+    pub fn rewind(self) -> CryptoBuffer<'b> {
+        self.offset(0)
+    }
+
+    pub(crate) fn offset(self, offset: usize) -> CryptoBuffer<'b> {
         let new_len = if offset > self.offset {
             self.len - (offset - self.offset)
         } else {
@@ -112,13 +121,13 @@ impl<'b> CryptoBuffer<'b> {
 
 impl<'b> AsRef<[u8]> for CryptoBuffer<'b> {
     fn as_ref(&self) -> &[u8] {
-        &self.buf[..self.len]
+        self.as_slice()
     }
 }
 
 impl<'b> AsMut<[u8]> for CryptoBuffer<'b> {
     fn as_mut(&mut self) -> &mut [u8] {
-        &mut self.buf[..self.len]
+        self.as_mut_slice()
     }
 }
 
@@ -166,7 +175,7 @@ mod test {
         c.set(0, 14).unwrap();
         c.set(1, 15).unwrap();
 
-        let mut c = c.offset(0);
+        let c = c.offset(0);
         assert_eq!(&[1, 2, 3, 4, 5, 6, 14, 15], c.as_slice());
 
         let mut c = c.offset(4);
@@ -174,7 +183,7 @@ mod test {
         c.extend_from_slice(&[10, 11, 12, 13]).unwrap();
         assert_eq!(&[10, 11, 12, 13], c.as_slice());
 
-        let mut c = c.offset(0);
+        let c = c.offset(0);
         assert_eq!(&[1, 2, 3, 4, 10, 11, 12, 13], c.as_slice());
     }
 }
