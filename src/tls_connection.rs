@@ -364,26 +364,31 @@ where
             return Err(TlsError::MissingHandshake);
         }
 
-        let rx_buf = &mut self.rx_buf[..];
-        let socket = &mut self.delegate;
-        let key_schedule = &mut self.key_schedule;
-        let record = Self::fetch_record(socket, rx_buf, key_schedule).await?;
-        let mut copied = 0;
-        Self::decrypt_record(key_schedule, record, |_, record| match record {
-            ServerRecord::ApplicationData(ApplicationData { header: _, data }) => {
-                info!("Got application data record");
-                if buf.len() < data.len() {
-                    warn!("Passed buffer is too small");
-                    Err(TlsError::EncodeError)
-                } else {
-                    buf[0..data.len()].copy_from_slice(data.as_slice());
-                    copied = data.len();
-                    Ok(())
+        let mut remaining = buf.len();
+        while remaining == buf.len() {
+            let rx_buf = &mut self.rx_buf[..];
+            let socket = &mut self.delegate;
+            let key_schedule = &mut self.key_schedule;
+            let record = Self::fetch_record(socket, rx_buf, key_schedule).await?;
+            Self::decrypt_record(key_schedule, record, |_, record| match record {
+                ServerRecord::ApplicationData(ApplicationData { header: _, data }) => {
+                    info!("Got application data record");
+                    if buf.len() < data.len() {
+                        warn!("Passed buffer is too small");
+                        Err(TlsError::EncodeError)
+                    } else {
+                        let to_copy = core::cmp::min(data.len(), buf.len());
+                        // TODO Need to buffer data not consumed
+                        buf[..to_copy].copy_from_slice(&data.as_slice()[..to_copy]);
+                        remaining -= to_copy;
+                        Ok(())
+                    }
                 }
-            }
-            _ => Err(TlsError::InvalidApplicationData),
-        })?;
-        Ok(copied)
+                _ => Ok(()) // TODO: Handle protocol events 
+                    //Err(TlsError::InvalidApplicationData)},
+            })?;
+        }
+        Ok(buf.len() - remaining)
     }
 
     pub fn delegate_socket(&mut self) -> &mut Socket {

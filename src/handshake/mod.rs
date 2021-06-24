@@ -9,6 +9,7 @@ use crate::handshake::certificate_verify::CertificateVerify;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::encrypted_extensions::EncryptedExtensions;
 use crate::handshake::finished::Finished;
+use crate::handshake::new_session_ticket::NewSessionTicket;
 use crate::handshake::server_hello::ServerHello;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
@@ -21,6 +22,7 @@ pub mod certificate_verify;
 pub mod client_hello;
 pub mod encrypted_extensions;
 pub mod finished;
+pub mod new_session_ticket;
 pub mod server_hello;
 
 const LEGACY_VERSION: u16 = 0x0303;
@@ -121,6 +123,7 @@ where
 pub enum ServerHandshake<N: ArrayLength<u8>> {
     ServerHello(ServerHello),
     EncryptedExtensions(EncryptedExtensions),
+    NewSessionTicket(NewSessionTicket),
     Certificate(Certificate),
     CertificateVerify(CertificateVerify),
     Finished(Finished<N>),
@@ -134,6 +137,7 @@ impl<N: ArrayLength<u8>> Debug for ServerHandshake<N> {
             ServerHandshake::Certificate(inner) => Debug::fmt(inner, f),
             ServerHandshake::CertificateVerify(inner) => Debug::fmt(inner, f),
             ServerHandshake::Finished(inner) => Debug::fmt(inner, f),
+            ServerHandshake::NewSessionTicket(inner) => Debug::fmt(inner, f),
         }
     }
 }
@@ -146,7 +150,6 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
             Some(handshake_type) => {
                 let length = u32::from_be_bytes([0, header[1], header[2], header[3]]) as usize;
                 match handshake_type {
-                    HandshakeType::ClientHello => Err(TlsError::Unimplemented),
                     HandshakeType::ServerHello => {
                         info!("hash [{:x?}]", &header);
                         digest.update(&header);
@@ -154,15 +157,21 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
                             ServerHello::read(&rx_buf[4..length + 4], digest).await?,
                         ))
                     }
-                    HandshakeType::NewSessionTicket => Err(TlsError::Unimplemented),
-                    HandshakeType::EndOfEarlyData => Err(TlsError::Unimplemented),
-                    HandshakeType::EncryptedExtensions => Err(TlsError::Unimplemented),
-                    HandshakeType::Certificate => Err(TlsError::Unimplemented),
-                    HandshakeType::CertificateRequest => Err(TlsError::Unimplemented),
-                    HandshakeType::CertificateVerify => Err(TlsError::Unimplemented),
-                    HandshakeType::Finished => Err(TlsError::Unimplemented),
-                    HandshakeType::KeyUpdate => Err(TlsError::Unimplemented),
-                    HandshakeType::MessageHash => Err(TlsError::Unimplemented),
+                    t => {
+                        info!("UNIMPLEMENTED: {:?}", t);
+                        Err(TlsError::Unimplemented)
+                    } /*
+                      HandshakeType::ClientHello => Err(TlsError::Unimplemented),
+                      HandshakeType::NewSessionTicket => Err(TlsError::Unimplemented),
+                      HandshakeType::EndOfEarlyData => Err(TlsError::Unimplemented),
+                      HandshakeType::EncryptedExtensions => Err(TlsError::Unimplemented),
+                      HandshakeType::Certificate => Err(TlsError::Unimplemented),
+                      HandshakeType::CertificateRequest => Err(TlsError::Unimplemented),
+                      HandshakeType::CertificateVerify => Err(TlsError::Unimplemented),
+                      HandshakeType::Finished => Err(TlsError::Unimplemented),
+                      HandshakeType::KeyUpdate => Err(TlsError::Unimplemented),
+                      HandshakeType::MessageHash => Err(TlsError::Unimplemented),
+                      */
                 }
             }
         }
@@ -178,7 +187,9 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
         match handshake_type {
             //HandshakeType::ClientHello => {}
             //HandshakeType::ServerHello => {}
-            //HandshakeType::NewSessionTicket => {}
+            HandshakeType::NewSessionTicket => Ok(ServerHandshake::NewSessionTicket(
+                NewSessionTicket::parse(buf)?,
+            )),
             //HandshakeType::EndOfEarlyData => {}
             HandshakeType::EncryptedExtensions => {
                 // todo, move digesting up
@@ -200,7 +211,10 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
             )?)),
             //HandshakeType::KeyUpdate => {}
             //HandshakeType::MessageHash => {}
-            _ => Err(TlsError::Unimplemented),
+            t => {
+                info!("Unimplemented handshake type: {:?}", t);
+                Err(TlsError::Unimplemented)
+            }
         }
     }
 }

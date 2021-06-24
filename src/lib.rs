@@ -36,6 +36,8 @@ pub enum TlsError {
     InternalError,
     InvalidRecord,
     UnknownContentType,
+    InvalidNonceLength,
+    InvalidTicketLength,
     UnknownExtensionType,
     InsufficientSpace,
     InvalidHandshake,
