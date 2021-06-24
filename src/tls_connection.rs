@@ -57,7 +57,6 @@ where
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     tx_buf: Vec<u8, TxBufLen>,
     rx_buf: Vec<u8, RxBufLen>,
-    queue: Queue<ServerRecord<'a, <CipherSuite::Hash as FixedOutput>::OutputSize>, U4>,
 }
 
 impl<'a, RNG, Socket, CipherSuite, TxBufLen, RxBufLen>
@@ -77,7 +76,6 @@ where
             key_schedule: KeySchedule::new(),
             tx_buf: Vec::new(),
             rx_buf: Vec::new(),
-            queue: Queue::new(),
         }
     }
 
@@ -156,11 +154,18 @@ where
         Ok(())
     }
 
-    async fn next_record(
+    async fn next_record<
+        'm,
+        N: ArrayLength<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>>,
+    >(
         &mut self,
         encrypted: bool,
-    ) -> Result<ServerRecord<'a, <CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError> {
-        if let Some(queued) = self.queue.dequeue() {
+        queue: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, N>,
+    ) -> Result<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError>
+    where
+        'a: 'm,
+    {
+        if let Some(queued) = queue.dequeue() {
             return Ok(queued);
         }
 
@@ -206,6 +211,7 @@ where
 
                 match content_type {
                     ContentType::Handshake => {
+                        // Decode potentially coaleced handshake messages
                         let mut buf = ParseBuffer::new(&data[..data.len() - 1]);
                         while buf.remaining() > 1 {
                             let mut inner = ServerHandshake::parse(&mut buf);
@@ -216,22 +222,23 @@ where
                                 );
                             }
                             info!("===> inner ==> {:?}", inner);
-                            record = ServerRecord::Handshake(inner.unwrap());
                             //if hash_later {
                             Digest::update(
                                 self.key_schedule.transcript_hash(),
                                 &data[..data.len() - 1],
                             );
                             info!("hash {:02x?}", &data[..data.len() - 1]);
-                            //self.queue.enqueue(record).map_err(|_| TlsError::IoError)?;
+                            queue
+                                .enqueue(ServerRecord::Handshake(inner.unwrap()))
+                                .map_err(|_| TlsError::IoError)?;
                         }
                         //}
                     }
                     ContentType::ApplicationData => {
                         let inner = ApplicationData::new(&mut data[..data_len - 1], header);
-                        record = ServerRecord::ApplicationData(inner);
                         info!("Enqueued some data");
-                        //self.queue.enqueue(record).map_err(|_| TlsError::IoError)?;
+                        //let record = ServerRecord::ApplicationData(inner);
+                        //queue.enqueue(record).map_err(|_| TlsError::IoError)?;
                     }
                     _ => {
                         return Err(TlsError::InvalidHandshake);
@@ -240,26 +247,31 @@ where
                 //debug!("decrypted {:?} --> {:x?}", content_type, data);
                 self.key_schedule.increment_read_counter();
             } else {
-                //self.queue.enqueue(record).map_err(|_| TlsError::IoError)?;
+                return Ok(record);
             }
         } else {
-            //self.queue.enqueue(record).map_err(|_| TlsError::IoError)?;
+            return Ok(record);
         }
         info!(
             "**** receive, hash={:02x?}",
             self.key_schedule.transcript_hash().clone().finalize()
         );
-        if let Some(queued) = self.queue.dequeue() {
+        if let Some(queued) = queue.dequeue() {
             Ok(queued)
         } else {
             Err(TlsError::InvalidApplicationData)
         }
     }
 
-    pub async fn open(&mut self) -> Result<(), TlsError> {
+    pub async fn open<'m>(&mut self) -> Result<(), TlsError>
+    where
+        'a: 'm,
+    {
+        let mut queue: Queue<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, U4> =
+            Queue::new();
         loop {
             if let Some(state) = self.state.take() {
-                let next_state = self.handshake(&state).await?;
+                let next_state = self.handshake(&state, &mut queue).await?;
                 info!("[handshake] {:?} -> {:?}", state, next_state);
                 if let State::ApplicationData = next_state {
                     self.state.replace(next_state);
@@ -273,7 +285,17 @@ where
         Ok(())
     }
 
-    async fn handshake(&mut self, state: &State) -> Result<State, TlsError> {
+    async fn handshake<
+        'm,
+        N: ArrayLength<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>>,
+    >(
+        &mut self,
+        state: &State,
+        queue: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, N>,
+    ) -> Result<State, TlsError>
+    where
+        'a: 'm,
+    {
         match state {
             State::ClientHello => {
                 self.key_schedule.initialize_early_secret()?;
@@ -288,7 +310,7 @@ where
                     Err(TlsError::UnableToInitializeCryptoEngine)
                 }
             }
-            State::ServerHello(secret) => match self.next_record(false).await? {
+            State::ServerHello(secret) => match self.next_record(false, queue).await? {
                 ServerRecord::Handshake(handshake) => match handshake {
                     ServerHandshake::ServerHello(server_hello) => {
                         info!("********* ServerHello");
@@ -305,7 +327,7 @@ where
                 },
                 _ => Err(TlsError::InvalidRecord),
             },
-            State::ServerCert => match self.next_record(true).await? {
+            State::ServerCert => match self.next_record(true, queue).await? {
                 ServerRecord::Handshake(handshake) => match handshake {
                     ServerHandshake::EncryptedExtensions(_) => Ok(State::ServerCert),
                     ServerHandshake::Certificate(_) => Ok(State::ServerCertVerify),
@@ -314,14 +336,14 @@ where
                 ServerRecord::ChangeCipherSpec(_) => Ok(State::ServerCert),
                 _ => Err(TlsError::InvalidRecord),
             },
-            State::ServerCertVerify => match self.next_record(true).await? {
+            State::ServerCertVerify => match self.next_record(true, queue).await? {
                 ServerRecord::Handshake(handshake) => match handshake {
                     ServerHandshake::CertificateVerify(_) => Ok(State::ServerFinished),
                     _ => Err(TlsError::InvalidHandshake),
                 },
                 _ => Err(TlsError::InvalidRecord),
             },
-            State::ServerFinished => match self.next_record(true).await? {
+            State::ServerFinished => match self.next_record(true, queue).await? {
                 ServerRecord::Handshake(handshake) => match handshake {
                     ServerHandshake::Finished(finished) => {
                         info!("************* Finished");
@@ -384,11 +406,18 @@ where
         }
     }
 
-    pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
+    pub async fn read<'m>(&mut self, buf: &mut [u8]) -> Result<usize, TlsError>
+    where
+        'a: 'm,
+    {
         match self.state.take().unwrap() {
             State::ApplicationData => {
                 self.state.replace(State::ApplicationData);
-                let record = self.next_record(true).await?;
+                let mut queue: Queue<
+                    ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>,
+                    U1,
+                > = Queue::new();
+                let record = self.next_record(true, &mut queue).await?;
                 match record {
                     ServerRecord::ApplicationData(ApplicationData { header: _, data }) => {
                         info!("Got application data record");
