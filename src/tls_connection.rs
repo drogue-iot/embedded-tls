@@ -1,10 +1,14 @@
-use crate::config::{Config, TlsCipherSuite};
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
+use crate::{
+    buffer::CryptoBuffer,
+    config::{Config, TlsCipherSuite},
+};
 use crate::{AsyncRead, AsyncWrite, TlsError};
 use core::fmt::Debug;
 use core::ops::Range;
+use digest::generic_array::typenum::Unsigned;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
 
@@ -97,6 +101,42 @@ where
 
         key_schedule.increment_write_counter();
         Ok(())
+    }
+
+    fn encrypt(
+        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+        buf: &mut CryptoBuffer<'_>,
+    ) -> Result<usize, TlsError> {
+        let client_key = key_schedule.get_client_key()?;
+        let nonce = &key_schedule.get_client_nonce()?;
+        info!("encrypt key {:02x?}", client_key);
+        info!("encrypt nonce {:02x?}", nonce);
+        info!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
+        //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
+        let crypto = CipherSuite::Cipher::new(&client_key);
+        let len = buf.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize();
+
+        if len > buf.capacity() {
+            return Err(TlsError::InsufficientSpace);
+        }
+
+        info!(
+            "output size {}",
+            <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize()
+        );
+        let len_bytes = (len as u16).to_be_bytes();
+        let additional_data = [
+            ContentType::ApplicationData as u8,
+            0x03,
+            0x03,
+            len_bytes[0],
+            len_bytes[1],
+        ];
+
+        crypto
+            .encrypt_in_place(nonce, &additional_data, buf)
+            .map_err(|_| TlsError::InvalidApplicationData)?;
+        Ok(buf.len())
     }
 
     fn decrypt_record<
@@ -194,8 +234,10 @@ where
         self.state = State::ClientHello;
         self.key_schedule.initialize_early_secret()?;
         let client_hello = ClientRecord::client_hello(&self.config);
+        let tx_buf = &mut self.tx_buf[..];
+        let key_schedule = &mut self.key_schedule;
 
-        let (len, range) = client_hello.encode(&mut self.tx_buf[..], &mut self.key_schedule)?;
+        let (len, range) = client_hello.encode(tx_buf, |buf| Self::encrypt(key_schedule, buf))?;
 
         Self::transmit(
             &mut self.delegate,
@@ -307,8 +349,11 @@ where
         let client_finished = Self::encrypt(buf)?;
         */
         let client_finished = ClientRecord::EncryptedHandshake(client_finished);
+        let tx_buf = &mut self.tx_buf[..];
+        let key_schedule = &mut self.key_schedule;
 
-        let (len, range) = client_finished.encode(&mut self.tx_buf[..], &mut self.key_schedule)?;
+        let (len, range) =
+            client_finished.encode(tx_buf, |buf| Self::encrypt(key_schedule, buf))?;
 
         Self::transmit(
             &mut self.delegate,
@@ -332,7 +377,9 @@ where
         info!("Writing {} bytes", buf.len());
         let record: ClientRecord<'a, 'm, RNG, CipherSuite> = ClientRecord::ApplicationData(buf);
         let initial_len = buf.len();
-        let (len, range) = record.encode(&mut self.tx_buf[..], &mut self.key_schedule)?;
+        let tx_buf = &mut self.tx_buf[..];
+        let key_schedule = &mut self.key_schedule;
+        let (len, range) = record.encode(tx_buf, |buf| Self::encrypt(key_schedule, buf))?;
 
         Self::transmit(
             &mut self.delegate,

@@ -10,7 +10,6 @@ use crate::{AsyncRead, AsyncWrite, TlsError};
 use aes_gcm::aead::{AeadInPlace, NewAead};
 use core::fmt::Debug;
 use core::ops::Range;
-use digest::generic_array::typenum::Unsigned;
 use heapless::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
@@ -44,10 +43,10 @@ where
         ClientRecord::Handshake(ClientHandshake::ClientHello(ClientHello::new(config)))
     }
 
-    pub(crate) fn encode(
+    pub(crate) fn encode<F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>>(
         &self,
         enc_buf: &mut [u8],
-        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+        mut encrypt_fn: F,
     ) -> Result<(usize, Option<Range<usize>>), TlsError> {
         let mut buf = CryptoBuffer::wrap(enc_buf);
         match self {
@@ -90,36 +89,7 @@ where
                     .push(ContentType::Handshake as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
-                let client_key = key_schedule.get_client_key()?;
-                let nonce = &key_schedule.get_client_nonce()?;
-                info!("encrypt key {:02x?}", client_key);
-                info!("encrypt nonce {:02x?}", nonce);
-                info!("plaintext {} {:02x?}", wrapped.len(), wrapped.as_slice(),);
-                //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
-                let crypto = CipherSuite::Cipher::new(&client_key);
-                let len = wrapped.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize();
-
-                if len > wrapped.capacity() {
-                    return Err(TlsError::InsufficientSpace);
-                }
-
-                info!(
-                    "output size {}",
-                    <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize()
-                );
-                let len_bytes = (len as u16).to_be_bytes();
-                let additional_data = [
-                    ContentType::ApplicationData as u8,
-                    0x03,
-                    0x03,
-                    len_bytes[0],
-                    len_bytes[1],
-                ];
-
-                crypto
-                    .encrypt_in_place(nonce, &additional_data, &mut wrapped)
-                    .map_err(|_| TlsError::InvalidApplicationData)?;
-                let enc_len = wrapped.len();
+                let enc_len = encrypt_fn(&mut wrapped)?;
                 wrapped.release();
 
                 (
@@ -139,36 +109,7 @@ where
                     .push(ContentType::ApplicationData as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
-                let client_key = key_schedule.get_client_key()?;
-                let nonce = &key_schedule.get_client_nonce()?;
-                info!("encrypt key {:02x?}", client_key);
-                info!("encrypt nonce {:02x?}", nonce);
-                info!("plaintext {} {:02x?}", wrapped.len(), wrapped.as_slice(),);
-                //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
-                let crypto = CipherSuite::Cipher::new(&client_key);
-                let len = wrapped.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize();
-
-                if len > wrapped.capacity() {
-                    return Err(TlsError::InsufficientSpace);
-                }
-
-                info!(
-                    "output size {}",
-                    <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize()
-                );
-                let len_bytes = (len as u16).to_be_bytes();
-                let additional_data = [
-                    ContentType::ApplicationData as u8,
-                    0x03,
-                    0x03,
-                    len_bytes[0],
-                    len_bytes[1],
-                ];
-
-                crypto
-                    .encrypt_in_place(nonce, &additional_data, &mut wrapped)
-                    .map_err(|_| TlsError::InvalidApplicationData)?;
-                let enc_len = wrapped.len();
+                let enc_len = encrypt_fn(&mut wrapped)?;
                 wrapped.release();
 
                 (
@@ -189,52 +130,6 @@ where
 
         Ok((buf.len(), range))
     }
-
-    /*
-    fn encrypt<'m>(
-        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-        buf: CryptoBuffer<'m>,
-    ) -> Result<ApplicationData<'m>, TlsError> {
-        let client_key = key_schedule.get_client_key()?;
-        let nonce = &key_schedule.get_client_nonce()?;
-        info!("encrypt key {:02x?}", client_key);
-        info!("encrypt nonce {:02x?}", nonce);
-        info!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
-        //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
-        let crypto = CipherSuite::Cipher::new(&client_key);
-        let len = buf.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize();
-
-        if len > buf.capacity() {
-            return Err(TlsError::InsufficientSpace);
-        }
-
-        info!(
-            "output size {}",
-            <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize()
-        );
-        let len_bytes = (len as u16).to_be_bytes();
-        let additional_data = [
-            ContentType::ApplicationData as u8,
-            0x03,
-            0x03,
-            len_bytes[0],
-            len_bytes[1],
-        ];
-
-        crypto
-            .encrypt_in_place(nonce, &additional_data, &mut buf)
-            .map_err(|_| TlsError::InvalidApplicationData)?;
-
-        info!("aad {:x?}", additional_data);
-        //        info!("encrypted data: {:x?}", &buf[..content_length]);
-        //        info!("ciphertext ## {} ## {:x?}", , &buf);
-        //Ok(())
-        Ok(ApplicationData::new(buf, additional_data))
-        //let result =
-        //crypto.decrypt_in_place(&self.key_schedule.get_server_nonce(), &header, &mut data);
-        //Ok(())
-    }
-    */
 }
 
 #[derive(Debug)]
