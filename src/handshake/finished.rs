@@ -4,7 +4,6 @@ use crate::TlsError;
 use core::fmt::{Debug, Formatter};
 //use digest::generic_array::{ArrayLength, GenericArray};
 use generic_array::{ArrayLength, GenericArray};
-use heapless::Vec;
 
 pub struct Finished<N: ArrayLength<u8>> {
     pub verify: GenericArray<u8, N>,

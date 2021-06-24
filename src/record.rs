@@ -7,14 +7,11 @@ use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::{AsyncRead, AsyncWrite, TlsError};
-use aes_gcm::aead::Buffer;
 use aes_gcm::aead::{AeadInPlace, NewAead};
-use core::fmt::{Debug, Formatter};
+use core::fmt::Debug;
 use core::ops::Range;
 use digest::generic_array::typenum::Unsigned;
-use digest::FixedOutput;
-use heapless::{consts::*, ArrayLength, Vec};
-use p256::ecdh::EphemeralSecret;
+use heapless::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
 

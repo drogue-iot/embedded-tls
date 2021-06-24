@@ -1,4 +1,4 @@
-use heapless::{ArrayLength, Vec};
+use heapless::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 
 //use p256::elliptic_curve::AffinePoint;

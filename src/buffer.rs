@@ -75,7 +75,7 @@ impl<'b> CryptoBuffer<'b> {
         self.capacity
     }
 
-    pub fn release(mut self) -> &'b mut [u8] {
+    pub fn release(self) -> &'b mut [u8] {
         self.buf
     }
 }

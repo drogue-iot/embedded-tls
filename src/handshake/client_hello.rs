@@ -1,4 +1,4 @@
-use heapless::{consts::*, ArrayLength, Vec};
+use heapless::{consts::*, Vec};
 use p256::ecdh::EphemeralSecret;
 use p256::elliptic_curve::rand_core::{CryptoRng, RngCore};
 use p256::EncodedPoint;

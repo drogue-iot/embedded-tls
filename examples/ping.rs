@@ -5,7 +5,6 @@
 
 use core::future::Future;
 use drogue_tls::{config::*, tls_connection::*, AsyncRead, AsyncWrite, TlsError};
-use heapless::consts;
 use rand::rngs::OsRng;
 use std::error::Error;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

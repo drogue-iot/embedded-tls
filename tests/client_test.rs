@@ -4,7 +4,6 @@
 #![feature(min_type_alias_impl_trait)]
 use core::future::Future;
 use drogue_tls::{config::*, tls_connection::*, AsyncRead, AsyncWrite, TlsError};
-use heapless::consts;
 use mio::net::TcpListener;
 use rand::rngs::OsRng;
 use std::net::SocketAddr;

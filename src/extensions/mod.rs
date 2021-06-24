@@ -8,7 +8,6 @@ use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
 use crate::supported_versions::ProtocolVersions;
 use crate::TlsError;
-use generic_array::ArrayLength;
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]

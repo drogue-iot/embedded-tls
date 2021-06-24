@@ -3,23 +3,16 @@ use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
 use crate::{AsyncRead, AsyncWrite, TlsError};
-use aes_gcm::aead::Buffer;
-use core::fmt::{Debug, Formatter};
+use core::fmt::Debug;
 use core::ops::Range;
-use digest::generic_array::typenum::Unsigned;
-use heapless::spsc::Queue;
-use heapless::{consts::*, ArrayLength, Vec};
-use p256::ecdh::EphemeralSecret;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
 
 use crate::application_data::ApplicationData;
-use crate::buffer::CryptoBuffer;
 use crate::content_types::ContentType;
 use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadInPlace, NewAead};
 use digest::FixedOutput;
-use generic_array::GenericArray;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum State {
@@ -48,8 +41,14 @@ impl Debug for State {
 }
 */
 
-pub struct TlsConnection<'a, RNG, Socket, CipherSuite, const TxBufLen: usize, const RxBufLen: usize>
-where
+pub struct TlsConnection<
+    'a,
+    RNG,
+    Socket,
+    CipherSuite,
+    const TX_BUF_LEN: usize,
+    const RX_BUF_LEN: usize,
+> where
     RNG: CryptoRng + RngCore + Copy + 'static,
     Socket: AsyncRead + AsyncWrite + 'static,
     CipherSuite: TlsCipherSuite + 'static,
@@ -57,13 +56,13 @@ where
     delegate: Socket,
     config: &'a Config<RNG, CipherSuite>,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    tx_buf: [u8; TxBufLen],
-    rx_buf: [u8; RxBufLen],
+    tx_buf: [u8; TX_BUF_LEN],
+    rx_buf: [u8; RX_BUF_LEN],
     state: State,
 }
 
-impl<'a, RNG, Socket, CipherSuite, const TxBufLen: usize, const RxBufLen: usize>
-    TlsConnection<'a, RNG, Socket, CipherSuite, TxBufLen, RxBufLen>
+impl<'a, RNG, Socket, CipherSuite, const TX_BUF_LEN: usize, const RX_BUF_LEN: usize>
+    TlsConnection<'a, RNG, Socket, CipherSuite, TX_BUF_LEN, RX_BUF_LEN>
 where
     RNG: CryptoRng + RngCore + Copy + 'static,
     Socket: AsyncRead + AsyncWrite + 'static,
@@ -75,8 +74,8 @@ where
             config,
             state: State::ClientHello,
             key_schedule: KeySchedule::new(),
-            tx_buf: [0; TxBufLen],
-            rx_buf: [0; RxBufLen],
+            tx_buf: [0; TX_BUF_LEN],
+            rx_buf: [0; RX_BUF_LEN],
         }
     }
 
@@ -136,8 +135,6 @@ where
             if let Some((index, _)) = padding {
                 app_data.truncate(index + 1);
             };
-            let data_len = app_data.len();
-
             //trace!("decrypted {:x?}", data);
 
             let content_type = ContentType::of(*app_data.as_slice().last().unwrap())
@@ -188,44 +185,6 @@ where
     ) -> Result<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError> {
         info!("Fetch record with rx buf len {}", rx_buf.len());
         Ok(ServerRecord::read(delegate, rx_buf, key_schedule.transcript_hash()).await?)
-    }
-
-    async fn next_record<
-        'm,
-        N: ArrayLength<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>>,
-    >(
-        &mut self,
-        encrypted: bool,
-        queue: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, N>,
-    ) -> Result<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError>
-    where
-        'a: 'm,
-    {
-        /*
-        if let Some(queued) = queue.dequeue() {
-            return Ok(queued);
-        }
-
-        let mut record = self.fetch_record().await?;
-
-        if encrypted {
-            self.decrypt_record(record, |record| {
-                //queue.enqueue(record).map_err(|_| TlsError::IoError)?;
-                Ok(())
-            });
-        } else {
-            return Ok(record);
-        }
-        info!(
-            "**** receive, hash={:02x?}",
-            self.key_schedule.transcript_hash().clone().finalize()
-        );
-        if let Some(queued) = queue.dequeue() {
-            Ok(queued)
-        } else {
-            Err(TlsError::InvalidApplicationData)
-        }*/
-        Err(TlsError::InvalidApplicationData)
     }
 
     pub async fn open<'m>(&mut self) -> Result<(), TlsError>
@@ -362,193 +321,8 @@ where
         self.key_schedule.initialize_master_secret()?;
         self.state = State::ApplicationData;
         log::info!("Handshake complete!");
-        /*
-        State::ClientFinished => {
-            Ok(
-
-            let client_finished = self
-                .key_schedule
-                .create_client_finished()
-                .map_err(|_| TlsError::InvalidHandshake)?;
-
-            let client_finished =
-                ClientHandshake::<RNG, CipherSuite>::Finished(client_finished);
-
-            let mut buf = Vec::<u8, U128>::new();
-            let _ = client_finished.encode(&mut buf)?;
-
-            buf.push(ContentType::Handshake as u8)
-                .map_err(|_| TlsError::EncodeError)?;
-            let len = buf.len();
-            let client_finished = self.encrypt(&mut buf, len)?;
-            let client_finished = ClientRecord::ApplicationData(client_finished);
-
-            self.transmit(&client_finished).await?;
-            self.key_schedule.initialize_master_secret()?;
-            Ok(State::ApplicationData)
-        }
-        State::ApplicationData => Ok(State::ApplicationData),
-            Ok(())
-        })?;
-                */
-
-        /*
-            ServerRecord::Handshake(handshake) => match handshake {
-                ServerHandshake::EncryptedExtensions(_) => Ok(()),
-                ServerHandshake::Certificate(_) => Ok(()),
-                ServerHandshake::CertificateVerify(_) => Ok(()),
-                ServerHandshake::Finished(finished) => {
-                    info!("************* Finished");
-                    let verified = self.key_schedule.verify_server_finished(&finished)?;
-                    if verified {
-                        let client_finished = self
-                            .key_schedule
-                            .create_client_finished()
-                            .map_err(|_| TlsError::InvalidHandshake)?;
-
-                        let client_finished =
-                            ClientHandshake::<RNG, CipherSuite>::Finished(client_finished);
-
-                        let mut buf = Vec::<u8, U128>::new();
-                        let _ = client_finished.encode(&mut buf)?;
-
-                        buf.push(ContentType::Handshake as u8)
-                            .map_err(|_| TlsError::EncodeError)?;
-                        let len = buf.len();
-                        let client_finished = self.encrypt(&mut buf, len)?;
-                        let client_finished = ClientRecord::ApplicationData(client_finished);
-
-                        self.transmit(&client_finished).await?;
-                        self.key_schedule.initialize_master_secret()?;
-                        Ok(())
-                    } else {
-                        Err(TlsError::InvalidSignature)
-                    }
-                }
-                _ => Err(TlsError::InvalidHandshake),
-            },
-            ServerRecord::ChangeCipherSpec(_) => Ok(()),
-            _ => Err(TlsError::InvalidRecord),
-        })?;
-            */
-        /*
-        loop {
-            if let Some(state) = self.state.take() {
-                let next_state = self.handshake(&state, &mut queue).await?;
-                info!("[handshake] {:?} -> {:?}", state, next_state);
-                if let State::ApplicationData = next_state {
-                    self.state.replace(next_state);
-                    break;
-                }
-                self.state.replace(next_state);
-            } else {
-                return Err(TlsError::UnableToInitializeCryptoEngine);
-            }
-        }*/
         Ok(())
     }
-
-    /*
-    async fn handshake<
-        'm,
-        N: ArrayLength<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>>,
-    >(
-        &mut self,
-        state: &State,
-        queue: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, N>,
-    ) -> Result<State, TlsError>
-    where
-        'a: 'm,
-    {
-        match state {
-            State::ClientHello => {
-                self.key_schedule.initialize_early_secret()?;
-                let client_hello = ClientRecord::client_hello(&self.config);
-                self.transmit(&client_hello).await?;
-                info!("sent client hello");
-                if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello)) =
-                    client_hello
-                {
-                    Ok(State::ServerHello(client_hello.secret))
-                } else {
-                    Err(TlsError::UnableToInitializeCryptoEngine)
-                }
-            }
-            State::ServerHello(secret) => match self.fetch_record().await? {
-                ServerRecord::Handshake(handshake) => match handshake {
-                    ServerHandshake::ServerHello(server_hello) => {
-                        info!("********* ServerHello");
-                        let shared = server_hello
-                            .calculate_shared_secret(&secret)
-                            .ok_or(TlsError::InvalidKeyShare)?;
-
-                        self.key_schedule
-                            .initialize_handshake_secret(shared.as_bytes())?;
-
-                        Ok(State::ServerCert)
-                    }
-                    _ => Err(TlsError::InvalidHandshake),
-                },
-                _ => Err(TlsError::InvalidRecord),
-            },
-            State::ServerCert => match self.next_record(true, queue).await? {
-                ServerRecord::Handshake(handshake) => match handshake {
-                    ServerHandshake::EncryptedExtensions(_) => Ok(State::ServerCert),
-                    ServerHandshake::Certificate(_) => Ok(State::ServerCertVerify),
-                    _ => Err(TlsError::InvalidHandshake),
-                },
-                ServerRecord::ChangeCipherSpec(_) => Ok(State::ServerCert),
-                _ => Err(TlsError::InvalidRecord),
-            },
-            State::ServerCertVerify => match self.next_record(true, queue).await? {
-                ServerRecord::Handshake(handshake) => match handshake {
-                    ServerHandshake::CertificateVerify(_) => Ok(State::ServerFinished),
-                    _ => Err(TlsError::InvalidHandshake),
-                },
-                _ => Err(TlsError::InvalidRecord),
-            },
-            State::ServerFinished => match self.next_record(true, queue).await? {
-                ServerRecord::Handshake(handshake) => match handshake {
-                    ServerHandshake::Finished(finished) => {
-                        info!("************* Finished");
-                        let verified = self.key_schedule.verify_server_finished(&finished)?;
-                        if verified {
-                            info!("FINISHED! server verified {}", verified);
-                            Ok(State::ClientFinished)
-                        } else {
-                            Err(TlsError::InvalidSignature)
-                        }
-                    }
-                    _ => Err(TlsError::InvalidHandshake),
-                },
-                _ => Err(TlsError::InvalidRecord),
-            },
-            State::ClientFinished => {
-                let client_finished = self
-                    .key_schedule
-                    .create_client_finished()
-                    .map_err(|_| TlsError::InvalidHandshake)?;
-
-                let client_finished =
-                    ClientHandshake::<RNG, CipherSuite>::Finished(client_finished);
-
-                let mut buf = Vec::<u8, U128>::new();
-                let _ = client_finished.encode(&mut buf)?;
-
-                buf.push(ContentType::Handshake as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-                let len = buf.len();
-                let client_finished = self.encrypt(&mut buf, len)?;
-                let client_finished = ClientRecord::ApplicationData(client_finished);
-
-                self.transmit(&client_finished).await?;
-                self.key_schedule.initialize_master_secret()?;
-                Ok(State::ApplicationData)
-            }
-            State::ApplicationData => Ok(State::ApplicationData),
-        }
-    }
-    */
 
     pub async fn write<'m>(&mut self, buf: &'m [u8]) -> Result<usize, TlsError> {
         if self.state != State::ApplicationData {
