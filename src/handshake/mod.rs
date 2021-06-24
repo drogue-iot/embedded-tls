@@ -2,6 +2,7 @@ use heapless::{ArrayLength, Vec};
 use rand_core::{CryptoRng, RngCore};
 
 //use p256::elliptic_curve::AffinePoint;
+use crate::buffer::*;
 use crate::config::TlsCipherSuite;
 use crate::handshake::certificate::Certificate;
 use crate::handshake::certificate_verify::CertificateVerify;
@@ -80,10 +81,7 @@ where
     RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
-    pub fn encode<O: ArrayLength<u8>>(
-        &self,
-        buf: &mut Vec<u8, O>,
-    ) -> Result<Range<usize>, TlsError> {
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<Range<usize>, TlsError> {
         let content_marker = buf.len();
         match self {
             ClientHandshake::ClientHello(_) => {
@@ -106,11 +104,14 @@ where
         }
         let content_length = (buf.len() as u32 - content_length_marker as u32) - 3;
 
-        buf[content_length_marker] = content_length.to_be_bytes()[1];
-        buf[content_length_marker + 1] = content_length.to_be_bytes()[2];
-        buf[content_length_marker + 2] = content_length.to_be_bytes()[3];
+        buf.set(content_length_marker, content_length.to_be_bytes()[1])
+            .map_err(|_| TlsError::EncodeError)?;
+        buf.set(content_length_marker + 1, content_length.to_be_bytes()[2])
+            .map_err(|_| TlsError::EncodeError)?;
+        buf.set(content_length_marker + 2, content_length.to_be_bytes()[3])
+            .map_err(|_| TlsError::EncodeError)?;
 
-        info!("hash [{:x?}]", &buf[content_marker..]);
+        //info!("hash [{:x?}]", &buf[content_marker..]);
         //digest.update(&buf[content_marker..]);
 
         Ok(content_marker..buf.len())

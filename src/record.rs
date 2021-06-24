@@ -1,4 +1,5 @@
 use crate::application_data::ApplicationData;
+use crate::buffer::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::config::{Config, TlsCipherSuite};
 use crate::content_types::ContentType;
@@ -37,10 +38,7 @@ where
         ClientRecord::Handshake(ClientHandshake::ClientHello(ClientHello::new(config)))
     }
 
-    pub fn encode<O: ArrayLength<u8>>(
-        &self,
-        buf: &mut Vec<u8, O>,
-    ) -> Result<Option<Range<usize>>, TlsError> {
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer) -> Result<Option<Range<usize>>, TlsError> {
         match self {
             ClientRecord::Handshake(_) => {
                 buf.push(ContentType::Handshake as u8)
@@ -64,7 +62,7 @@ where
             ClientRecord::Handshake(handshake) => Some(handshake.encode(buf)?),
             ClientRecord::ApplicationData(application_data) => {
                 info!("Enoding record data {:?}", application_data.data);
-                buf.extend(application_data.data.iter());
+                buf.extend_from_slice(application_data.data);
                 None
             }
         };
@@ -73,8 +71,10 @@ where
 
         info!("record len {}", record_length);
 
-        buf[record_length_marker] = record_length.to_be_bytes()[0];
-        buf[record_length_marker + 1] = record_length.to_be_bytes()[1];
+        buf.set(record_length_marker, record_length.to_be_bytes()[0])
+            .map_err(|_| TlsError::EncodeError)?;
+        buf.set(record_length_marker + 1, record_length.to_be_bytes()[1])
+            .map_err(|_| TlsError::EncodeError)?;
 
         Ok(range)
     }
@@ -88,12 +88,12 @@ pub enum ServerRecord<'a, N: ArrayLength<u8>> {
     ApplicationData(ApplicationData<'a>),
 }
 
-impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
-    pub async fn read<T: AsyncWrite + AsyncRead, D: Digest>(
+impl<N: ArrayLength<u8>> ServerRecord<'_, N> {
+    pub async fn read<'m, T: AsyncWrite + AsyncRead, D: Digest>(
         socket: &mut T,
-        rx_buf: &'a mut [u8],
+        rx_buf: &'m mut [u8],
         digest: &mut D,
-    ) -> Result<ServerRecord<'a, N>, TlsError> {
+    ) -> Result<ServerRecord<'m, N>, TlsError> {
         let mut pos: usize = 0;
         let mut header: [u8; 5] = [0; 5];
         loop {
@@ -109,6 +109,12 @@ impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
             None => Err(TlsError::InvalidRecord),
             Some(content_type) => {
                 let content_length = u16::from_be_bytes([header[3], header[4]]) as usize;
+                info!(
+                    "Content length: {}, rx_buf: {}, pos: {}",
+                    content_length,
+                    rx_buf.len(),
+                    pos
+                );
                 if content_length > rx_buf.len() - pos {
                     return Err(TlsError::InsufficientSpace);
                 }

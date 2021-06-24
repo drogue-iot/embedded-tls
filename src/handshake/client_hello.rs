@@ -3,6 +3,7 @@ use p256::ecdh::EphemeralSecret;
 use p256::elliptic_curve::rand_core::{CryptoRng, RngCore};
 use p256::EncodedPoint;
 
+use crate::buffer::*;
 use crate::config::{Config, TlsCipherSuite};
 use crate::extensions::ClientExtension;
 use crate::handshake::{Random, LEGACY_VERSION};
@@ -38,7 +39,7 @@ where
         }
     }
 
-    pub fn encode<N: ArrayLength<u8>>(&self, buf: &mut Vec<u8, N>) -> Result<(), TlsError> {
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
         let public_key = EncodedPoint::from(&self.secret.public_key());
         let public_key = public_key.as_ref();
 
@@ -116,8 +117,13 @@ where
 
         let extensions_length = (buf.len() as u16 - extension_length_marker as u16) - 2;
         info!("extensions length: {:x?}", extensions_length.to_be_bytes());
-        buf[extension_length_marker] = extensions_length.to_be_bytes()[0];
-        buf[extension_length_marker + 1] = extensions_length.to_be_bytes()[1];
+        buf.set(extension_length_marker, extensions_length.to_be_bytes()[0])
+            .map_err(|_| TlsError::EncodeError)?;
+        buf.set(
+            extension_length_marker + 1,
+            extensions_length.to_be_bytes()[1],
+        )
+        .map_err(|_| TlsError::EncodeError)?;
 
         Ok(())
     }

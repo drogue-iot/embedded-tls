@@ -15,6 +15,43 @@ impl<'b> CryptoBuffer<'b> {
             len: 0,
         }
     }
+
+    pub fn push(&mut self, b: u8) -> Result<(), ()> {
+        if self.capacity - self.len > 0 {
+            self.buf[self.len] = b;
+            self.len += 1;
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn set(&mut self, idx: usize, val: u8) -> Result<(), ()> {
+        if idx < self.len {
+            self.buf[idx] = val;
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), ()> {
+        if self.capacity - self.len < other.len() {
+            Err(())
+        } else {
+            self.buf[self.len..self.len + other.len()].clone_from_slice(&other[..other.len()]);
+            self.len += other.len();
+            Ok(())
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn release(mut self) -> &'b mut [u8] {
+        self.buf
+    }
 }
 
 impl<'b> AsRef<[u8]> for CryptoBuffer<'b> {
