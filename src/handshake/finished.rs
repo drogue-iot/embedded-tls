@@ -1,9 +1,9 @@
+use crate::buffer::*;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use core::fmt::{Debug, Formatter};
 //use digest::generic_array::{ArrayLength, GenericArray};
 use generic_array::{ArrayLength, GenericArray};
-use heapless::Vec;
 
 pub struct Finished<N: ArrayLength<u8>> {
     pub verify: GenericArray<u8, N>,
@@ -34,10 +34,11 @@ impl<N: ArrayLength<u8>> Finished<N> {
         Ok(Self { verify, hash: None })
     }
 
-    pub(crate) fn encode<O: ArrayLength<u8>>(&self, buf: &mut Vec<u8, O>) -> Result<(), TlsError> {
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
         //let len = self.verify.len().to_be_bytes();
         //buf.extend_from_slice(&[len[1], len[2], len[3]]);
-        buf.extend(self.verify.iter());
+        buf.extend_from_slice(&self.verify[..self.verify.len()])
+            .map_err(|_| TlsError::EncodeError)?;
         Ok(())
     }
 }

@@ -3,11 +3,11 @@ pub mod server;
 
 use crate::signature_schemes::SignatureScheme;
 
+use crate::buffer::*;
 use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
 use crate::supported_versions::ProtocolVersions;
 use crate::TlsError;
-use generic_array::ArrayLength;
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]
@@ -104,7 +104,7 @@ impl ClientExtension {
         .to_be_bytes()
     }
 
-    pub fn encode<N: ArrayLength<u8>>(&self, buf: &mut Vec<u8, N>) -> Result<(), TlsError> {
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.extend_from_slice(&self.extension_type())
             .map_err(|_| TlsError::EncodeError)?;
         let extension_length_marker = buf.len();
@@ -181,8 +181,13 @@ impl ClientExtension {
         info!("tail at {}", buf.len());
         let extension_length = (buf.len() as u16 - extension_length_marker as u16) - 2;
         info!("len: {}", extension_length);
-        buf[extension_length_marker] = extension_length.to_be_bytes()[0];
-        buf[extension_length_marker + 1] = extension_length.to_be_bytes()[1];
+        buf.set(extension_length_marker, extension_length.to_be_bytes()[0])
+            .map_err(|_| TlsError::EncodeError)?;
+        buf.set(
+            extension_length_marker + 1,
+            extension_length.to_be_bytes()[1],
+        )
+        .map_err(|_| TlsError::EncodeError)?;
         Ok(())
     }
 }

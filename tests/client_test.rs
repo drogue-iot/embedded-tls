@@ -4,7 +4,6 @@
 #![feature(min_type_alias_impl_trait)]
 use core::future::Future;
 use drogue_tls::{config::*, tls_connection::*, AsyncRead, AsyncWrite, TlsError};
-use heapless::consts;
 use mio::net::TcpListener;
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
@@ -42,7 +41,7 @@ async fn test_ping() {
 
     log::info!("Connected");
     let tls_config: Config<OsRng, Aes128GcmSha256> = Config::new(OsRng);
-    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, consts::U4096, consts::U4096> =
+    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 4096, 4096> =
         TlsConnection::new(&tls_config, socket);
 
     tls.open().await.expect("error establishing TLS connection");
