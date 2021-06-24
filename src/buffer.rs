@@ -1,7 +1,7 @@
 use aes_gcm::aead::Buffer;
 use aes_gcm::Error;
 
-pub(crate) struct CryptoBuffer<'b> {
+pub struct CryptoBuffer<'b> {
     buf: &'b mut [u8],
     capacity: usize,
     len: usize,
@@ -13,6 +13,14 @@ impl<'b> CryptoBuffer<'b> {
             capacity: buf.len(),
             buf,
             len: 0,
+        }
+    }
+
+    pub(crate) fn wrap_with_pos(buf: &'b mut [u8], pos: usize) -> Self {
+        Self {
+            capacity: buf.len(),
+            buf,
+            len: pos,
         }
     }
 
@@ -35,6 +43,14 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
+    pub fn as_mut_slice<'m>(&'m mut self) -> &'m mut [u8] {
+        &mut self.buf[..self.len]
+    }
+
+    pub fn as_slice<'m>(&'m self) -> &'m [u8] {
+        &self.buf[..self.len]
+    }
+
     pub fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), ()> {
         if self.capacity - self.len < other.len() {
             Err(())
@@ -45,8 +61,18 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
+    pub fn truncate(&mut self, len: usize) {
+        if len <= self.buf.len() {
+            self.len = len;
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.capacity
     }
 
     pub fn release(mut self) -> &'b mut [u8] {

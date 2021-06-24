@@ -151,7 +151,7 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
                         info!("hash [{:x?}]", &header);
                         digest.update(&header);
                         Ok(ServerHandshake::ServerHello(
-                            ServerHello::read(&rx_buf[4..length], digest).await?,
+                            ServerHello::read(&rx_buf[4..length + 4], digest).await?,
                         ))
                     }
                     HandshakeType::NewSessionTicket => Err(TlsError::Unimplemented),
