@@ -69,6 +69,7 @@ where
         }
 
         let record_length_marker = buf.len();
+        log::info!("Record length marker: {}", record_length_marker);
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
@@ -78,28 +79,42 @@ where
                 (Some(range), buf)
             }
             ClientRecord::EncryptedHandshake(handshake) => {
+                info!("Encoding encrypted handshake");
                 let pos = buf.len();
+                /*
+                let mut wrapped = buf.offset(pos);*/
                 buf.release();
+                let mut wrapped = CryptoBuffer::wrap(&mut enc_buf[pos..]); //buf.offset(len);
+                let wrlen = wrapped.len();
+                info!(
+                    "offset({}) len({}) -> offset({}) len({})",
+                    0,
+                    pos,
+                    pos,
+                    wrapped.len()
+                );
 
-                let mut wrapped = CryptoBuffer::wrap(&mut enc_buf[pos..]);
                 handshake.encode(&mut wrapped)?;
                 wrapped
                     .push(ContentType::Handshake as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
                 let enc_len = encrypt_fn(&mut wrapped)?;
-                wrapped.release();
+                info!(
+                    "offset({}) len({}) -> offset({}) len({})",
+                    pos,
+                    wrlen,
+                    0,
+                    pos + enc_len
+                );
+                (None, CryptoBuffer::wrap_with_pos(enc_buf, pos + enc_len))
 
-                (
-                    None,
-                    CryptoBuffer::wrap_with_pos(&mut enc_buf[..], pos + enc_len),
-                )
+                //                (None, wrapped.offset(0))
             }
             ClientRecord::ApplicationData(data) => {
+                info!("Encoding application data");
                 let pos = buf.len();
-                buf.release();
-
-                let mut wrapped = CryptoBuffer::wrap(&mut enc_buf[pos..]);
+                let mut wrapped = buf.offset(pos);
                 wrapped
                     .extend_from_slice(data)
                     .map_err(|_| TlsError::EncodeError)?;
@@ -108,14 +123,12 @@ where
                     .map_err(|_| TlsError::EncodeError)?;
 
                 let enc_len = encrypt_fn(&mut wrapped)?;
-                wrapped.release();
-
-                (
-                    None,
-                    CryptoBuffer::wrap_with_pos(&mut enc_buf[..], pos + enc_len),
-                )
+                info!("Encoded length {}", enc_len);
+                (None, wrapped.offset(0))
             }
         };
+
+        info!("But length is : {}", buf.len());
 
         let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
 
