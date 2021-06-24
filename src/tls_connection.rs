@@ -7,7 +7,6 @@ use crate::{
 };
 use crate::{AsyncRead, AsyncWrite, TlsError};
 use core::fmt::Debug;
-use core::ops::Range;
 use digest::generic_array::typenum::Unsigned;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
@@ -84,20 +83,24 @@ where
     }
 
     async fn transmit<'m>(
-        delegate: &mut Socket,
-        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-        buf: &'m [u8],
-        range: Option<Range<usize>>,
+        &mut self,
+        record: &ClientRecord<'_, 'm, RNG, CipherSuite>,
     ) -> Result<(), TlsError> {
+        let tx_buf = &mut self.tx_buf[..];
+        let key_schedule = &mut self.key_schedule;
+        let delegate = &mut self.delegate;
+
+        let (len, range) = record.encode(tx_buf, |buf| Self::encrypt(key_schedule, buf))?;
+
         if let Some(range) = range {
-            Digest::update(key_schedule.transcript_hash(), &buf[range]);
+            Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
         }
         trace!(
             "**** transmit, hash={:x?}",
             key_schedule.transcript_hash().clone().finalize()
         );
 
-        delegate.write(buf).await.map(|_| ())?;
+        delegate.write(&tx_buf[..len]).await.map(|_| ())?;
 
         key_schedule.increment_write_counter();
         Ok(())
@@ -234,18 +237,8 @@ where
         self.state = State::ClientHello;
         self.key_schedule.initialize_early_secret()?;
         let client_hello = ClientRecord::client_hello(&self.config);
-        let tx_buf = &mut self.tx_buf[..];
-        let key_schedule = &mut self.key_schedule;
 
-        let (len, range) = client_hello.encode(tx_buf, |buf| Self::encrypt(key_schedule, buf))?;
-
-        Self::transmit(
-            &mut self.delegate,
-            &mut self.key_schedule,
-            &self.tx_buf[..len],
-            range,
-        )
-        .await?;
+        self.transmit(&client_hello).await?;
 
         info!("sent client hello");
 
@@ -349,19 +342,8 @@ where
         let client_finished = Self::encrypt(buf)?;
         */
         let client_finished = ClientRecord::EncryptedHandshake(client_finished);
-        let tx_buf = &mut self.tx_buf[..];
-        let key_schedule = &mut self.key_schedule;
 
-        let (len, range) =
-            client_finished.encode(tx_buf, |buf| Self::encrypt(key_schedule, buf))?;
-
-        Self::transmit(
-            &mut self.delegate,
-            &mut self.key_schedule,
-            &mut self.tx_buf[..len],
-            range,
-        )
-        .await?;
+        self.transmit(&client_finished).await?;
 
         self.key_schedule.initialize_master_secret()?;
         self.state = State::ApplicationData;
@@ -376,19 +358,8 @@ where
 
         info!("Writing {} bytes", buf.len());
         let record: ClientRecord<'a, 'm, RNG, CipherSuite> = ClientRecord::ApplicationData(buf);
-        let initial_len = buf.len();
-        let tx_buf = &mut self.tx_buf[..];
-        let key_schedule = &mut self.key_schedule;
-        let (len, range) = record.encode(tx_buf, |buf| Self::encrypt(key_schedule, buf))?;
-
-        Self::transmit(
-            &mut self.delegate,
-            &mut self.key_schedule,
-            &self.tx_buf[..len],
-            range,
-        )
-        .await?;
-        Ok(initial_len)
+        self.transmit(&record).await?;
+        Ok(buf.len())
     }
 
     pub async fn read<'m>(&mut self, buf: &mut [u8]) -> Result<usize, TlsError>
