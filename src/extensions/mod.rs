@@ -67,9 +67,9 @@ impl ExtensionType {
     }
 }
 
-pub enum ClientExtension {
+pub enum ClientExtension<'a> {
     ServerName {
-        server_name: String<U256>,
+        server_name: &'a str,
     },
     SupportedVersions {
         versions: ProtocolVersions,
@@ -90,7 +90,7 @@ pub enum ClientExtension {
     MaxFragmentLength(MaxFragmentLength),
 }
 
-impl ClientExtension {
+impl ClientExtension<'_> {
     pub fn extension_type(&self) -> [u8; 2] {
         match self {
             ClientExtension::ServerName { .. } => ExtensionType::ServerName as u16,
@@ -119,6 +119,15 @@ impl ClientExtension {
         match self {
             ClientExtension::ServerName { server_name } => {
                 info!("server name ext");
+                let names: u16 = 1;
+                buf.extend_from_slice(&names.to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
+                buf.push(0).map_err(|_| TlsError::EncodeError)?;
+                let len: u16 = server_name.len() as u16;
+                buf.extend_from_slice(&len.to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
+                buf.extend_from_slice(server_name.as_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
             }
             ClientExtension::SupportedVersions { versions } => {
                 info!("supported versions ext");

@@ -57,7 +57,7 @@ pub struct TlsConnection<
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
-    config: &'a Config<RNG, CipherSuite>,
+    config: &'a Config<'a, RNG, CipherSuite>,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     tx_buf: [u8; TX_BUF_LEN],
     rx_buf: [u8; RX_BUF_LEN],
@@ -71,7 +71,7 @@ where
     Socket: AsyncRead + AsyncWrite + 'static,
     CipherSuite: TlsCipherSuite,
 {
-    pub fn new(config: &'a Config<RNG, CipherSuite>, delegate: Socket) -> Self {
+    pub fn new(config: &'a Config<'a, RNG, CipherSuite>, delegate: Socket) -> Self {
         Self {
             delegate,
             config,

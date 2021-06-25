@@ -17,7 +17,7 @@ where
     RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
-    config: &'config Config<RNG, CipherSuite>,
+    config: &'config Config<'config, RNG, CipherSuite>,
     random: Random,
     pub(crate) secret: EphemeralSecret,
 }
@@ -78,10 +78,6 @@ where
             .push(ClientExtension::SupportedVersions { versions })
             .map_err(|_| TlsError::EncodeError)?;
 
-        extensions
-            .push(ClientExtension::
-            .map_err(|_| TlsError::EncodeError)?;
-
         let mut supported_signature_algorithms = Vec::<SignatureScheme, U16>::new();
         supported_signature_algorithms.extend(self.config.signature_schemes.iter());
         extensions
@@ -107,6 +103,10 @@ where
                 opaque,
             })
             .map_err(|_| TlsError::EncodeError)?;
+
+        if let Some(server_name) = self.config.server_name {
+            // TODO Add SNI extension
+        }
 
         //extensions.push(ClientExtension::MaxFragmentLength(
         //self.config.max_fragment_length,

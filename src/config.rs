@@ -33,20 +33,21 @@ impl TlsCipherSuite for Aes128GcmSha256 {
 }
 
 #[derive(Debug)]
-pub struct Config<RNG, CipherSuite>
+pub struct Config<'a, RNG, CipherSuite>
 where
     RNG: CryptoRng + RngCore,
     CipherSuite: TlsCipherSuite,
 {
     pub(crate) rng: RNG,
     //pub(crate) cipher_suites: Vec<CipherSuite, U16>,
+    pub(crate) server_name: Option<&'a str>,
     pub(crate) cipher_suite: PhantomData<CipherSuite>,
     pub(crate) signature_schemes: Vec<SignatureScheme, U16>,
     pub(crate) named_groups: Vec<NamedGroup, U16>,
     pub(crate) max_fragment_length: MaxFragmentLength,
 }
 
-impl<RNG, CipherSuite> Config<RNG, CipherSuite>
+impl<'a, RNG, CipherSuite> Config<'a, RNG, CipherSuite>
 where
     RNG: CryptoRng + RngCore,
     CipherSuite: TlsCipherSuite,
@@ -58,6 +59,7 @@ where
             signature_schemes: Vec::new(),
             named_groups: Vec::new(),
             max_fragment_length: MaxFragmentLength::Bits10,
+            server_name: None,
         };
 
         //config.cipher_suites.push(CipherSuite::TlsAes128GcmSha256);
@@ -78,5 +80,10 @@ where
         config.named_groups.push(NamedGroup::Secp256r1).unwrap();
 
         config
+    }
+
+    pub fn with_server_name(mut self, server_name: &'a str) -> Self {
+        self.server_name = Some(server_name);
+        self
     }
 }
