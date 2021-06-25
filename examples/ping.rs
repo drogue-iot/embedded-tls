@@ -13,15 +13,16 @@ use tokio::net::TcpStream;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
-    let stream = TcpStream::connect("127.0.0.1:12345").await?;
+    let stream = TcpStream::connect("http.sandbox.drogue.cloud:443").await?;
     let socket = Socket { stream };
 
     log::info!("Connected");
     let tls_config: Config<OsRng, Aes128GcmSha256> = Config::new(OsRng);
-    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 4096, 4096> =
+    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 32768, 32768> =
         TlsConnection::new(&tls_config, socket);
 
     tls.open().await.expect("error establishing TLS connection");
+
     tls.write(b"ping").await.expect("error writing data");
 
     let mut rx_buf = [0; 4096];

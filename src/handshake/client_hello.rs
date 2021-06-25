@@ -73,8 +73,13 @@ where
 
         let mut versions = Vec::<ProtocolVersion, U16>::new();
         versions.push(TLS13).map_err(|_| TlsError::EncodeError)?;
+
         extensions
             .push(ClientExtension::SupportedVersions { versions })
+            .map_err(|_| TlsError::EncodeError)?;
+
+        extensions
+            .push(ClientExtension::
             .map_err(|_| TlsError::EncodeError)?;
 
         let mut supported_signature_algorithms = Vec::<SignatureScheme, U16>::new();

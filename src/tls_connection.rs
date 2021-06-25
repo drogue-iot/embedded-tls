@@ -197,10 +197,10 @@ where
                                 .hash
                                 .replace(key_schedule.transcript_hash().clone().finalize());
                         }
-                        trace!("===> inner ==> {:?}", inner);
+                        info!("===> inner ==> {:?}", inner);
                         //if hash_later {
                         Digest::update(key_schedule.transcript_hash(), &data[..data.len()]);
-                        trace!("hash {:02x?}", &data[..data.len()]);
+                        info!("hash {:02x?}", &data[..data.len()]);
                         processor(key_schedule, ServerRecord::Handshake(inner.unwrap()))?;
                     }
                     //}
@@ -315,7 +315,7 @@ where
                     },
                     state => Ok(state),
                 }?;
-                debug!("State {:?} -> {:?}", *state, next_state);
+                info!("State {:?} -> {:?}", *state, next_state);
                 *state = next_state;
                 Ok(())
             })?;
