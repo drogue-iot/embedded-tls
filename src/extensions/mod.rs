@@ -8,7 +8,7 @@ use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
 use crate::supported_versions::ProtocolVersions;
 use crate::TlsError;
-use heapless::{consts::*, String, Vec};
+use heapless::{consts::*, Vec};
 
 #[derive(Debug)]
 pub enum ExtensionType {
@@ -119,12 +119,14 @@ impl ClientExtension<'_> {
         match self {
             ClientExtension::ServerName { server_name } => {
                 info!("server name ext");
-                let names: u16 = 1;
-                buf.extend_from_slice(&names.to_be_bytes())
+                let sni_size: u16 = (server_name.as_bytes().len() + 3) as u16;
+
+                buf.extend_from_slice(&sni_size.to_be_bytes())
                     .map_err(|_| TlsError::EncodeError)?;
+
+                // Type host
                 buf.push(0).map_err(|_| TlsError::EncodeError)?;
-                let len: u16 = server_name.len() as u16;
-                buf.extend_from_slice(&len.to_be_bytes())
+                buf.extend_from_slice(&(server_name.as_bytes().len() as u16).to_be_bytes())
                     .map_err(|_| TlsError::EncodeError)?;
                 buf.extend_from_slice(server_name.as_bytes())
                     .map_err(|_| TlsError::EncodeError)?;

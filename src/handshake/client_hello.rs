@@ -106,6 +106,7 @@ where
 
         if let Some(server_name) = self.config.server_name {
             // TODO Add SNI extension
+            extensions.push(ClientExtension::ServerName { server_name });
         }
 
         //extensions.push(ClientExtension::MaxFragmentLength(

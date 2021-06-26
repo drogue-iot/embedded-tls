@@ -210,7 +210,8 @@ where
                     let inner = ApplicationData::new(app_data, header);
                     processor(key_schedule, ServerRecord::ApplicationData(inner))?;
                 }
-                _ => {
+                e => {
+                    error!("Unexpected content type: {:?}", e);
                     return Err(TlsError::InvalidHandshake);
                 }
             }
@@ -261,7 +262,10 @@ where
                         return Err(TlsError::InvalidHandshake);
                     }
                 }
-                _ => return Err(TlsError::InvalidHandshake),
+                e => {
+                    info!("INVALID HANDSHAKE 1: {:?}", e);
+                    return Err(TlsError::InvalidHandshake);
+                }
             },
             _ => return Err(TlsError::InvalidRecord),
         }
@@ -285,7 +289,11 @@ where
                         ServerRecord::Handshake(handshake) => match handshake {
                             ServerHandshake::EncryptedExtensions(_) => Ok(State::ServerCert),
                             ServerHandshake::Certificate(_) => Ok(State::ServerCertVerify),
-                            _ => Err(TlsError::InvalidHandshake),
+                            ServerHandshake::CertificateRequest(_) => Ok(State::ServerCert),
+                            e => {
+                                info!("INVALID HANDSHAKE 2: {:?}", e);
+                                Err(TlsError::InvalidHandshake)
+                            }
                         },
                         ServerRecord::ChangeCipherSpec(_) => Ok(State::ServerCert),
                         _ => Err(TlsError::InvalidRecord),
@@ -379,6 +387,7 @@ where
                     } else {
                         let to_copy = core::cmp::min(data.len(), buf.len());
                         // TODO Need to buffer data not consumed
+                        log::info!("Got {} bytes to copy", to_copy);
                         buf[..to_copy].copy_from_slice(&data.as_slice()[..to_copy]);
                         remaining -= to_copy;
                         Ok(())
