@@ -41,7 +41,7 @@ async fn test_ping() {
 
     log::info!("Connected");
     let tls_config: Config<OsRng, Aes128GcmSha256> = Config::new(OsRng);
-    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 4096, 4096> =
+    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 16384> =
         TlsConnection::new(&tls_config, socket);
 
     tls.open().await.expect("error establishing TLS connection");

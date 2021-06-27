@@ -44,14 +44,11 @@ impl Debug for State {
 }
 */
 
-pub struct TlsConnection<
-    'a,
-    RNG,
-    Socket,
-    CipherSuite,
-    const TX_BUF_LEN: usize,
-    const RX_BUF_LEN: usize,
-> where
+// Split records at 8k of data
+const FRAME_MTU: usize = 8192;
+
+pub struct TlsConnection<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
+where
     RNG: CryptoRng + RngCore + Copy + 'static,
     Socket: AsyncRead + AsyncWrite + 'static,
     CipherSuite: TlsCipherSuite + 'static,
@@ -59,13 +56,12 @@ pub struct TlsConnection<
     delegate: Socket,
     config: &'a Config<'a, RNG, CipherSuite>,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    tx_buf: [u8; TX_BUF_LEN],
-    rx_buf: [u8; RX_BUF_LEN],
+    frame_buf: [u8; FRAME_BUF_LEN],
     state: State,
 }
 
-impl<'a, RNG, Socket, CipherSuite, const TX_BUF_LEN: usize, const RX_BUF_LEN: usize>
-    TlsConnection<'a, RNG, Socket, CipherSuite, TX_BUF_LEN, RX_BUF_LEN>
+impl<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
+    TlsConnection<'a, RNG, Socket, CipherSuite, FRAME_BUF_LEN>
 where
     RNG: CryptoRng + RngCore + Copy + 'static,
     Socket: AsyncRead + AsyncWrite + 'static,
@@ -77,8 +73,7 @@ where
             config,
             state: State::ClientHello,
             key_schedule: KeySchedule::new(),
-            tx_buf: [0; TX_BUF_LEN],
-            rx_buf: [0; RX_BUF_LEN],
+            frame_buf: [0; FRAME_BUF_LEN],
         }
     }
 
@@ -86,7 +81,7 @@ where
         &mut self,
         record: &ClientRecord<'_, 'm, RNG, CipherSuite>,
     ) -> Result<(), TlsError> {
-        let tx_buf = &mut self.tx_buf[..];
+        let tx_buf = &mut self.frame_buf[..];
         let key_schedule = &mut self.key_schedule;
         let delegate = &mut self.delegate;
 
@@ -243,8 +238,12 @@ where
 
         // Expecting server hello
         self.state = State::ServerHello;
-        match Self::fetch_record(&mut self.delegate, &mut self.rx_buf, &mut self.key_schedule)
-            .await?
+        match Self::fetch_record(
+            &mut self.delegate,
+            &mut self.frame_buf,
+            &mut self.key_schedule,
+        )
+        .await?
         {
             ServerRecord::Handshake(handshake) => match handshake {
                 ServerHandshake::ServerHello(server_hello) => {
@@ -279,7 +278,7 @@ where
 
             // Handle encrypted traffic with coaleced records
             let state = &mut self.state;
-            let rx_buf = &mut self.rx_buf;
+            let rx_buf = &mut self.frame_buf;
             let socket = &mut self.delegate;
             let key_schedule = &mut self.key_schedule;
             let record = Self::fetch_record(socket, rx_buf, key_schedule).await?;
@@ -335,15 +334,6 @@ where
             .map_err(|_| TlsError::InvalidHandshake)?;
 
         let client_finished = ClientHandshake::<RNG, CipherSuite>::Finished(client_finished);
-
-        /*
-        let mut buf = CryptoBuffer::wrap(&mut self.tx_buf);
-        let _ = client_finished.encode(&mut buf)?;
-
-        buf.push(ContentType::Handshake as u8)
-            .map_err(|_| TlsError::EncodeError)?;
-        let client_finished = Self::encrypt(buf)?;
-        */
         let client_finished = ClientRecord::EncryptedHandshake(client_finished);
 
         self.transmit(&client_finished).await?;
@@ -358,9 +348,18 @@ where
             return Err(TlsError::MissingHandshake);
         }
 
-        info!("Writing {} bytes", buf.len());
-        let record: ClientRecord<'a, 'm, RNG, CipherSuite> = ClientRecord::ApplicationData(buf);
-        self.transmit(&record).await?;
+        let mut wp = 0;
+        let mut remaining = buf.len();
+        while remaining > 0 {
+            let to_write = core::cmp::min(remaining, FRAME_MTU);
+            info!("Writing {} bytes", buf.len());
+            let record: ClientRecord<'a, 'm, RNG, CipherSuite> =
+                ClientRecord::ApplicationData(&buf[wp..to_write]);
+            self.transmit(&record).await?;
+            wp += to_write;
+            remaining -= to_write;
+        }
+
         Ok(buf.len())
     }
 
@@ -374,7 +373,7 @@ where
 
         let mut remaining = buf.len();
         while remaining == buf.len() {
-            let rx_buf = &mut self.rx_buf[..];
+            let rx_buf = &mut self.frame_buf[..];
             let socket = &mut self.delegate;
             let key_schedule = &mut self.key_schedule;
             let record = Self::fetch_record(socket, rx_buf, key_schedule).await?;
