@@ -1,3 +1,4 @@
+use crate::alert::*;
 use crate::application_data::ApplicationData;
 use crate::buffer::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
@@ -119,7 +120,7 @@ where
 pub enum ServerRecord<'a, N: ArrayLength<u8>> {
     Handshake(ServerHandshake<N>),
     ChangeCipherSpec(ChangeCipherSpec),
-    Alert,
+    Alert(Alert),
     ApplicationData(ApplicationData<'a>),
 }
 

@@ -1,3 +1,4 @@
+use crate::alert::*;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
@@ -205,10 +206,13 @@ where
                     let inner = ApplicationData::new(app_data, header);
                     processor(key_schedule, ServerRecord::ApplicationData(inner))?;
                 }
-                e => {
-                    error!("Unexpected content type: {:?}", e);
-                    return Err(TlsError::InvalidHandshake);
+                ContentType::Alert => {
+                    let data = &app_data.as_slice()[..app_data.len() - 1];
+                    let mut buf = ParseBuffer::new(data);
+                    let alert = Alert::parse(&mut buf)?;
+                    processor(key_schedule, ServerRecord::Alert(alert))?;
                 }
+                _ => return Err(TlsError::Unimplemented),
             }
             //debug!("decrypted {:?} --> {:x?}", content_type, data);
             key_schedule.increment_read_counter();
@@ -392,8 +396,13 @@ where
                         Ok(())
                     }
                 }
-                _ => Ok(()) // TODO: Handle protocol events 
-                    //Err(TlsError::InvalidApplicationData)},
+                ServerRecord::Alert(alert) => {
+                    error!("ALERT record! {:?}", alert);
+                    Err(TlsError::InternalError)
+                }
+                _ => {
+                    unimplemented!()
+                }
             })?;
         }
         Ok(buf.len() - remaining)

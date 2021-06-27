@@ -9,6 +9,7 @@ use parse_buffer::ParseError;
 
 pub(crate) mod fmt;
 
+pub mod alert;
 pub mod application_data;
 pub mod buffer;
 pub mod certificate_types;
