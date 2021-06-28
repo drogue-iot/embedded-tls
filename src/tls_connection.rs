@@ -340,6 +340,8 @@ where
         let client_finished = ClientHandshake::<RNG, CipherSuite>::Finished(client_finished);
         let client_finished = ClientRecord::EncryptedHandshake(client_finished);
 
+        info!("Transmitting finished frame");
+
         self.transmit(&client_finished).await?;
 
         self.key_schedule.initialize_master_secret()?;
@@ -400,7 +402,11 @@ where
                     error!("ALERT record! {:?}", alert);
                     Err(TlsError::InternalError)
                 }
-                _ => {
+                ServerRecord::ChangeCipherSpec(_) => {
+                    error!("Unexpected change cipher spec");
+                    Err(TlsError::InternalError)
+                }
+                r => {
                     unimplemented!()
                 }
             })?;
