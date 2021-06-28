@@ -20,7 +20,7 @@ fn setup() -> std::io::Result<SocketAddr> {
         env_logger::init();
     });
 
-    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
 
     let listener = TcpListener::bind(addr).expect("cannot listen on port");
     let addr = listener.local_addr()?;

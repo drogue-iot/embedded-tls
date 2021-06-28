@@ -1,5 +1,5 @@
 #![macro_use]
-#![no_std]
+//#![no_std]
 #![allow(incomplete_features)]
 #![allow(dead_code)]
 #![feature(generic_associated_types)]
