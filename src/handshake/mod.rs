@@ -76,6 +76,7 @@ where
     RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
+    ClientCert(Certificate),
     ClientHello(ClientHello<'config, RNG, CipherSuite>),
     Finished(Finished<<CipherSuite::Hash as Digest>::OutputSize>),
 }
@@ -96,6 +97,10 @@ where
                 buf.push(HandshakeType::Finished as u8)
                     .map_err(|_| TlsError::EncodeError)?;
             }
+            ClientHandshake::ClientCert(_) => {
+                buf.push(HandshakeType::Certificate as u8)
+                    .map_err(|_| TlsError::EncodeError)?;
+            }
         }
 
         let content_length_marker = buf.len();
@@ -105,6 +110,7 @@ where
         match self {
             ClientHandshake::ClientHello(inner) => inner.encode(buf)?,
             ClientHandshake::Finished(inner) => inner.encode(buf)?,
+            ClientHandshake::ClientCert(inner) => inner.encode(buf)?,
         }
         let content_length = (buf.len() as u32 - content_length_marker as u32) - 3;
 

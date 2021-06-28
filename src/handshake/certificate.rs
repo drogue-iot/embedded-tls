@@ -1,3 +1,4 @@
+use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use heapless::{consts::*, Vec};
@@ -8,6 +9,12 @@ pub struct Certificate {
 }
 
 impl Certificate {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, TlsError> {
         let request_context_len = buf.read_u8().map_err(|_| TlsError::InvalidCertificate)?;
         let _request_context = buf
@@ -21,6 +28,14 @@ impl Certificate {
         let entries = CertificateEntry::parse_vector(&mut entries)?;
 
         Ok(Self { entries })
+    }
+
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+        // TODO: Implement
+        buf.push(0).map_err(|_| TlsError::EncodeError)?;
+        buf.extend_from_slice(&[0x00, 0x00, 0x00])
+            .map_err(|_| TlsError::EncodeError)?;
+        Ok(())
     }
 }
 
