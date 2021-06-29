@@ -82,6 +82,10 @@ where
         }
     }
 
+    pub fn free(self) -> Socket {
+        self.delegate
+    }
+
     async fn transmit<'m>(
         &mut self,
         record: &ClientRecord<'_, 'm, RNG, CipherSuite>,
@@ -385,9 +389,7 @@ where
                                     self.cert_requested = true;
                                     Ok(State::ServerCert)
                                 }
-                                e => {
-                                    Err(TlsError::InvalidHandshake)
-                                }
+                                e => Err(TlsError::InvalidHandshake),
                             },
                             ServerRecord::ChangeCipherSpec(_) => Ok(State::ServerCert),
                             _ => Err(TlsError::InvalidRecord),
@@ -483,12 +485,8 @@ where
                                 Ok(())
                             }
                         }
-                        ServerRecord::Alert(alert) => {
-                            Err(TlsError::InternalError)
-                        }
-                        ServerRecord::ChangeCipherSpec(_) => {
-                            Err(TlsError::InternalError)
-                        }
+                        ServerRecord::Alert(alert) => Err(TlsError::InternalError),
+                        ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
                         ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
                             // Ignore
                             Ok(())
