@@ -7,7 +7,6 @@ use core::marker::PhantomData;
 use digest::{BlockInput, FixedOutput, Reset, Update};
 use generic_array::ArrayLength;
 use heapless::{consts::*, Vec};
-use rand_core::{CryptoRng, RngCore};
 pub use sha2::Sha256;
 
 pub trait TlsCipherSuite {
@@ -33,12 +32,10 @@ impl TlsCipherSuite for Aes128GcmSha256 {
 }
 
 #[derive(Debug)]
-pub struct TlsConfig<'a, RNG, CipherSuite>
+pub struct TlsConfig<'a, CipherSuite>
 where
-    RNG: CryptoRng + RngCore,
     CipherSuite: TlsCipherSuite,
 {
-    pub(crate) rng: RNG,
     //pub(crate) cipher_suites: Vec<CipherSuite, U16>,
     pub(crate) server_name: Option<&'a str>,
     pub(crate) cipher_suite: PhantomData<CipherSuite>,
@@ -47,14 +44,12 @@ where
     pub(crate) max_fragment_length: MaxFragmentLength,
 }
 
-impl<'a, RNG, CipherSuite> TlsConfig<'a, RNG, CipherSuite>
+impl<'a, CipherSuite> TlsConfig<'a, CipherSuite>
 where
-    RNG: CryptoRng + RngCore,
     CipherSuite: TlsCipherSuite,
 {
-    pub fn new(rng: RNG) -> Self {
+    pub fn new() -> Self {
         let mut config = Self {
-            rng,
             cipher_suite: PhantomData,
             signature_schemes: Vec::new(),
             named_groups: Vec::new(),

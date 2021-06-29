@@ -48,12 +48,13 @@ const FRAME_MTU: usize = 8192;
 
 pub struct TlsConnection<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
 where
-    RNG: CryptoRng + RngCore + Copy + 'static,
+    RNG: CryptoRng + RngCore + 'static,
     Socket: AsyncRead + AsyncWrite + 'static,
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
-    config: &'a TlsConfig<'a, RNG, CipherSuite>,
+    rng: RNG,
+    config: TlsConfig<'a, CipherSuite>,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     frame_buf: [u8; FRAME_BUF_LEN],
     cert_requested: bool,
@@ -63,14 +64,15 @@ where
 impl<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
     TlsConnection<'a, RNG, Socket, CipherSuite, FRAME_BUF_LEN>
 where
-    RNG: CryptoRng + RngCore + Copy + 'static,
+    RNG: CryptoRng + RngCore + 'static,
     Socket: AsyncRead + AsyncWrite + 'static,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    pub fn new(config: &'a TlsConfig<'a, RNG, CipherSuite>, delegate: Socket) -> Self {
+    pub fn new(config: TlsConfig<'a, CipherSuite>, rng: RNG, delegate: Socket) -> Self {
         Self {
             delegate,
             config,
+            rng,
             state: Some(State::ClientHello),
             key_schedule: KeySchedule::new(),
             frame_buf: [0; FRAME_BUF_LEN],
@@ -83,14 +85,12 @@ where
     }
 
     async fn transmit<'m>(
-        &mut self,
-        record: &ClientRecord<'_, 'm, RNG, CipherSuite>,
+        delegate: &mut Socket,
+        tx_buf: &'m mut [u8],
+        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+        record: &ClientRecord<'_, 'm, CipherSuite>,
         update_hash: bool,
     ) -> Result<(), TlsError> {
-        let tx_buf = &mut self.frame_buf[..];
-        let key_schedule = &mut self.key_schedule;
-        let delegate = &mut self.delegate;
-
         let mut next_hash = key_schedule.transcript_hash().clone();
 
         let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| {
@@ -297,9 +297,16 @@ where
         match state {
             State::ClientHello => {
                 self.key_schedule.initialize_early_secret()?;
-                let client_hello = ClientRecord::client_hello(self.config);
+                let client_hello = ClientRecord::client_hello(&self.config, &mut self.rng);
 
-                self.transmit(&client_hello, false).await?;
+                Self::transmit(
+                    &mut self.delegate,
+                    &mut self.frame_buf,
+                    &mut self.key_schedule,
+                    &client_hello,
+                    false,
+                )
+                .await?;
 
                 if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello)) =
                     client_hello
@@ -340,10 +347,17 @@ where
                 let hash_after_handshake = self.key_schedule.transcript_hash().clone();
                 if self.cert_requested {
                     let handshake = ClientHandshake::ClientCert(Certificate::new());
-                    let client_cert: ClientRecord<'a, 'm, RNG, CipherSuite> =
+                    let client_cert: ClientRecord<'a, 'm, CipherSuite> =
                         ClientRecord::EncryptedHandshake(handshake);
 
-                    self.transmit(&client_cert, true).await?;
+                    Self::transmit(
+                        &mut self.delegate,
+                        &mut self.frame_buf,
+                        &mut self.key_schedule,
+                        &client_cert,
+                        true,
+                    )
+                    .await?;
                 }
 
                 let client_finished = self
@@ -351,11 +365,17 @@ where
                     .create_client_finished()
                     .map_err(|_| TlsError::InvalidHandshake)?;
 
-                let client_finished =
-                    ClientHandshake::<RNG, CipherSuite>::Finished(client_finished);
+                let client_finished = ClientHandshake::<CipherSuite>::Finished(client_finished);
                 let client_finished = ClientRecord::EncryptedHandshake(client_finished);
 
-                self.transmit(&client_finished, false).await?;
+                Self::transmit(
+                    &mut self.delegate,
+                    &mut self.frame_buf,
+                    &mut self.key_schedule,
+                    &client_finished,
+                    false,
+                )
+                .await?;
 
                 self.key_schedule
                     .replace_transcript_hash(hash_after_handshake);
@@ -439,9 +459,16 @@ where
             while remaining > 0 {
                 let to_write = core::cmp::min(remaining, FRAME_MTU);
                 // trace!("Writing {} bytes", buf.len());
-                let record: ClientRecord<'a, 'm, RNG, CipherSuite> =
+                let record: ClientRecord<'a, 'm, CipherSuite> =
                     ClientRecord::ApplicationData(&buf[wp..to_write]);
-                self.transmit(&record, false).await?;
+                Self::transmit(
+                    &mut self.delegate,
+                    &mut self.frame_buf,
+                    &mut self.key_schedule,
+                    &record,
+                    false,
+                )
+                .await?;
                 wp += to_write;
                 remaining -= to_write;
             }

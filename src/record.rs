@@ -14,21 +14,19 @@ use heapless::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
 
-pub enum ClientRecord<'config, 'a, R, CipherSuite>
+pub enum ClientRecord<'config, 'a, CipherSuite>
 where
-    R: CryptoRng + RngCore + Copy,
     // N: ArrayLength<u8>,
     CipherSuite: TlsCipherSuite,
 {
-    Handshake(ClientHandshake<'config, R, CipherSuite>),
-    EncryptedHandshake(ClientHandshake<'config, R, CipherSuite>),
+    Handshake(ClientHandshake<'config, CipherSuite>),
+    EncryptedHandshake(ClientHandshake<'config, CipherSuite>),
     ChangeCipherSpec(ChangeCipherSpec),
     ApplicationData(&'a [u8]),
 }
 
-impl<'config, 'a, RNG, CipherSuite> ClientRecord<'config, 'a, RNG, CipherSuite>
+impl<'config, 'a, CipherSuite> ClientRecord<'config, 'a, CipherSuite>
 where
-    RNG: CryptoRng + RngCore + Copy,
     //N: ArrayLength<u8>,
     CipherSuite: TlsCipherSuite,
 {
@@ -41,8 +39,14 @@ where
         }
     }
 
-    pub fn client_hello(config: &'config TlsConfig<RNG, CipherSuite>) -> Self {
-        ClientRecord::Handshake(ClientHandshake::ClientHello(ClientHello::new(config)))
+    pub fn client_hello<RNG>(
+        config: &'config TlsConfig<'config, CipherSuite>,
+        rng: &mut RNG,
+    ) -> Self
+    where
+        RNG: CryptoRng + RngCore,
+    {
+        ClientRecord::Handshake(ClientHandshake::ClientHello(ClientHello::new(config, rng)))
     }
 
     pub(crate) fn encode<

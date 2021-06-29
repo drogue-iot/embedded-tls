@@ -17,10 +17,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let socket = Socket { stream };
 
     log::info!("Connected");
-    let tls_config: Config<OsRng, Aes128GcmSha256> =
-        Config::new(OsRng).with_server_name("example.com");
+    let tls_config: TlsConfig<Aes128GcmSha256> = TlsConfig::new().with_server_name("example.com");
     let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 16384> =
-        TlsConnection::new(&tls_config, socket);
+        TlsConnection::new(tls_config, OsRng, socket);
 
     tls.open().await.expect("error establishing TLS connection");
 

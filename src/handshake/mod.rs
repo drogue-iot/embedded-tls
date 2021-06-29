@@ -1,5 +1,4 @@
 use heapless::ArrayLength;
-use rand_core::{CryptoRng, RngCore};
 
 //use p256::elliptic_curve::AffinePoint;
 use crate::buffer::*;
@@ -71,19 +70,17 @@ impl HandshakeType {
     }
 }
 
-pub enum ClientHandshake<'config, RNG, CipherSuite>
+pub enum ClientHandshake<'config, CipherSuite>
 where
-    RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
     ClientCert(Certificate),
-    ClientHello(ClientHello<'config, RNG, CipherSuite>),
+    ClientHello(ClientHello<'config, CipherSuite>),
     Finished(Finished<<CipherSuite::Hash as Digest>::OutputSize>),
 }
 
-impl<'config, RNG, CipherSuite> ClientHandshake<'config, RNG, CipherSuite>
+impl<'config, CipherSuite> ClientHandshake<'config, CipherSuite>
 where
-    RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<Range<usize>, TlsError> {

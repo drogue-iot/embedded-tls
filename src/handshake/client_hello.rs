@@ -12,24 +12,24 @@ use crate::signature_schemes::SignatureScheme;
 use crate::supported_versions::{ProtocolVersion, TLS13};
 use crate::TlsError;
 
-pub struct ClientHello<'config, RNG, CipherSuite>
+pub struct ClientHello<'config, CipherSuite>
 where
-    RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
-    config: &'config TlsConfig<'config, RNG, CipherSuite>,
+    config: &'config TlsConfig<'config, CipherSuite>,
     random: Random,
     pub(crate) secret: EphemeralSecret,
 }
 
-impl<'config, RNG, CipherSuite> ClientHello<'config, RNG, CipherSuite>
+impl<'config, CipherSuite> ClientHello<'config, CipherSuite>
 where
-    RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
-    pub fn new(config: &'config TlsConfig<RNG, CipherSuite>) -> Self {
+    pub fn new<RNG>(config: &'config TlsConfig<'config, CipherSuite>, rng: &mut RNG) -> Self
+    where
+        RNG: CryptoRng + RngCore,
+    {
         let mut random = [0; 32];
-        let mut rng = config.rng;
         rng.fill_bytes(&mut random);
 
         Self {
@@ -104,7 +104,7 @@ where
             })
             .map_err(|_| TlsError::EncodeError)?;
 
-        if let Some(server_name) = self.config.server_name {
+        if let Some(server_name) = self.config.server_name.as_ref() {
             // TODO Add SNI extension
             extensions
                 .push(ClientExtension::ServerName { server_name })
