@@ -138,9 +138,8 @@ where
             self.server_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16())?,
         )?;
-        info!("hmac sign key {:x?}", key);
+        // info!("hmac sign key {:x?}", key);
         let mut hmac = Hmac::<D>::new_varkey(&key).unwrap();
-        info!("CHECK HASH {:x?}", &finished.hash.as_ref().unwrap());
         hmac.update(finished.hash.as_ref().unwrap());
         //let code = hmac.clone().finalize().into_bytes();
         Ok(hmac.verify(&finished.verify).is_ok())
@@ -153,7 +152,7 @@ where
         let counter = Self::pad::<IvLen>(&counter.to_be_bytes());
 
         //info!("counter = {:x?}", counter);
-        info!("iv = {:x?}", iv);
+        // info!("iv = {:x?}", iv);
 
         let mut nonce = GenericArray::default();
 
@@ -171,15 +170,15 @@ where
     }
 
     fn pad<N: ArrayLength<u8>>(input: &[u8]) -> GenericArray<u8, N> {
-        info!("padding input = {:x?}", input);
+        // info!("padding input = {:x?}", input);
         let mut padded = GenericArray::default();
         for (index, byte) in input.iter().rev().enumerate() {
-            info!(
+            /*info!(
                 "{} pad {}={:x?}",
                 index,
                 ((N::to_usize() - index) - 1),
                 *byte
-            );
+            );*/
             padded[(N::to_usize() - index) - 1] = *byte;
         }
         padded
@@ -232,19 +231,19 @@ where
         let client_secret = self.derive_secret(client_label, ContextType::TranscriptHash)?;
         self.client_traffic_secret
             .replace(Hkdf::from_prk(&client_secret).unwrap());
-        info!(
+        /*info!(
             "\n\nTRAFFIC {} secret {:x?}",
             core::str::from_utf8(client_label).unwrap(),
             client_secret
-        );
+        );*/
         let server_secret = self.derive_secret(server_label, ContextType::TranscriptHash)?;
         self.server_traffic_secret
             .replace(Hkdf::from_prk(&server_secret).unwrap());
-        info!(
+        /*info!(
             "TRAFFIC {} secret {:x?}\n\n",
             core::str::from_utf8(server_label).unwrap(),
             server_secret
-        );
+        );*/
         self.read_counter = 0;
         self.write_counter = 0;
         Ok(())

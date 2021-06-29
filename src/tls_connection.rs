@@ -98,21 +98,19 @@ where
         })?;
 
         if let Some(range) = range {
-            info!("UPDATING hash once?");
             Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
         }
-        trace!(
+        /*trace!(
             "**** transmit {} bytes, hash={:x?}",
             len,
             key_schedule.transcript_hash().clone().finalize()
-        );
+        );*/
 
         delegate.write(&tx_buf[..len]).await?;
 
         key_schedule.increment_write_counter();
 
         if update_hash {
-            info!("UPDATING HASH TWICE?");
             key_schedule.replace_transcript_hash(next_hash);
         }
         Ok(())
@@ -124,9 +122,9 @@ where
     ) -> Result<usize, TlsError> {
         let client_key = key_schedule.get_client_key()?;
         let nonce = &key_schedule.get_client_nonce()?;
-        info!("encrypt key {:02x?}", client_key);
-        info!("encrypt nonce {:02x?}", nonce);
-        trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
+        // trace!("encrypt key {:02x?}", client_key);
+        // trace!("encrypt nonce {:02x?}", nonce);
+        // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
         //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
         let crypto = CipherSuite::Cipher::new(&client_key);
         let len = buf.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize();
@@ -170,15 +168,15 @@ where
             data: mut app_data,
         }) = record
         {
-            info!("decrypting {:x?} with {}", &header, app_data.len());
+            // info!("decrypting {:x?} with {}", &header, app_data.len());
             //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
             let crypto = CipherSuite::Cipher::new(&key_schedule.get_server_key()?);
             let nonce = &key_schedule.get_server_nonce();
-            info!("server write nonce {:x?}", nonce);
+            // info!("server write nonce {:x?}", nonce);
             crypto
                 .decrypt_in_place(&key_schedule.get_server_nonce()?, &header, &mut app_data)
                 .map_err(|_| TlsError::CryptoError)?;
-            info!("decrypted with padding {:x?}", app_data.as_slice());
+            // info!("decrypted with padding {:x?}", app_data.as_slice());
             let padding = app_data
                 .as_slice()
                 .iter()
@@ -200,15 +198,15 @@ where
                     while buf.remaining() > 1 {
                         let mut inner = ServerHandshake::parse(&mut buf);
                         if let Ok(ServerHandshake::Finished(ref mut finished)) = inner {
-                            trace!("Server finished hash: {:x?}", finished.hash);
+                            // trace!("Server finished hash: {:x?}", finished.hash);
                             finished
                                 .hash
                                 .replace(key_schedule.transcript_hash().clone().finalize());
                         }
-                        info!("===> inner ==> {:?}", inner);
+                        //info!("===> inner ==> {:?}", inner);
                         //if hash_later {
                         Digest::update(key_schedule.transcript_hash(), &data[..data.len()]);
-                        info!("hash {:02x?}", &data[..data.len()]);
+                        // info!("hash {:02x?}", &data[..data.len()]);
                         records
                             .enqueue(ServerRecord::Handshake(inner.unwrap()))
                             .map_err(|_| TlsError::EncodeError)?
@@ -235,7 +233,7 @@ where
             //debug!("decrypted {:?} --> {:x?}", content_type, data);
             key_schedule.increment_read_counter();
         } else {
-            info!("Not encapsulated in app data");
+            //info!("Not encapsulated in app data");
             records.enqueue(record).map_err(|_| TlsError::EncodeError)?
         }
         Ok(())
@@ -280,10 +278,9 @@ where
     {
         loop {
             let state = self.state.take().unwrap();
-            info!("From: {:?}", &state);
+            trace!("From: {:?}", &state);
             let next_state = self.handshake(state).await?;
-            info!("To: {:?}", &next_state);
-            //            info!("State {:?} -> {:?}", &state, &next_state);
+            trace!("To: {:?}", &next_state);
             self.state.replace(next_state);
             if let Some(State::ApplicationData) = self.state {
                 break;
@@ -321,7 +318,7 @@ where
             {
                 ServerRecord::Handshake(handshake) => match handshake {
                     ServerHandshake::ServerHello(server_hello) => {
-                        info!("********* ServerHello");
+                        trace!("********* ServerHello");
                         let shared = server_hello
                             .calculate_shared_secret(&secret)
                             .ok_or(TlsError::InvalidKeyShare)?;
@@ -389,7 +386,6 @@ where
                                     Ok(State::ServerCert)
                                 }
                                 e => {
-                                    info!("GOT INVALID HANDSHAKE: {:?}", e);
                                     Err(TlsError::InvalidHandshake)
                                 }
                             },
@@ -399,11 +395,11 @@ where
                         State::ServerFinished => match record {
                             ServerRecord::Handshake(handshake) => match handshake {
                                 ServerHandshake::Finished(finished) => {
-                                    info!("************* Finished");
+                                    trace!("************* Finished");
                                     let verified =
                                         key_schedule.verify_server_finished(&finished)?;
                                     if verified {
-                                        info!("server verified {}", verified);
+                                        // trace!("server verified {}", verified);
                                         Ok(State::ClientFinished)
                                     } else {
                                         Err(TlsError::InvalidSignature)
@@ -444,7 +440,7 @@ where
             let mut remaining = buf.len();
             while remaining > 0 {
                 let to_write = core::cmp::min(remaining, FRAME_MTU);
-                info!("Writing {} bytes", buf.len());
+                // trace!("Writing {} bytes", buf.len());
                 let record: ClientRecord<'a, 'm, RNG, CipherSuite> =
                     ClientRecord::ApplicationData(&buf[wp..to_write]);
                 self.transmit(&record, false).await?;
@@ -468,33 +464,29 @@ where
                 let rx_buf = &mut self.frame_buf[..];
                 let socket = &mut self.delegate;
                 let key_schedule = &mut self.key_schedule;
-                info!("Fetching reCORDS");
                 let record = Self::fetch_record(socket, rx_buf, key_schedule).await?;
                 let mut records = Queue::new();
                 Self::decrypt_record(key_schedule, &mut records, record)?;
-                info!("Received {} records", records.len());
                 while let Some(record) = records.dequeue() {
                     match record {
                         ServerRecord::ApplicationData(ApplicationData { header: _, data }) => {
-                            info!("Got application data record");
+                            trace!("Got application data record");
                             if buf.len() < data.len() {
                                 warn!("Passed buffer is too small");
                                 Err(TlsError::EncodeError)
                             } else {
                                 let to_copy = core::cmp::min(data.len(), buf.len());
                                 // TODO Need to buffer data not consumed
-                                log::info!("Got {} bytes to copy", to_copy);
+                                trace!("Got {} bytes to copy", to_copy);
                                 buf[..to_copy].copy_from_slice(&data.as_slice()[..to_copy]);
                                 remaining -= to_copy;
                                 Ok(())
                             }
                         }
                         ServerRecord::Alert(alert) => {
-                            error!("ALERT record! {:?}", alert);
                             Err(TlsError::InternalError)
                         }
                         ServerRecord::ChangeCipherSpec(_) => {
-                            error!("Unexpected change cipher spec");
                             Err(TlsError::InternalError)
                         }
                         ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {

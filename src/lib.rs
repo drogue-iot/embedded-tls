@@ -29,6 +29,9 @@ pub mod signature_schemes;
 pub mod supported_versions;
 pub mod tls_connection;
 
+pub use tls_connection::*;
+pub use config::*;
+
 #[derive(Debug, Copy, Clone)]
 pub enum TlsError {
     Unimplemented,
