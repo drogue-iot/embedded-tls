@@ -67,7 +67,10 @@ impl ExtensionType {
     }
 }
 
-pub enum ClientExtension {
+pub enum ClientExtension<'a> {
+    ServerName {
+        server_name: &'a str,
+    },
     SupportedVersions {
         versions: ProtocolVersions,
     },
@@ -87,9 +90,10 @@ pub enum ClientExtension {
     MaxFragmentLength(MaxFragmentLength),
 }
 
-impl ClientExtension {
+impl ClientExtension<'_> {
     pub fn extension_type(&self) -> [u8; 2] {
         match self {
+            ClientExtension::ServerName { .. } => ExtensionType::ServerName as u16,
             ClientExtension::SupportedVersions { .. } => ExtensionType::SupportedVersions as u16,
             ClientExtension::SignatureAlgorithms { .. } => {
                 ExtensionType::SignatureAlgorithms as u16
@@ -113,6 +117,20 @@ impl ClientExtension {
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
         match self {
+            ClientExtension::ServerName { server_name } => {
+                info!("server name ext");
+                let sni_size: u16 = (server_name.as_bytes().len() + 3) as u16;
+
+                buf.extend_from_slice(&sni_size.to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
+
+                // Type host
+                buf.push(0).map_err(|_| TlsError::EncodeError)?;
+                buf.extend_from_slice(&(server_name.as_bytes().len() as u16).to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
+                buf.extend_from_slice(server_name.as_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
+            }
             ClientExtension::SupportedVersions { versions } => {
                 info!("supported versions ext");
                 buf.push(versions.len() as u8 * 2)

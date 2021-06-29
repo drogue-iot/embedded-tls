@@ -17,11 +17,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let socket = Socket { stream };
 
     log::info!("Connected");
-    let tls_config: Config<OsRng, Aes128GcmSha256> = Config::new(OsRng);
-    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 4096, 4096> =
+    let tls_config: Config<OsRng, Aes128GcmSha256> =
+        Config::new(OsRng).with_server_name("example.com");
+    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 16384> =
         TlsConnection::new(&tls_config, socket);
 
     tls.open().await.expect("error establishing TLS connection");
+
     tls.write(b"ping").await.expect("error writing data");
 
     let mut rx_buf = [0; 4096];

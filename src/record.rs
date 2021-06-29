@@ -1,3 +1,4 @@
+use crate::alert::*;
 use crate::application_data::ApplicationData;
 use crate::buffer::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
@@ -8,6 +9,7 @@ use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::{AsyncRead, AsyncWrite, TlsError};
 use core::fmt::Debug;
 use core::ops::Range;
+use digest::{BlockInput, FixedOutput, Reset, Update};
 use heapless::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
@@ -20,6 +22,7 @@ where
 {
     Handshake(ClientHandshake<'config, R, CipherSuite>),
     EncryptedHandshake(ClientHandshake<'config, R, CipherSuite>),
+    ChangeCipherSpec(ChangeCipherSpec),
     ApplicationData(&'a [u8]),
 }
 
@@ -34,6 +37,7 @@ where
             ClientRecord::Handshake(_) => ContentType::Handshake,
             ClientRecord::EncryptedHandshake(_) => ContentType::ApplicationData,
             ClientRecord::ApplicationData(_) => ContentType::ApplicationData,
+            ClientRecord::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
         }
     }
 
@@ -41,9 +45,13 @@ where
         ClientRecord::Handshake(ClientHandshake::ClientHello(ClientHello::new(config)))
     }
 
-    pub(crate) fn encode<F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>>(
+    pub(crate) fn encode<
+        N: Update + BlockInput + FixedOutput + Reset + Default + Clone,
+        F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>,
+    >(
         &self,
         enc_buf: &mut [u8],
+        transcript: &mut N,
         mut encrypt_fn: F,
     ) -> Result<(usize, Option<Range<usize>>), TlsError> {
         let mut buf = CryptoBuffer::wrap(enc_buf);
@@ -66,6 +74,12 @@ where
                 buf.extend_from_slice(&[0x03, 0x03])
                     .map_err(|_| TlsError::EncodeError)?;
             }
+            ClientRecord::ChangeCipherSpec(_) => {
+                buf.push(ContentType::ChangeCipherSpec as u8)
+                    .map_err(|_| TlsError::EncodeError)?;
+                buf.extend_from_slice(&[0x03, 0x03])
+                    .map_err(|_| TlsError::EncodeError)?;
+            }
         }
 
         let record_length_marker = buf.len();
@@ -80,7 +94,8 @@ where
             ClientRecord::EncryptedHandshake(handshake) => {
                 let mut wrapped = buf.forward();
 
-                handshake.encode(&mut wrapped)?;
+                let range = handshake.encode(&mut wrapped)?;
+                N::update(transcript, &wrapped.as_slice()[range]);
                 wrapped
                     .push(ContentType::Handshake as u8)
                     .map_err(|_| TlsError::EncodeError)?;
@@ -99,6 +114,10 @@ where
 
                 let _ = encrypt_fn(&mut wrapped)?;
                 (None, wrapped.rewind())
+            }
+            ClientRecord::ChangeCipherSpec(spec) => {
+                spec.encode(&mut buf)?;
+                (None, buf)
             }
         };
 
@@ -119,7 +138,7 @@ where
 pub enum ServerRecord<'a, N: ArrayLength<u8>> {
     Handshake(ServerHandshake<N>),
     ChangeCipherSpec(ChangeCipherSpec),
-    Alert,
+    Alert(Alert),
     ApplicationData(ApplicationData<'a>),
 }
 

@@ -5,6 +5,7 @@ use rand_core::{CryptoRng, RngCore};
 use crate::buffer::*;
 use crate::config::TlsCipherSuite;
 use crate::handshake::certificate::Certificate;
+use crate::handshake::certificate_request::CertificateRequest;
 use crate::handshake::certificate_verify::CertificateVerify;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::encrypted_extensions::EncryptedExtensions;
@@ -18,6 +19,7 @@ use core::ops::Range;
 use sha2::Digest;
 
 pub mod certificate;
+pub mod certificate_request;
 pub mod certificate_verify;
 pub mod client_hello;
 pub mod encrypted_extensions;
@@ -74,6 +76,7 @@ where
     RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
+    ClientCert(Certificate),
     ClientHello(ClientHello<'config, RNG, CipherSuite>),
     Finished(Finished<<CipherSuite::Hash as Digest>::OutputSize>),
 }
@@ -94,6 +97,10 @@ where
                 buf.push(HandshakeType::Finished as u8)
                     .map_err(|_| TlsError::EncodeError)?;
             }
+            ClientHandshake::ClientCert(_) => {
+                buf.push(HandshakeType::Certificate as u8)
+                    .map_err(|_| TlsError::EncodeError)?;
+            }
         }
 
         let content_length_marker = buf.len();
@@ -103,6 +110,7 @@ where
         match self {
             ClientHandshake::ClientHello(inner) => inner.encode(buf)?,
             ClientHandshake::Finished(inner) => inner.encode(buf)?,
+            ClientHandshake::ClientCert(inner) => inner.encode(buf)?,
         }
         let content_length = (buf.len() as u32 - content_length_marker as u32) - 3;
 
@@ -125,6 +133,7 @@ pub enum ServerHandshake<N: ArrayLength<u8>> {
     EncryptedExtensions(EncryptedExtensions),
     NewSessionTicket(NewSessionTicket),
     Certificate(Certificate),
+    CertificateRequest(CertificateRequest),
     CertificateVerify(CertificateVerify),
     Finished(Finished<N>),
 }
@@ -135,6 +144,7 @@ impl<N: ArrayLength<u8>> Debug for ServerHandshake<N> {
             ServerHandshake::ServerHello(inner) => Debug::fmt(inner, f),
             ServerHandshake::EncryptedExtensions(inner) => Debug::fmt(inner, f),
             ServerHandshake::Certificate(inner) => Debug::fmt(inner, f),
+            ServerHandshake::CertificateRequest(inner) => Debug::fmt(inner, f),
             ServerHandshake::CertificateVerify(inner) => Debug::fmt(inner, f),
             ServerHandshake::Finished(inner) => Debug::fmt(inner, f),
             ServerHandshake::NewSessionTicket(inner) => Debug::fmt(inner, f),
@@ -182,6 +192,8 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
             HandshakeType::of(buf.read_u8().map_err(|_| TlsError::InvalidHandshake)?)
                 .ok_or(TlsError::InvalidHandshake)?;
 
+        info!("Handshake type {:?}", handshake_type);
+
         let content_len = buf.read_u24().map_err(|_| TlsError::InvalidHandshake)?;
 
         match handshake_type {
@@ -201,7 +213,13 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
                 Ok(ServerHandshake::Certificate(Certificate::parse(buf)?))
             }
 
-            //HandshakeType::CertificateRequest => {}
+            HandshakeType::CertificateRequest => {
+                info!("Cert request handshake type");
+                Ok(ServerHandshake::CertificateRequest(
+                    CertificateRequest::parse(buf)?,
+                ))
+            }
+
             HandshakeType::CertificateVerify => Ok(ServerHandshake::CertificateVerify(
                 CertificateVerify::parse(buf)?,
             )),

@@ -217,8 +217,8 @@ where
         self.secret = secret;
         self.hkdf.replace(hkdf);
 
-        let context = self.transcript_hash.as_ref().unwrap().clone().finalize();
-        info!("Derive keys, hash: {:x?}", context);
+        //let context = self.transcript_hash.as_ref().unwrap().clone().finalize();
+        //info!("Derive keys, hash: {:x?}", context);
 
         self.calculate_traffic_secrets(b"c ap traffic", b"s ap traffic")?;
         self.derived()
@@ -232,11 +232,19 @@ where
         let client_secret = self.derive_secret(client_label, ContextType::TranscriptHash)?;
         self.client_traffic_secret
             .replace(Hkdf::from_prk(&client_secret).unwrap());
-        // info!("c traffic secret {:x?}", client_secret);
+        info!(
+            "\n\nTRAFFIC {} secret {:x?}",
+            core::str::from_utf8(client_label).unwrap(),
+            client_secret
+        );
         let server_secret = self.derive_secret(server_label, ContextType::TranscriptHash)?;
         self.server_traffic_secret
             .replace(Hkdf::from_prk(&server_secret).unwrap());
-        // info!("s traffic secret {:x?}", server_secret);
+        info!(
+            "TRAFFIC {} secret {:x?}\n\n",
+            core::str::from_utf8(server_label).unwrap(),
+            server_secret
+        );
         self.read_counter = 0;
         self.write_counter = 0;
         Ok(())
@@ -248,7 +256,7 @@ where
         context_type: ContextType,
     ) -> Result<GenericArray<u8, D::OutputSize>, TlsError> {
         let label = self.make_hkdf_label(label, context_type, D::OutputSize::to_u16())?;
-        Ok(self.hkdf_expand_label(self.hkdf.as_ref().unwrap(), &label)?)
+        self.hkdf_expand_label(self.hkdf.as_ref().unwrap(), &label)
     }
 
     pub fn hkdf_expand_label<N: ArrayLength<u8>>(

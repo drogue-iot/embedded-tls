@@ -17,7 +17,7 @@ where
     RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
-    config: &'config Config<RNG, CipherSuite>,
+    config: &'config Config<'config, RNG, CipherSuite>,
     random: Random,
     pub(crate) secret: EphemeralSecret,
 }
@@ -73,6 +73,7 @@ where
 
         let mut versions = Vec::<ProtocolVersion, U16>::new();
         versions.push(TLS13).map_err(|_| TlsError::EncodeError)?;
+
         extensions
             .push(ClientExtension::SupportedVersions { versions })
             .map_err(|_| TlsError::EncodeError)?;
@@ -102,6 +103,11 @@ where
                 opaque,
             })
             .map_err(|_| TlsError::EncodeError)?;
+
+        if let Some(server_name) = self.config.server_name {
+            // TODO Add SNI extension
+            extensions.push(ClientExtension::ServerName { server_name });
+        }
 
         //extensions.push(ClientExtension::MaxFragmentLength(
         //self.config.max_fragment_length,
