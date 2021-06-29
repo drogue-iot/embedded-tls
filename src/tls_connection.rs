@@ -497,6 +497,10 @@ where
                             error!("Unexpected change cipher spec");
                             Err(TlsError::InternalError)
                         }
+                        ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
+                            // Ignore
+                            Ok(())
+                        }
                         r => {
                             unimplemented!()
                         }
