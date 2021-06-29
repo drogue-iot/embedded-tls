@@ -80,8 +80,8 @@ where
         }
     }
 
-    pub fn free(self) -> Socket {
-        self.delegate
+    pub fn free(self) -> (RNG, Socket) {
+        (self.rng, self.delegate)
     }
 
     async fn transmit<'m>(
