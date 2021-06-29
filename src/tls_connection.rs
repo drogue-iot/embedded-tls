@@ -80,8 +80,8 @@ where
         }
     }
 
-    pub fn free(self) -> (RNG, Socket) {
-        (self.rng, self.delegate)
+    pub fn free(self) -> (TlsConfig<'a, CipherSuite>, RNG, Socket) {
+        (self.config, self.rng, self.delegate)
     }
 
     async fn transmit<'m>(
