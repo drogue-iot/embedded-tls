@@ -1,7 +1,5 @@
-use crate::extensions::server::ServerExtension;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
-use heapless::{consts::*, Vec};
 
 #[derive(Debug)]
 pub struct CertificateRequest {}

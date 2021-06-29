@@ -4,7 +4,7 @@ use p256::elliptic_curve::rand_core::{CryptoRng, RngCore};
 use p256::EncodedPoint;
 
 use crate::buffer::*;
-use crate::config::{Config, TlsCipherSuite};
+use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::extensions::ClientExtension;
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::named_groups::NamedGroup;
@@ -17,7 +17,7 @@ where
     RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
-    config: &'config Config<'config, RNG, CipherSuite>,
+    config: &'config TlsConfig<'config, RNG, CipherSuite>,
     random: Random,
     pub(crate) secret: EphemeralSecret,
 }
@@ -27,7 +27,7 @@ where
     RNG: CryptoRng + RngCore + Copy,
     CipherSuite: TlsCipherSuite,
 {
-    pub fn new(config: &'config Config<RNG, CipherSuite>) -> Self {
+    pub fn new(config: &'config TlsConfig<RNG, CipherSuite>) -> Self {
         let mut random = [0; 32];
         let mut rng = config.rng;
         rng.fill_bytes(&mut random);
@@ -106,7 +106,9 @@ where
 
         if let Some(server_name) = self.config.server_name {
             // TODO Add SNI extension
-            extensions.push(ClientExtension::ServerName { server_name });
+            extensions
+                .push(ClientExtension::ServerName { server_name })
+                .map_err(|_| TlsError::EncodeError)?;
         }
 
         //extensions.push(ClientExtension::MaxFragmentLength(

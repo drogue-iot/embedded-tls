@@ -1,15 +1,8 @@
 use heapless::{consts::*, Vec};
 
-use crate::cipher_suites::CipherSuite;
-use crate::crypto_engine::CryptoEngine;
-use crate::extensions::common::KeyShareEntry;
 use crate::extensions::server::ServerExtension;
-use crate::handshake::Random;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
-use p256::ecdh::{EphemeralSecret, SharedSecret};
-use p256::PublicKey;
-use sha2::Digest;
 
 #[derive(Debug)]
 pub struct NewSessionTicket {

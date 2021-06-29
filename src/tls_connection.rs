@@ -1,14 +1,10 @@
-use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
-use crate::{
-    alert::*,
-    handshake::{certificate::Certificate, certificate_request::CertificateRequest},
-};
+use crate::{alert::*, handshake::certificate::Certificate};
 use crate::{
     buffer::CryptoBuffer,
-    config::{Config, TlsCipherSuite},
+    config::{TlsCipherSuite, TlsConfig},
 };
 use crate::{AsyncRead, AsyncWrite, TlsError};
 use core::fmt::Debug;
@@ -57,7 +53,7 @@ where
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
-    config: &'a Config<'a, RNG, CipherSuite>,
+    config: &'a TlsConfig<'a, RNG, CipherSuite>,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     frame_buf: [u8; FRAME_BUF_LEN],
     cert_requested: bool,
@@ -71,7 +67,7 @@ where
     Socket: AsyncRead + AsyncWrite + 'static,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    pub fn new(config: &'a Config<'a, RNG, CipherSuite>, delegate: Socket) -> Self {
+    pub fn new(config: &'a TlsConfig<'a, RNG, CipherSuite>, delegate: Socket) -> Self {
         Self {
             delegate,
             config,
@@ -175,7 +171,7 @@ where
             // info!("decrypting {:x?} with {}", &header, app_data.len());
             //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
             let crypto = CipherSuite::Cipher::new(&key_schedule.get_server_key()?);
-            let nonce = &key_schedule.get_server_nonce();
+            // let nonce = &key_schedule.get_server_nonce();
             // info!("server write nonce {:x?}", nonce);
             crypto
                 .decrypt_in_place(&key_schedule.get_server_nonce()?, &header, &mut app_data)
@@ -301,7 +297,7 @@ where
         match state {
             State::ClientHello => {
                 self.key_schedule.initialize_early_secret()?;
-                let client_hello = ClientRecord::client_hello(&self.config);
+                let client_hello = ClientRecord::client_hello(self.config);
 
                 self.transmit(&client_hello, false).await?;
 
@@ -330,7 +326,7 @@ where
                             .initialize_handshake_secret(shared.as_bytes())?;
                         Ok(State::ServerCert)
                     }
-                    e => Err(TlsError::InvalidHandshake),
+                    _ => Err(TlsError::InvalidHandshake),
                 },
                 _ => Err(TlsError::InvalidRecord),
             },
@@ -376,7 +372,6 @@ where
                 let record = Self::fetch_record(socket, frame_buf, key_schedule).await?;
                 Self::decrypt_record(key_schedule, &mut records, record)?;
 
-                let socket = &mut self.delegate;
                 let mut state = Some(state);
                 while let Some(record) = records.dequeue() {
                     let next_state = match state.take().unwrap() {
@@ -385,11 +380,12 @@ where
                                 ServerHandshake::EncryptedExtensions(_) => Ok(State::ServerCert),
                                 ServerHandshake::Certificate(_) => Ok(State::ServerCert),
                                 ServerHandshake::CertificateVerify(_) => Ok(State::ServerFinished),
-                                ServerHandshake::CertificateRequest(request) => {
+                                ServerHandshake::CertificateRequest(_) => {
+                                    // TODO: Implement client cert
                                     self.cert_requested = true;
                                     Ok(State::ServerCert)
                                 }
-                                e => Err(TlsError::InvalidHandshake),
+                                _ => Err(TlsError::InvalidHandshake),
                             },
                             ServerRecord::ChangeCipherSpec(_) => Ok(State::ServerCert),
                             _ => Err(TlsError::InvalidRecord),
@@ -485,13 +481,13 @@ where
                                 Ok(())
                             }
                         }
-                        ServerRecord::Alert(alert) => Err(TlsError::InternalError),
+                        ServerRecord::Alert(_) => Err(TlsError::InternalError),
                         ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
                         ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
                             // Ignore
                             Ok(())
                         }
-                        r => {
+                        _ => {
                             unimplemented!()
                         }
                     }?;

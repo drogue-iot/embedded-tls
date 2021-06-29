@@ -2,7 +2,7 @@ use crate::alert::*;
 use crate::application_data::ApplicationData;
 use crate::buffer::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
-use crate::config::{Config, TlsCipherSuite};
+use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
@@ -41,7 +41,7 @@ where
         }
     }
 
-    pub fn client_hello(config: &'config Config<RNG, CipherSuite>) -> Self {
+    pub fn client_hello(config: &'config TlsConfig<RNG, CipherSuite>) -> Self {
         ClientRecord::Handshake(ClientHandshake::ClientHello(ClientHello::new(config)))
     }
 

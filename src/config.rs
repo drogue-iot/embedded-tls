@@ -33,7 +33,7 @@ impl TlsCipherSuite for Aes128GcmSha256 {
 }
 
 #[derive(Debug)]
-pub struct Config<'a, RNG, CipherSuite>
+pub struct TlsConfig<'a, RNG, CipherSuite>
 where
     RNG: CryptoRng + RngCore,
     CipherSuite: TlsCipherSuite,
@@ -47,7 +47,7 @@ where
     pub(crate) max_fragment_length: MaxFragmentLength,
 }
 
-impl<'a, RNG, CipherSuite> Config<'a, RNG, CipherSuite>
+impl<'a, RNG, CipherSuite> TlsConfig<'a, RNG, CipherSuite>
 where
     RNG: CryptoRng + RngCore,
     CipherSuite: TlsCipherSuite,
