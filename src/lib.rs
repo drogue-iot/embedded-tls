@@ -108,7 +108,7 @@ pub trait AsyncRead {
 }
 
 #[cfg(feature = "tokio")]
-mod tokio_io {
+mod runtime {
     use super::{AsyncRead, AsyncWrite, TlsError};
     use core::future::Future;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -119,9 +119,9 @@ mod tokio_io {
         type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
         fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
             async move {
-                Ok(AsyncWriteExt::write(self, buf)
+                AsyncWriteExt::write(self, buf)
                     .await
-                    .map_err(|_| TlsError::IoError)?)
+                    .map_err(|_| TlsError::IoError)
             }
         }
     }
@@ -131,13 +131,59 @@ mod tokio_io {
         type ReadFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
         fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
             async move {
-                Ok(AsyncReadExt::read(self, buf)
+                AsyncReadExt::read(self, buf)
                     .await
-                    .map_err(|_| TlsError::IoError)?)
+                    .map_err(|_| TlsError::IoError)
             }
         }
     }
 }
 
-#[cfg(feature = "tokio")]
-pub use tokio_io::*;
+#[cfg(feature = "embassy")]
+mod runtime {
+    use super::{AsyncRead, AsyncWrite, TlsError};
+    use core::future::Future;
+    use embassy::io::{AsyncBufReadExt, AsyncWriteExt};
+
+    impl<W: AsyncWriteExt> AsyncWrite for W {
+        #[rustfmt::skip]
+        type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
+        fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
+            async move { Ok(self.write(buf).await.map_err(|_| TlsError::IoError)?) }
+        }
+    }
+
+    impl<R: AsyncBufReadExt> AsyncRead for R {
+        #[rustfmt::skip]
+        type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
+        fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
+            async move { Ok(self.read(buf).await.map_err(|_| TlsError::IoError)?) }
+        }
+    }
+}
+
+#[cfg(feature = "futures")]
+mod runtime {
+    use super::{AsyncRead, AsyncWrite, TlsError};
+    use core::future::Future;
+    use futures::io::{AsyncReadExt, AsyncWriteExt};
+
+    impl<W: AsyncWriteExt + Unpin> AsyncWrite for W {
+        #[rustfmt::skip]
+        type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
+        fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
+            async move { Ok(self.write(buf).await.map_err(|_| TlsError::IoError)?) }
+        }
+    }
+
+    impl<R: AsyncReadExt + Unpin> AsyncRead for R {
+        #[rustfmt::skip]
+        type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
+        fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
+            async move { Ok(self.read(buf).await.map_err(|_| TlsError::IoError)?) }
+        }
+    }
+}
+
+#[cfg(any(feature = "tokio", feature = "embassy", feature = "futures"))]
+pub use runtime::*;
