@@ -8,8 +8,8 @@
 Drogue-TLS is an async Rust-native TLS 1.3 implementation that aims to work in a no-std environment. The
 implementation is work in progress, but the example clients should work against the [rustls](https://github.com/ctz/rustls) echo server.
 
+Some features are still not implemented, have a look at [open issues](https://github.com/drogue-iot/drogue-tls/issues).
 Only supports writing/receiving one frame at a time, hence using a frame buffer larger than 16k is not currently needed.  You may use a lower frame buffer size, but there is no guarantee that it will be able to parse any TLS 1.3 frame.
-
 
 Usage of this crate should fit in 20 kB of RAM assuming a frame buffer of 16 kB (max TLS record size). Some memory usage statistics:
 
