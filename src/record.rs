@@ -167,7 +167,7 @@ impl<N: ArrayLength<u8>> ServerRecord<'_, N> {
             None => Err(TlsError::InvalidRecord),
             Some(content_type) => {
                 let content_length = u16::from_be_bytes([header[3], header[4]]) as usize;
-                /*trace!(
+                /*info!(
                     "Content length: {}, rx_buf: {}, pos: {}",
                     content_length,
                     rx_buf.len(),
@@ -180,12 +180,18 @@ impl<N: ArrayLength<u8>> ServerRecord<'_, N> {
                 let rx_buf = &mut rx_buf[pos..];
                 let mut pos = 0;
                 while pos < content_length {
-                    pos += socket
+                    let read = socket
                         .read(&mut rx_buf[pos..content_length])
                         .await
                         .map_err(|_| TlsError::InvalidRecord)?;
+                    pos += read;
+                    /*info!(
+                        "Read block of {} bytes. Remaining: {}",
+                        read,
+                        content_length - pos
+                    );*/
                 }
-                //trace!("Read {} bytes", content_length);
+                // info!("Read {} bytes", content_length);
 
                 match content_type {
                     ContentType::Invalid => Err(TlsError::Unimplemented),

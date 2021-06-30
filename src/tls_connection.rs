@@ -460,7 +460,7 @@ where
                         },
                         state => Ok(state),
                     }?;
-                    //info!("State {:?} -> {:?}", &self.state, &next_state);
+                    trace!("State {:?} -> {:?}", &state, &next_state);
                     state.replace(next_state);
                 }
                 Ok(state.unwrap())

@@ -11,8 +11,6 @@ impl CertificateRequest {
             .slice(request_context_len as usize)
             .map_err(|_| TlsError::InvalidCertificate)?;
 
-        info!("Request context parsed");
-
         let _extensions_length = buf
             .read_u16()
             .map_err(|_| TlsError::InvalidExtensionsLength)?;
@@ -20,10 +18,10 @@ impl CertificateRequest {
 
         buf.slice(_extensions_length as usize)
             .map_err(|_| TlsError::DecodeError)?;
-        info!("Cert request parsing");
+        // info!("Cert request parsing");
         // TODO
         //let extensions = ServerExtension::parse_vector(buf)?;
-        info!("Cert request parsing done");
+        //info!("Cert request parsing done");
 
         Ok(Self {})
     }
