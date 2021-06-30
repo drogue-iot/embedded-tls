@@ -5,33 +5,28 @@ use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 
 #[derive(Debug)]
-pub struct NewSessionTicket {
+pub struct NewSessionTicket<'a> {
     lifetime: u32,
     age_add: u32,
-    nonce: Vec<u8, U256>,
-    ticket: Vec<u8, U256>,
-    extensions: Vec<ServerExtension, U16>,
+    nonce: &'a [u8],
+    ticket: &'a [u8],
+    extensions: Vec<ServerExtension<'a>, U16>,
 }
 
-impl NewSessionTicket {
-    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, TlsError> {
+impl<'a> NewSessionTicket<'a> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<NewSessionTicket<'a>, TlsError> {
         let lifetime = buf.read_u32()?;
         let age_add = buf.read_u32()?;
 
         let nonce_length = buf.read_u8()?;
-        let mut nonce = Vec::new();
-        buf.copy(&mut nonce, nonce_length as usize)
+        let nonce = buf
+            .slice(nonce_length as usize)
             .map_err(|_| TlsError::InvalidNonceLength)?;
 
-        let mut ticket = Vec::new();
         let ticket_length = buf.read_u16()?;
-        if ticket_length > 255 {
-            // Store slice instead?
-            buf.slice(ticket_length as usize)?;
-        } else {
-            buf.copy(&mut ticket, ticket_length as usize)
-                .map_err(|_| TlsError::InvalidTicketLength)?;
-        }
+        let ticket = buf
+            .slice(ticket_length as usize)
+            .map_err(|_| TlsError::InvalidTicketLength)?;
 
         let _extensions_length = buf
             .read_u16()
@@ -41,8 +36,8 @@ impl NewSessionTicket {
         Ok(Self {
             lifetime,
             age_add,
-            nonce,
-            ticket,
+            nonce: nonce.as_slice(),
+            ticket: ticket.as_slice(),
             extensions,
         })
     }

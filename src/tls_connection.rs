@@ -15,6 +15,12 @@ use sha2::Digest;
 
 use crate::application_data::ApplicationData;
 use crate::content_types::ContentType;
+use crate::handshake::certificate_request::CertificateRequest;
+use crate::handshake::certificate_verify::CertificateVerify;
+use crate::handshake::encrypted_extensions::EncryptedExtensions;
+use crate::handshake::finished::Finished;
+use crate::handshake::new_session_ticket::NewSessionTicket;
+use crate::handshake::server_hello::ServerHello;
 use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadInPlace, NewAead};
 use core::fmt::Formatter;
@@ -193,8 +199,9 @@ where
             match content_type {
                 ContentType::Handshake => {
                     // Decode potentially coaleced handshake messages
-                    let data = &app_data.as_slice()[..app_data.len() - 1];
-                    let mut buf = ParseBuffer::new(data);
+                    let (data, offset, len) = app_data.release();
+                    let data = &data[offset..offset + len - 1];
+                    let mut buf: ParseBuffer<'m> = ParseBuffer::new(data);
                     while buf.remaining() > 1 {
                         let mut inner = ServerHandshake::parse(&mut buf);
                         if let Ok(ServerHandshake::Finished(ref mut finished)) = inner {
@@ -296,17 +303,15 @@ where
     {
         match state {
             State::ClientHello => {
-                self.key_schedule.initialize_early_secret()?;
-                let client_hello = ClientRecord::client_hello(&self.config, &mut self.rng);
+                let key_schedule = &mut self.key_schedule;
+                let delegate = &mut self.delegate;
+                let frame_buf = &mut self.frame_buf;
+                let config = &self.config;
+                let rng = &mut self.rng;
+                key_schedule.initialize_early_secret()?;
+                let client_hello = ClientRecord::client_hello(config, rng);
 
-                Self::transmit(
-                    &mut self.delegate,
-                    &mut self.frame_buf,
-                    &mut self.key_schedule,
-                    &client_hello,
-                    false,
-                )
-                .await?;
+                Self::transmit(delegate, frame_buf, key_schedule, &client_hello, false).await?;
 
                 if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello)) =
                     client_hello
@@ -316,27 +321,63 @@ where
                     Err(TlsError::EncodeError)
                 }
             }
-            State::ServerHello(secret) => match Self::fetch_record(
-                &mut self.delegate,
-                &mut self.frame_buf,
-                &mut self.key_schedule,
-            )
-            .await?
-            {
-                ServerRecord::Handshake(handshake) => match handshake {
-                    ServerHandshake::ServerHello(server_hello) => {
-                        trace!("********* ServerHello");
-                        let shared = server_hello
-                            .calculate_shared_secret(&secret)
-                            .ok_or(TlsError::InvalidKeyShare)?;
-                        self.key_schedule
-                            .initialize_handshake_secret(shared.as_bytes())?;
-                        Ok(State::ServerCert)
+            State::ServerHello(secret) => {
+                let key_schedule = &mut self.key_schedule;
+                let delegate = &mut self.delegate;
+                let frame_buf = &mut self.frame_buf;
+                let record = Self::fetch_record(delegate, frame_buf, key_schedule).await?;
+                /*info!(
+                    "SIZE of server record : {}",
+                    core::mem::size_of_val(&record)
+                );*/
+                match record {
+                    ServerRecord::Handshake(handshake) => {
+                        /*info!(
+                            "SIZE of server handshake: {}",
+                            core::mem::size_of_val(&handshake)
+                        );
+                        info!(
+                            "SIZE of server hello: {}",
+                            core::mem::size_of::<ServerHello>()
+                        );
+                        info!(
+                            "SIZE of encrypted extensions: {}",
+                            core::mem::size_of::<EncryptedExtensions>()
+                        );
+                        info!("SIZE of NST: {}", core::mem::size_of::<NewSessionTicket>());
+                        info!(
+                            "SIZE of Certificate: {}",
+                            core::mem::size_of::<Certificate<'a>>()
+                        );
+                        info!(
+                            "SIZE of CertificateReq: {}",
+                            core::mem::size_of::<CertificateRequest>()
+                        );
+                        info!(
+                            "SIZE of CertificateVerify: {}",
+                            core::mem::size_of::<CertificateVerify>()
+                        );
+                        info!(
+                            "SIZE of CertificateFinished: {}",
+                            core::mem::size_of::<
+                                Finished<<CipherSuite::Hash as FixedOutput>::OutputSize>,
+                            >()
+                        );*/
+                        match handshake {
+                            ServerHandshake::ServerHello(server_hello) => {
+                                trace!("********* ServerHello");
+                                let shared = server_hello
+                                    .calculate_shared_secret(&secret)
+                                    .ok_or(TlsError::InvalidKeyShare)?;
+                                key_schedule.initialize_handshake_secret(shared.as_bytes())?;
+                                Ok(State::ServerCert)
+                            }
+                            _ => Err(TlsError::InvalidHandshake),
+                        }
                     }
-                    _ => Err(TlsError::InvalidHandshake),
-                },
-                _ => Err(TlsError::InvalidRecord),
-            },
+                    _ => Err(TlsError::InvalidRecord),
+                }
+            }
             State::ClientFinished => {
                 /*
                 self.transmit(
@@ -344,52 +385,42 @@ where
                     false,
                 )
                 .await?;*/
-                let hash_after_handshake = self.key_schedule.transcript_hash().clone();
+                let key_schedule = &mut self.key_schedule;
+                let delegate = &mut self.delegate;
+                let frame_buf = &mut self.frame_buf;
+                let hash_after_handshake = key_schedule.transcript_hash().clone();
                 if self.cert_requested {
                     let handshake = ClientHandshake::ClientCert(Certificate::new());
-                    let client_cert: ClientRecord<'a, 'm, CipherSuite> =
+                    let client_cert: ClientRecord<'a, '_, CipherSuite> =
                         ClientRecord::EncryptedHandshake(handshake);
 
-                    Self::transmit(
-                        &mut self.delegate,
-                        &mut self.frame_buf,
-                        &mut self.key_schedule,
-                        &client_cert,
-                        true,
-                    )
-                    .await?;
+                    Self::transmit(delegate, frame_buf, key_schedule, &client_cert, true).await?;
                 }
 
-                let client_finished = self
-                    .key_schedule
+                let client_finished = key_schedule
                     .create_client_finished()
                     .map_err(|_| TlsError::InvalidHandshake)?;
 
                 let client_finished = ClientHandshake::<CipherSuite>::Finished(client_finished);
                 let client_finished = ClientRecord::EncryptedHandshake(client_finished);
 
-                Self::transmit(
-                    &mut self.delegate,
-                    &mut self.frame_buf,
-                    &mut self.key_schedule,
-                    &client_finished,
-                    false,
-                )
-                .await?;
+                Self::transmit(delegate, frame_buf, key_schedule, &client_finished, false).await?;
 
-                self.key_schedule
-                    .replace_transcript_hash(hash_after_handshake);
-                self.key_schedule.initialize_master_secret()?;
+                key_schedule.replace_transcript_hash(hash_after_handshake);
+                key_schedule.initialize_master_secret()?;
                 Ok(State::ApplicationData)
             }
             State::ApplicationData => Ok(State::ApplicationData),
             state => {
-                let frame_buf = &mut self.frame_buf;
-                let socket = &mut self.delegate;
                 let key_schedule = &mut self.key_schedule;
-
+                let delegate = &mut self.delegate;
+                let frame_buf = &mut self.frame_buf;
                 let mut records = Queue::new();
-                let record = Self::fetch_record(socket, frame_buf, key_schedule).await?;
+                /*info!(
+                    "SIZE of server record queue : {}",
+                    core::mem::size_of_val(&records)
+                );*/
+                let record = Self::fetch_record(delegate, frame_buf, key_schedule).await?;
                 Self::decrypt_record(key_schedule, &mut records, record)?;
 
                 let mut state = Some(state);
@@ -456,19 +487,30 @@ where
 
             let mut wp = 0;
             let mut remaining = buf.len();
+
             while remaining > 0 {
+                let delegate = &mut self.delegate;
+                let frame_buf = &mut self.frame_buf;
+                let key_schedule = &mut self.key_schedule;
                 let to_write = core::cmp::min(remaining, FRAME_MTU);
                 // trace!("Writing {} bytes", buf.len());
-                let record: ClientRecord<'a, 'm, CipherSuite> =
+                /*info!(
+                    "SIZE of client handhake : {}",
+                    core::mem::size_of::<ClientHandshake<'a, 'm, CipherSuite>>()
+                );*/
+                let record: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::ApplicationData(&buf[wp..to_write]);
-                Self::transmit(
-                    &mut self.delegate,
-                    &mut self.frame_buf,
-                    &mut self.key_schedule,
-                    &record,
-                    false,
-                )
-                .await?;
+                /*info!(
+                    "SIZE of client record : {}",
+                    core::mem::size_of_val(&record)
+                );*/
+                let trans = Self::transmit(delegate, frame_buf, key_schedule, &record, false);
+                /*info!(
+                    "SIZE of transmit future: {}",
+                    core::mem::size_of_val(&trans)
+                );*/
+
+                trans.await?;
                 wp += to_write;
                 remaining -= to_write;
             }

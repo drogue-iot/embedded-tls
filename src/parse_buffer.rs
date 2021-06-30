@@ -38,7 +38,11 @@ impl<'b> ParseBuffer<'b> {
         self.buffer.len() - self.pos
     }
 
-    pub fn slice(&mut self, len: usize) -> Result<ParseBuffer, ParseError> {
+    pub fn as_slice(&self) -> &'b [u8] {
+        &self.buffer[..]
+    }
+
+    pub fn slice(&mut self, len: usize) -> Result<ParseBuffer<'b>, ParseError> {
         if self.pos + len <= self.buffer.len() {
             let slice = ParseBuffer::new(&self.buffer[self.pos..self.pos + len]);
             self.pos += len;
@@ -59,7 +63,7 @@ impl<'b> ParseBuffer<'b> {
     }
 
     pub fn read_u16(&mut self) -> Result<u16, ParseError> {
-        info!("pos={} len={}", self.pos, self.buffer.len());
+        //info!("pos={} len={}", self.pos, self.buffer.len());
         if self.pos + 2 <= self.buffer.len() {
             let value = u16::from_be_bytes([self.buffer[self.pos], self.buffer[self.pos + 1]]);
             self.pos += 2;
@@ -103,7 +107,7 @@ impl<'b> ParseBuffer<'b> {
         if self.pos + dest.len() <= self.buffer.len() {
             dest.copy_from_slice(&self.buffer[self.pos..self.pos + dest.len()]);
             self.pos += dest.len();
-            info!("Copied {} bytes", dest.len());
+            // info!("Copied {} bytes", dest.len());
             Ok(())
         } else {
             Err(ParseError::InsufficientBytes)

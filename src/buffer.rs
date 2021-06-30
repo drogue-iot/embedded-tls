@@ -83,8 +83,8 @@ impl<'b> CryptoBuffer<'b> {
         self.len
     }
 
-    pub fn release(self) -> &'b mut [u8] {
-        self.buf
+    pub fn release(self) -> (&'b mut [u8], usize, usize) {
+        (self.buf, self.offset, self.len)
     }
 
     pub fn capacity(&self) -> usize {
@@ -106,10 +106,10 @@ impl<'b> CryptoBuffer<'b> {
         } else {
             self.len + (self.offset - offset)
         };
-        info!(
+        /*info!(
             "offset({}) len({}) -> offset({}), len({})",
             self.offset, self.len, offset, new_len
-        );
+        );*/
         CryptoBuffer {
             buf: self.buf,
             len: new_len,

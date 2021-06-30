@@ -19,8 +19,8 @@ where
     // N: ArrayLength<u8>,
     CipherSuite: TlsCipherSuite,
 {
-    Handshake(ClientHandshake<'config, CipherSuite>),
-    EncryptedHandshake(ClientHandshake<'config, CipherSuite>),
+    Handshake(ClientHandshake<'config, 'a, CipherSuite>),
+    EncryptedHandshake(ClientHandshake<'config, 'a, CipherSuite>),
     ChangeCipherSpec(ChangeCipherSpec),
     ApplicationData(&'a [u8]),
 }
@@ -127,7 +127,7 @@ where
 
         let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
 
-        trace!("record len {}", record_length);
+        // trace!("record len {}", record_length);
 
         buf.set(record_length_marker, record_length.to_be_bytes()[0])
             .map_err(|_| TlsError::EncodeError)?;
@@ -140,7 +140,7 @@ where
 
 #[derive(Debug)]
 pub enum ServerRecord<'a, N: ArrayLength<u8>> {
-    Handshake(ServerHandshake<N>),
+    Handshake(ServerHandshake<'a, N>),
     ChangeCipherSpec(ChangeCipherSpec),
     Alert(Alert),
     ApplicationData(ApplicationData<'a>),
@@ -161,18 +161,18 @@ impl<N: ArrayLength<u8>> ServerRecord<'_, N> {
             }
         }
 
-        info!("receive header {:x?}", &header);
+        // info!("receive header {:x?}", &header);
 
         match ContentType::of(header[0]) {
             None => Err(TlsError::InvalidRecord),
             Some(content_type) => {
                 let content_length = u16::from_be_bytes([header[3], header[4]]) as usize;
-                trace!(
+                /*trace!(
                     "Content length: {}, rx_buf: {}, pos: {}",
                     content_length,
                     rx_buf.len(),
                     pos
-                );
+                );*/
                 if content_length > rx_buf.len() - pos {
                     return Err(TlsError::InsufficientSpace);
                 }
@@ -185,7 +185,7 @@ impl<N: ArrayLength<u8>> ServerRecord<'_, N> {
                         .await
                         .map_err(|_| TlsError::InvalidRecord)?;
                 }
-                trace!("Read {} bytes", content_length);
+                //trace!("Read {} bytes", content_length);
 
                 match content_type {
                     ContentType::Invalid => Err(TlsError::Unimplemented),

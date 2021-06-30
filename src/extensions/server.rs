@@ -6,9 +6,9 @@ use crate::TlsError;
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]
-pub enum ServerExtension {
+pub enum ServerExtension<'a> {
     SupportedVersion(SupportedVersion),
-    KeyShare(KeyShare),
+    KeyShare(KeyShare<'a>),
 }
 
 #[derive(Debug)]
@@ -24,16 +24,18 @@ impl SupportedVersion {
 }
 
 #[derive(Debug)]
-pub struct KeyShare(pub(crate) KeyShareEntry);
+pub struct KeyShare<'a>(pub(crate) KeyShareEntry<'a>);
 
-impl KeyShare {
-    pub fn parse(buf: &mut ParseBuffer) -> Result<KeyShare, ParseError> {
+impl<'a> KeyShare<'a> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShare<'a>, ParseError> {
         Ok(KeyShare(KeyShareEntry::parse(buf)?))
     }
 }
 
-impl ServerExtension {
-    pub fn parse_vector(buf: &mut ParseBuffer) -> Result<Vec<ServerExtension, U16>, TlsError> {
+impl<'a> ServerExtension<'a> {
+    pub fn parse_vector(
+        buf: &mut ParseBuffer<'a>,
+    ) -> Result<Vec<ServerExtension<'a>, U16>, TlsError> {
         let mut extensions = Vec::new();
 
         loop {
@@ -45,13 +47,13 @@ impl ServerExtension {
                 ExtensionType::of(buf.read_u16().map_err(|_| TlsError::UnknownExtensionType)?)
                     .ok_or(TlsError::UnknownExtensionType)?;
 
-            info!("extension type {:?}", extension_type);
+            //info!("extension type {:?}", extension_type);
 
             let extension_length = buf
                 .read_u16()
                 .map_err(|_| TlsError::InvalidExtensionsLength)?;
 
-            info!("extension length {}", extension_length);
+            //info!("extension length {}", extension_length);
 
             match extension_type {
                 ExtensionType::SupportedVersions => {

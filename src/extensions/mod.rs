@@ -38,7 +38,7 @@ pub enum ExtensionType {
 
 impl ExtensionType {
     pub fn of(num: u16) -> Option<Self> {
-        info!("extension type of {:x}", num);
+        //info!("extension type of {:x}", num);
         match num {
             0 => Some(Self::ServerName),
             1 => Some(Self::MaxFragmentLength),
@@ -112,13 +112,13 @@ impl ClientExtension<'_> {
         buf.extend_from_slice(&self.extension_type())
             .map_err(|_| TlsError::EncodeError)?;
         let extension_length_marker = buf.len();
-        info!("marker at {}", extension_length_marker);
+        //info!("marker at {}", extension_length_marker);
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
         match self {
             ClientExtension::ServerName { server_name } => {
-                info!("server name ext");
+                //info!("server name ext");
                 let sni_size: u16 = (server_name.as_bytes().len() + 3) as u16;
 
                 buf.extend_from_slice(&sni_size.to_be_bytes())
@@ -132,7 +132,7 @@ impl ClientExtension<'_> {
                     .map_err(|_| TlsError::EncodeError)?;
             }
             ClientExtension::SupportedVersions { versions } => {
-                info!("supported versions ext");
+                //info!("supported versions ext");
                 buf.push(versions.len() as u8 * 2)
                     .map_err(|_| TlsError::EncodeError)?;
                 for v in versions {
@@ -143,7 +143,7 @@ impl ClientExtension<'_> {
             ClientExtension::SignatureAlgorithms {
                 supported_signature_algorithms,
             } => {
-                info!("supported sig algo ext");
+                //info!("supported sig algo ext");
                 buf.extend_from_slice(
                     &(supported_signature_algorithms.len() as u16 * 2).to_be_bytes(),
                 )
@@ -157,7 +157,7 @@ impl ClientExtension<'_> {
             ClientExtension::SignatureAlgorithmsCert {
                 supported_signature_algorithms,
             } => {
-                info!("supported sig algo cert ext");
+                //info!("supported sig algo cert ext");
                 buf.extend_from_slice(
                     &(supported_signature_algorithms.len() as u16 * 2).to_be_bytes(),
                 )
@@ -169,7 +169,7 @@ impl ClientExtension<'_> {
                 }
             }
             ClientExtension::SupportedGroups { supported_groups } => {
-                info!("supported groups ext");
+                //info!("supported groups ext");
                 buf.extend_from_slice(&(supported_groups.len() as u16 * 2).to_be_bytes())
                     .map_err(|_| TlsError::EncodeError)?;
 
@@ -179,7 +179,7 @@ impl ClientExtension<'_> {
                 }
             }
             ClientExtension::KeyShare { group, opaque } => {
-                info!("key_share ext");
+                //info!("key_share ext");
                 buf.extend_from_slice(&(2 + 2 as u16 + opaque.len() as u16).to_be_bytes())
                     .map_err(|_| TlsError::EncodeError)?;
                 // one key-share
@@ -191,14 +191,14 @@ impl ClientExtension<'_> {
                     .map_err(|_| TlsError::EncodeError)?;
             }
             ClientExtension::MaxFragmentLength(len) => {
-                info!("max fragment length");
+                //info!("max fragment length");
                 buf.push(*len as u8).map_err(|_| TlsError::EncodeError)?;
             }
         }
 
-        info!("tail at {}", buf.len());
+        //info!("tail at {}", buf.len());
         let extension_length = (buf.len() as u16 - extension_length_marker as u16) - 2;
-        info!("len: {}", extension_length);
+        //info!("len: {}", extension_length);
         buf.set(extension_length_marker, extension_length.to_be_bytes()[0])
             .map_err(|_| TlsError::EncodeError)?;
         buf.set(

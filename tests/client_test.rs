@@ -44,12 +44,24 @@ async fn test_ping() {
     let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 16384> =
         TlsConnection::new(tls_config, OsRng, socket);
 
-    tls.open().await.expect("error establishing TLS connection");
+    let sz = std::mem::size_of::<TlsConnection<OsRng, Socket, Aes128GcmSha256, 16384>>();
+    log::info!("SIZE of connection is {}", sz);
 
-    tls.write(b"ping").await.expect("error writing data");
+    let open_fut = tls.open();
+    log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
+    open_fut.await.expect("error establishing TLS connection");
+
+    let write_fut = tls.write(b"ping");
+    log::info!(
+        "SIZE of write fut is {}",
+        core::mem::size_of_val(&write_fut)
+    );
+    write_fut.await.expect("error writing data");
 
     let mut rx_buf = [0; 4096];
-    let sz = tls.read(&mut rx_buf).await.expect("error reading data");
+    let read_fut = tls.read(&mut rx_buf);
+    log::info!("SIZE of read fut is {}", core::mem::size_of_val(&read_fut));
+    let sz = read_fut.await.expect("error reading data");
     assert_eq!(4, sz);
     assert_eq!(b"ping", &rx_buf[..sz]);
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);

@@ -1,14 +1,13 @@
 use crate::named_groups::NamedGroup;
 use crate::parse_buffer::{ParseBuffer, ParseError};
-use heapless::{consts::*, Vec};
 
 #[derive(Debug)]
-pub struct KeyShareEntry {
+pub struct KeyShareEntry<'a> {
     pub(crate) group: NamedGroup,
-    pub(crate) opaque: Vec<u8, U128>,
+    pub(crate) opaque: &'a [u8],
 }
 
-impl Clone for KeyShareEntry {
+impl Clone for KeyShareEntry<'_> {
     fn clone(&self) -> Self {
         Self {
             group: self.group,
@@ -17,13 +16,15 @@ impl Clone for KeyShareEntry {
     }
 }
 
-impl KeyShareEntry {
-    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
+impl<'a> KeyShareEntry<'a> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShareEntry<'a>, ParseError> {
         let group = NamedGroup::of(buf.read_u16()?).ok_or(ParseError::InvalidData)?;
-        let mut opaque = Vec::<u8, U128>::new();
         let opaque_len = buf.read_u16()?;
-        buf.copy(&mut opaque, opaque_len as usize)?;
-        Ok(Self { group, opaque })
+        let opaque = buf.slice(opaque_len as usize)?;
+        Ok(Self {
+            group,
+            opaque: opaque.as_slice(),
+        })
     }
 }
 
