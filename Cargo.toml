@@ -23,6 +23,7 @@ nom = { version = "6.1.2", default-features = false }
 # Logging alternatives
 log = { version = "0.4", optional = true }
 defmt = { version = "0.2", optional = true }
+tokio = { version = "1.7", features = ["full"], optional = true }
 
 [dev-dependencies]
 env_logger = "0.8"
@@ -35,7 +36,7 @@ rand = "0.8"
 log = "0.4"
 
 [features]
-default = ["log"]
+default = ["log", "tokio"]
 defmt-trace = [ ]
 defmt-debug = [ ]
 defmt-info = [ ]

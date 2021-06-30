@@ -3,23 +3,20 @@
 #![feature(generic_associated_types)]
 #![feature(min_type_alias_impl_trait)]
 
-use core::future::Future;
-use drogue_tls::{config::*, tls_connection::*, AsyncRead, AsyncWrite, TlsError};
+use drogue_tls::*;
 use rand::rngs::OsRng;
 use std::error::Error;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
     let stream = TcpStream::connect("127.0.0.1:12345").await?;
-    let socket = Socket { stream };
 
     log::info!("Connected");
     let tls_config: TlsConfig<Aes128GcmSha256> = TlsConfig::new().with_server_name("example.com");
-    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 16384> =
-        TlsConnection::new(tls_config, OsRng, socket);
+    let mut tls: TlsConnection<OsRng, TcpStream, Aes128GcmSha256, 16384> =
+        TlsConnection::new(tls_config, OsRng, stream);
 
     tls.open().await.expect("error establishing TLS connection");
 
@@ -30,30 +27,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
 
     Ok(())
-}
-
-pub struct Socket {
-    stream: TcpStream,
-}
-
-impl AsyncWrite for Socket {
-    #[rustfmt::skip]
-    type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
-    fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-        async move {
-            Ok(self
-                .stream
-                .write(buf)
-                .await
-                .map_err(|_| TlsError::IoError)?)
-        }
-    }
-}
-
-impl AsyncRead for Socket {
-    #[rustfmt::skip]
-    type ReadFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
-    fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-        async move { Ok(self.stream.read(buf).await.map_err(|_| TlsError::IoError)?) }
-    }
 }
