@@ -8,7 +8,7 @@ authors = [
 ]
 
 [dependencies]
-drogue-tls = { path = "../..", features = ["log"] }
+drogue-tls = { path = "../..", features = ["log", "tokio"] }
 env_logger = "0.8"
 tokio = { version = "1.7", features = ["full"] }
 rand = "0.8"
