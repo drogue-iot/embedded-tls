@@ -37,14 +37,13 @@ async fn test_ping() {
     let stream = TcpStream::connect(addr)
         .await
         .expect("error connecting to server");
-    let socket = Socket { stream };
 
     log::info!("Connected");
     let tls_config: TlsConfig<Aes128GcmSha256> = TlsConfig::new();
-    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 16384> =
-        TlsConnection::new(tls_config, OsRng, socket);
+    let mut tls: TlsConnection<OsRng, TcpStream, Aes128GcmSha256, 16384> =
+        TlsConnection::new(tls_config, OsRng, stream);
 
-    let sz = std::mem::size_of::<TlsConnection<OsRng, Socket, Aes128GcmSha256, 16384>>();
+    let sz = std::mem::size_of::<TlsConnection<OsRng, TcpStream, Aes128GcmSha256, 16384>>();
     log::info!("SIZE of connection is {}", sz);
 
     let open_fut = tls.open();
@@ -65,34 +64,4 @@ async fn test_ping() {
     assert_eq!(4, sz);
     assert_eq!(b"ping", &rx_buf[..sz]);
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
-}
-
-pub struct Socket {
-    stream: TcpStream,
-}
-
-impl AsyncWrite for Socket {
-    #[rustfmt::skip]
-    type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
-    fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-        async move {
-            self.stream.write(buf).await.map_err(|e| {
-                log::info!("Err: {:?}", e);
-                TlsError::IoError
-            })
-        }
-    }
-}
-
-impl AsyncRead for Socket {
-    #[rustfmt::skip]
-    type ReadFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
-    fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-        async move {
-            self.stream.read(buf).await.map_err(|e| {
-                log::info!("RErr: {:?}", e);
-                TlsError::IoError
-            })
-        }
-    }
 }

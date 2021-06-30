@@ -55,7 +55,7 @@ const FRAME_MTU: usize = 8192;
 pub struct TlsConnection<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
 where
     RNG: CryptoRng + RngCore + 'static,
-    Socket: AsyncRead + AsyncWrite + 'static,
+    Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
@@ -71,9 +71,10 @@ impl<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
     TlsConnection<'a, RNG, Socket, CipherSuite, FRAME_BUF_LEN>
 where
     RNG: CryptoRng + RngCore + 'static,
-    Socket: AsyncRead + AsyncWrite + 'static,
+    Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
+    /// Create a new TLS connection with the provided config, a random generator and a async I/O implementation
     pub fn new(config: TlsConfig<'a, CipherSuite>, rng: RNG, delegate: Socket) -> Self {
         Self {
             delegate,
@@ -86,6 +87,7 @@ where
         }
     }
 
+    /// Free up a connection instance, returning the ownership of the config, random generator and the async I/O provider.
     pub fn free(self) -> (TlsConfig<'a, CipherSuite>, RNG, Socket) {
         (self.config, self.rng, self.delegate)
     }
@@ -279,6 +281,11 @@ where
         Ok(ServerRecord::read(delegate, rx_buf, key_schedule.transcript_hash()).await?)
     }
 
+    /// Open a TLS connection, performing the handshake with the configuration provided when creating
+    /// the connection instance.
+    ///
+    /// Returns an error if the handshake does not proceed. If an error occurs, the connection instance
+    /// must be recreated.
     pub async fn open<'m>(&mut self) -> Result<(), TlsError>
     where
         'a: 'm,
@@ -468,6 +475,10 @@ where
         }
     }
 
+    /// Encrypt and send the provided slice over the connection. The connection
+    /// must be opened before writing.
+    ///
+    /// Returns the number of bytes written.
     pub async fn write<'m>(&mut self, buf: &'m [u8]) -> Result<usize, TlsError> {
         if let Some(State::ApplicationData) = self.state {
             /*
@@ -521,6 +532,8 @@ where
         }
     }
 
+    /// Read and decrypt data filling the provided slice. The slice must be able to
+    /// keep the expected amount of data transmitted.
     pub async fn read<'m>(&mut self, buf: &mut [u8]) -> Result<usize, TlsError>
     where
         'a: 'm,
@@ -566,9 +579,5 @@ where
         } else {
             Err(TlsError::MissingHandshake)
         }
-    }
-
-    pub fn delegate_socket(&mut self) -> &mut Socket {
-        &mut self.delegate
     }
 }
