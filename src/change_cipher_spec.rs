@@ -11,7 +11,7 @@ impl ChangeCipherSpec {
         Self {}
     }
 
-    pub async fn read(rx_buf: &mut [u8]) -> Result<Self, TlsError> {
+    pub async fn read(_rx_buf: &mut [u8]) -> Result<Self, TlsError> {
         // info!("change cipher spec of len={}", rx_buf.len());
         // TODO: Decode data
         Ok(Self {})

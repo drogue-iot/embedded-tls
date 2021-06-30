@@ -166,7 +166,7 @@ impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
                             ServerHello::read(&rx_buf[4..length + 4], digest).await?,
                         ))
                     }
-                    t => Err(TlsError::Unimplemented), /*
+                    _ => Err(TlsError::Unimplemented), /*
                                                        HandshakeType::ClientHello => Err(TlsError::Unimplemented),
                                                        HandshakeType::NewSessionTicket => Err(TlsError::Unimplemented),
                                                        HandshakeType::EndOfEarlyData => Err(TlsError::Unimplemented),

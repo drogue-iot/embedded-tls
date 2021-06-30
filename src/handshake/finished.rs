@@ -4,7 +4,7 @@ use crate::TlsError;
 use core::fmt::{Debug, Formatter};
 //use digest::generic_array::{ArrayLength, GenericArray};
 use generic_array::{ArrayLength, GenericArray};
-use heapless::Vec;
+// use heapless::Vec;
 
 pub struct Finished<N: ArrayLength<u8>> {
     pub verify: GenericArray<u8, N>,
@@ -20,7 +20,7 @@ impl<N: ArrayLength<u8>> Debug for Finished<N> {
 }
 
 impl<N: ArrayLength<u8>> Finished<N> {
-    pub fn parse(buf: &mut ParseBuffer, len: u32) -> Result<Self, TlsError> {
+    pub fn parse(buf: &mut ParseBuffer, _len: u32) -> Result<Self, TlsError> {
         // info!("finished len: {}", len);
         let mut verify = GenericArray::default();
         buf.fill(&mut verify)?;
