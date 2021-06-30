@@ -82,7 +82,7 @@ pub enum ClientExtension<'a> {
     },
     KeyShare {
         group: NamedGroup,
-        opaque: Vec<u8, U128>,
+        opaque: &'a [u8],
     },
     SignatureAlgorithmsCert {
         supported_signature_algorithms: Vec<SignatureScheme, U16>,

@@ -92,15 +92,10 @@ where
             .push(ClientExtension::SupportedGroups { supported_groups })
             .map_err(|_| TlsError::EncodeError)?;
 
-        let mut opaque = Vec::<u8, U128>::new();
-        opaque
-            .extend_from_slice(public_key)
-            .map_err(|_| TlsError::EncodeError)?;
-
         extensions
             .push(ClientExtension::KeyShare {
                 group: NamedGroup::Secp256r1,
-                opaque,
+                opaque: public_key,
             })
             .map_err(|_| TlsError::EncodeError)?;
 
