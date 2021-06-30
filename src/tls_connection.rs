@@ -55,7 +55,7 @@ const FRAME_MTU: usize = 8192;
 pub struct TlsConnection<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
 where
     RNG: CryptoRng + RngCore + 'static,
-    Socket: AsyncRead + AsyncWrite + 'static,
+    Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
@@ -71,7 +71,7 @@ impl<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
     TlsConnection<'a, RNG, Socket, CipherSuite, FRAME_BUF_LEN>
 where
     RNG: CryptoRng + RngCore + 'static,
-    Socket: AsyncRead + AsyncWrite + 'static,
+    Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
     pub fn new(config: TlsConfig<'a, CipherSuite>, rng: RNG, delegate: Socket) -> Self {
