@@ -9,7 +9,6 @@ pub enum ContentType {
 
 impl ContentType {
     pub fn of(num: u8) -> Option<Self> {
-        info!("find content-type of {}", num);
         match num {
             0 => Some(Self::Invalid),
             20 => Some(Self::ChangeCipherSpec),

@@ -119,12 +119,12 @@ where
         // ----------------------------------------
 
         for e in extensions {
-            info!("encode extension");
+            //info!("encode extension");
             e.encode(buf)?;
         }
 
         let extensions_length = (buf.len() as u16 - extension_length_marker as u16) - 2;
-        info!("extensions length: {:x?}", extensions_length.to_be_bytes());
+        //info!("extensions length: {:x?}", extensions_length.to_be_bytes());
         buf.set(extension_length_marker, extensions_length.to_be_bytes()[0])
             .map_err(|_| TlsError::EncodeError)?;
         buf.set(

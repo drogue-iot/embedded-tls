@@ -52,7 +52,6 @@ pub enum HandshakeType {
 
 impl HandshakeType {
     pub fn of(num: u8) -> Option<Self> {
-        info!("find handshake type of {}", num);
         match num {
             1 => Some(HandshakeType::ClientHello),
             2 => Some(HandshakeType::ServerHello),
@@ -70,16 +69,16 @@ impl HandshakeType {
     }
 }
 
-pub enum ClientHandshake<'config, CipherSuite>
+pub enum ClientHandshake<'config, 'a, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
-    ClientCert(Certificate),
+    ClientCert(Certificate<'a>),
     ClientHello(ClientHello<'config, CipherSuite>),
     Finished(Finished<<CipherSuite::Hash as Digest>::OutputSize>),
 }
 
-impl<'config, CipherSuite> ClientHandshake<'config, CipherSuite>
+impl<'config, 'a, CipherSuite> ClientHandshake<'config, 'a, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
@@ -125,17 +124,17 @@ where
     }
 }
 
-pub enum ServerHandshake<N: ArrayLength<u8>> {
-    ServerHello(ServerHello),
-    EncryptedExtensions(EncryptedExtensions),
-    NewSessionTicket(NewSessionTicket),
-    Certificate(Certificate),
+pub enum ServerHandshake<'a, N: ArrayLength<u8>> {
+    ServerHello(ServerHello<'a>),
+    EncryptedExtensions(EncryptedExtensions<'a>),
+    NewSessionTicket(NewSessionTicket<'a>),
+    Certificate(Certificate<'a>),
     CertificateRequest(CertificateRequest),
     CertificateVerify(CertificateVerify),
     Finished(Finished<N>),
 }
 
-impl<N: ArrayLength<u8>> Debug for ServerHandshake<N> {
+impl<'a, N: ArrayLength<u8>> Debug for ServerHandshake<'a, N> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             ServerHandshake::ServerHello(inner) => Debug::fmt(inner, f),
@@ -149,8 +148,11 @@ impl<N: ArrayLength<u8>> Debug for ServerHandshake<N> {
     }
 }
 
-impl<N: ArrayLength<u8>> ServerHandshake<N> {
-    pub async fn read<D: Digest>(rx_buf: &mut [u8], digest: &mut D) -> Result<Self, TlsError> {
+impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
+    pub async fn read<D: Digest>(
+        rx_buf: &'a mut [u8],
+        digest: &mut D,
+    ) -> Result<ServerHandshake<'a, N>, TlsError> {
         let header = &rx_buf[0..4];
         match HandshakeType::of(header[0]) {
             None => Err(TlsError::InvalidHandshake),
@@ -158,38 +160,35 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
                 let length = u32::from_be_bytes([0, header[1], header[2], header[3]]) as usize;
                 match handshake_type {
                     HandshakeType::ServerHello => {
-                        info!("hash [{:x?}]", &header);
+                        // info!("hash [{:x?}]", &header);
                         digest.update(&header);
                         Ok(ServerHandshake::ServerHello(
                             ServerHello::read(&rx_buf[4..length + 4], digest).await?,
                         ))
                     }
-                    t => {
-                        info!("UNIMPLEMENTED: {:?}", t);
-                        Err(TlsError::Unimplemented)
-                    } /*
-                      HandshakeType::ClientHello => Err(TlsError::Unimplemented),
-                      HandshakeType::NewSessionTicket => Err(TlsError::Unimplemented),
-                      HandshakeType::EndOfEarlyData => Err(TlsError::Unimplemented),
-                      HandshakeType::EncryptedExtensions => Err(TlsError::Unimplemented),
-                      HandshakeType::Certificate => Err(TlsError::Unimplemented),
-                      HandshakeType::CertificateRequest => Err(TlsError::Unimplemented),
-                      HandshakeType::CertificateVerify => Err(TlsError::Unimplemented),
-                      HandshakeType::Finished => Err(TlsError::Unimplemented),
-                      HandshakeType::KeyUpdate => Err(TlsError::Unimplemented),
-                      HandshakeType::MessageHash => Err(TlsError::Unimplemented),
-                      */
+                    t => Err(TlsError::Unimplemented), /*
+                                                       HandshakeType::ClientHello => Err(TlsError::Unimplemented),
+                                                       HandshakeType::NewSessionTicket => Err(TlsError::Unimplemented),
+                                                       HandshakeType::EndOfEarlyData => Err(TlsError::Unimplemented),
+                                                       HandshakeType::EncryptedExtensions => Err(TlsError::Unimplemented),
+                                                       HandshakeType::Certificate => Err(TlsError::Unimplemented),
+                                                       HandshakeType::CertificateRequest => Err(TlsError::Unimplemented),
+                                                       HandshakeType::CertificateVerify => Err(TlsError::Unimplemented),
+                                                       HandshakeType::Finished => Err(TlsError::Unimplemented),
+                                                       HandshakeType::KeyUpdate => Err(TlsError::Unimplemented),
+                                                       HandshakeType::MessageHash => Err(TlsError::Unimplemented),
+                                                       */
                 }
             }
         }
     }
 
-    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, TlsError> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<ServerHandshake<'a, N>, TlsError> {
         let handshake_type =
             HandshakeType::of(buf.read_u8().map_err(|_| TlsError::InvalidHandshake)?)
                 .ok_or(TlsError::InvalidHandshake)?;
 
-        info!("Handshake type {:?}", handshake_type);
+        // info!("Handshake type {:?}", handshake_type);
 
         let content_len = buf.read_u24().map_err(|_| TlsError::InvalidHandshake)?;
 
@@ -210,12 +209,9 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
                 Ok(ServerHandshake::Certificate(Certificate::parse(buf)?))
             }
 
-            HandshakeType::CertificateRequest => {
-                info!("Cert request handshake type");
-                Ok(ServerHandshake::CertificateRequest(
-                    CertificateRequest::parse(buf)?,
-                ))
-            }
+            HandshakeType::CertificateRequest => Ok(ServerHandshake::CertificateRequest(
+                CertificateRequest::parse(buf)?,
+            )),
 
             HandshakeType::CertificateVerify => Ok(ServerHandshake::CertificateVerify(
                 CertificateVerify::parse(buf)?,
@@ -227,7 +223,7 @@ impl<N: ArrayLength<u8>> ServerHandshake<N> {
             //HandshakeType::KeyUpdate => {}
             //HandshakeType::MessageHash => {}
             t => {
-                info!("Unimplemented handshake type: {:?}", t);
+                warn!("Unimplemented handshake type: {:?}", t);
                 Err(TlsError::Unimplemented)
             }
         }

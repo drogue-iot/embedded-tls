@@ -12,21 +12,24 @@ use p256::PublicKey;
 use sha2::Digest;
 
 #[derive(Debug)]
-pub struct ServerHello {
+pub struct ServerHello<'a> {
     random: Random,
-    legacy_session_id_echo: Vec<u8, U32>,
+    legacy_session_id_echo: &'a [u8],
     cipher_suite: CipherSuite,
-    extensions: Vec<ServerExtension, U16>,
+    extensions: Vec<ServerExtension<'a>, U16>,
 }
 
-impl ServerHello {
-    pub async fn read<D: Digest>(buf: &[u8], digest: &mut D) -> Result<ServerHello, TlsError> {
-        info!("server hello hash [{:x?}]", &buf[..]);
+impl<'a> ServerHello<'a> {
+    pub async fn read<D: Digest>(
+        buf: &'a [u8],
+        digest: &mut D,
+    ) -> Result<ServerHello<'a>, TlsError> {
+        //trace!("server hello hash [{:x?}]", &buf[..]);
         digest.update(&buf);
         Self::parse(&mut ParseBuffer::new(&buf))
     }
 
-    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, TlsError> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<ServerHello<'a>, TlsError> {
         //let mut buf = ParseBuffer::new(&buf[0..content_length]);
         //let mut buf = ParseBuffer::new(&buf);
 
@@ -41,8 +44,8 @@ impl ServerHello {
 
         //info!("sh 1");
 
-        let mut session_id = Vec::<u8, U32>::new();
-        buf.copy(&mut session_id, session_id_length as usize)
+        let session_id = buf
+            .slice(session_id_length as usize)
             .map_err(|_| TlsError::InvalidSessionIdLength)?;
         //info!("sh 2");
 
@@ -62,14 +65,14 @@ impl ServerHello {
         let extensions = ServerExtension::parse_vector(buf)?;
         //info!("sh 6");
 
-        info!("server random {:x?}", random);
-        info!("server session-id {:x?}", session_id);
-        info!("server cipher_suite {:x?}", cipher_suite);
-        info!("server extensions {:?}", extensions);
+        // info!("server random {:x?}", random);
+        // info!("server session-id {:x?}", session_id.as_slice());
+        // info!("server cipher_suite {:x?}", cipher_suite);
+        // info!("server extensions {:?}", extensions);
 
         Ok(Self {
             random,
-            legacy_session_id_echo: session_id,
+            legacy_session_id_echo: session_id.as_slice(),
             cipher_suite,
             extensions,
         })
