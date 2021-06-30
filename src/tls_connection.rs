@@ -87,14 +87,41 @@ where
         }
     }
 
-    /// Free up a connection instance, returning the ownership of the config, random generator and the async I/O provider.
-    pub fn free(self) -> (TlsConfig<'a, CipherSuite>, RNG, Socket) {
-        (self.config, self.rng, self.delegate)
+    /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
+    pub async fn close(self) -> Result<(TlsConfig<'a, CipherSuite>, RNG, Socket), TlsError> {
+        let record = if let Some(State::ApplicationData) = self.state {
+            ClientRecord::Alert(
+                Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
+                true,
+            )
+        } else {
+            ClientRecord::Alert(
+                Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
+                false,
+            )
+        };
+
+        let mut key_schedule = self.key_schedule;
+        let mut delegate = self.delegate;
+        let mut frame_buf = self.frame_buf;
+        let rng = self.rng;
+        let config = self.config;
+
+        Self::transmit(
+            &mut delegate,
+            &mut frame_buf[..],
+            &mut key_schedule,
+            &record,
+            false,
+        )
+        .await?;
+
+        Ok((config, rng, delegate))
     }
 
     async fn transmit<'m>(
         delegate: &mut Socket,
-        tx_buf: &'m mut [u8],
+        tx_buf: &mut [u8],
         key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         record: &ClientRecord<'_, 'm, CipherSuite>,
         update_hash: bool,
@@ -320,7 +347,7 @@ where
 
                 Self::transmit(delegate, frame_buf, key_schedule, &client_hello, false).await?;
 
-                if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello)) =
+                if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) =
                     client_hello
                 {
                     Ok(State::ServerHello(client_hello.secret))
@@ -399,7 +426,7 @@ where
                 if self.cert_requested {
                     let handshake = ClientHandshake::ClientCert(Certificate::new());
                     let client_cert: ClientRecord<'a, '_, CipherSuite> =
-                        ClientRecord::EncryptedHandshake(handshake);
+                        ClientRecord::Handshake(handshake, true);
 
                     Self::transmit(delegate, frame_buf, key_schedule, &client_cert, true).await?;
                 }
@@ -409,7 +436,7 @@ where
                     .map_err(|_| TlsError::InvalidHandshake)?;
 
                 let client_finished = ClientHandshake::<CipherSuite>::Finished(client_finished);
-                let client_finished = ClientRecord::EncryptedHandshake(client_finished);
+                let client_finished = ClientRecord::Handshake(client_finished, true);
 
                 Self::transmit(delegate, frame_buf, key_schedule, &client_finished, false).await?;
 
@@ -533,7 +560,8 @@ where
     }
 
     /// Read and decrypt data filling the provided slice. The slice must be able to
-    /// keep the expected amount of data transmitted.
+    /// keep the expected amount of data that can be received in one record to avoid
+    /// loosing data.
     pub async fn read<'m>(&mut self, buf: &mut [u8]) -> Result<usize, TlsError>
     where
         'a: 'm,

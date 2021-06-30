@@ -14,14 +14,16 @@ use heapless::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
 
+pub type Encrypted = bool;
+
 pub enum ClientRecord<'config, 'a, CipherSuite>
 where
     // N: ArrayLength<u8>,
     CipherSuite: TlsCipherSuite,
 {
-    Handshake(ClientHandshake<'config, 'a, CipherSuite>),
-    EncryptedHandshake(ClientHandshake<'config, 'a, CipherSuite>),
-    ChangeCipherSpec(ChangeCipherSpec),
+    Handshake(ClientHandshake<'config, 'a, CipherSuite>, Encrypted),
+    ChangeCipherSpec(ChangeCipherSpec, Encrypted),
+    Alert(Alert, Encrypted),
     ApplicationData(&'a [u8]),
 }
 
@@ -32,10 +34,13 @@ where
 {
     pub fn content_type(&self) -> ContentType {
         match self {
-            ClientRecord::Handshake(_) => ContentType::Handshake,
-            ClientRecord::EncryptedHandshake(_) => ContentType::ApplicationData,
+            ClientRecord::Handshake(_, false) => ContentType::Handshake,
+            ClientRecord::Alert(_, false) => ContentType::ChangeCipherSpec,
+            ClientRecord::ChangeCipherSpec(_, false) => ContentType::ChangeCipherSpec,
+            ClientRecord::Handshake(_, true) => ContentType::ApplicationData,
+            ClientRecord::Alert(_, true) => ContentType::ApplicationData,
+            ClientRecord::ChangeCipherSpec(_, true) => ContentType::ApplicationData,
             ClientRecord::ApplicationData(_) => ContentType::ApplicationData,
-            ClientRecord::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
         }
     }
 
@@ -46,7 +51,10 @@ where
     where
         RNG: CryptoRng + RngCore,
     {
-        ClientRecord::Handshake(ClientHandshake::ClientHello(ClientHello::new(config, rng)))
+        ClientRecord::Handshake(
+            ClientHandshake::ClientHello(ClientHello::new(config, rng)),
+            false,
+        )
     }
 
     pub(crate) fn encode<
@@ -59,43 +67,31 @@ where
         mut encrypt_fn: F,
     ) -> Result<(usize, Option<Range<usize>>), TlsError> {
         let mut buf = CryptoBuffer::wrap(enc_buf);
-        match self {
-            ClientRecord::Handshake(_) => {
-                buf.push(ContentType::Handshake as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-                buf.extend_from_slice(&[0x03, 0x01])
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-            ClientRecord::EncryptedHandshake(_) => {
-                buf.push(ContentType::ApplicationData as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-                buf.extend_from_slice(&[0x03, 0x03])
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-            ClientRecord::ApplicationData(_) => {
-                buf.push(ContentType::ApplicationData as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-                buf.extend_from_slice(&[0x03, 0x03])
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-            ClientRecord::ChangeCipherSpec(_) => {
-                buf.push(ContentType::ChangeCipherSpec as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-                buf.extend_from_slice(&[0x03, 0x03])
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-        }
+        buf.push(self.content_type() as u8)
+            .map_err(|_| TlsError::EncodeError)?;
+        let version = match self {
+            ClientRecord::Handshake(_, true) => &[0x03, 0x03],
+            ClientRecord::Handshake(_, false) => &[0x03, 0x01],
+            ClientRecord::ChangeCipherSpec(_, true) => &[0x03, 0x03],
+            ClientRecord::ChangeCipherSpec(_, false) => &[0x03, 0x01],
+            ClientRecord::Alert(_, true) => &[0x03, 0x03],
+            ClientRecord::Alert(_, false) => &[0x03, 0x01],
+            ClientRecord::ApplicationData(_) => &[0x03, 0x03],
+        };
+
+        buf.extend_from_slice(version)
+            .map_err(|_| TlsError::EncodeError)?;
 
         let record_length_marker = buf.len();
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
         let (range, mut buf) = match self {
-            ClientRecord::Handshake(handshake) => {
+            ClientRecord::Handshake(handshake, false) => {
                 let range = handshake.encode(&mut buf)?;
                 (Some(range), buf)
             }
-            ClientRecord::EncryptedHandshake(handshake) => {
+            ClientRecord::Handshake(handshake, true) => {
                 let mut wrapped = buf.forward();
 
                 let range = handshake.encode(&mut wrapped)?;
@@ -107,6 +103,37 @@ where
                 let _ = encrypt_fn(&mut wrapped)?;
                 (None, wrapped.rewind())
             }
+            ClientRecord::ChangeCipherSpec(spec, false) => {
+                spec.encode(&mut buf)?;
+                (None, buf)
+            }
+            ClientRecord::ChangeCipherSpec(spec, true) => {
+                let mut wrapped = buf.forward();
+
+                let _ = spec.encode(&mut wrapped)?;
+                wrapped
+                    .push(ContentType::ChangeCipherSpec as u8)
+                    .map_err(|_| TlsError::EncodeError)?;
+
+                let _ = encrypt_fn(&mut wrapped)?;
+                (None, wrapped.rewind())
+            }
+            ClientRecord::Alert(alert, false) => {
+                alert.encode(&mut buf)?;
+                (None, buf)
+            }
+            ClientRecord::Alert(alert, true) => {
+                let mut wrapped = buf.forward();
+
+                let _ = alert.encode(&mut wrapped)?;
+                wrapped
+                    .push(ContentType::Alert as u8)
+                    .map_err(|_| TlsError::EncodeError)?;
+
+                let _ = encrypt_fn(&mut wrapped)?;
+                (None, wrapped.rewind())
+            }
+
             ClientRecord::ApplicationData(data) => {
                 let mut wrapped = buf.forward();
                 wrapped
@@ -118,10 +145,6 @@ where
 
                 let _ = encrypt_fn(&mut wrapped)?;
                 (None, wrapped.rewind())
-            }
-            ClientRecord::ChangeCipherSpec(spec) => {
-                spec.encode(&mut buf)?;
-                (None, buf)
             }
         };
 

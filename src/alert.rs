@@ -1,7 +1,8 @@
+use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum AlertLevel {
     Warning = 1,
     Fatal = 2,
@@ -17,7 +18,7 @@ impl AlertLevel {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum AlertDescription {
     CloseNotify = 0,
     UnexpectedMessage = 10,
@@ -90,6 +91,10 @@ pub struct Alert {
 }
 
 impl Alert {
+    pub fn new(level: AlertLevel, description: AlertDescription) -> Self {
+        Self { level, description }
+    }
+
     pub fn parse(buf: &mut ParseBuffer<'_>) -> Result<Alert, TlsError> {
         let level = buf.read_u8()?;
         let desc = buf.read_u8()?;
@@ -98,5 +103,13 @@ impl Alert {
             level: AlertLevel::of(level).ok_or(TlsError::DecodeError)?,
             description: AlertDescription::of(desc).ok_or(TlsError::DecodeError)?,
         })
+    }
+
+    pub fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+        buf.push(self.level as u8)
+            .map_err(|_| TlsError::EncodeError)?;
+        buf.push(self.description as u8)
+            .map_err(|_| TlsError::EncodeError)?;
+        Ok(())
     }
 }

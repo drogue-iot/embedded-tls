@@ -64,4 +64,6 @@ async fn test_ping() {
     assert_eq!(4, sz);
     assert_eq!(b"ping", &rx_buf[..sz]);
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
+
+    tls.close().await.expect("error closing session");
 }
