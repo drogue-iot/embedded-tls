@@ -65,6 +65,10 @@ where
     CipherSuite: TlsCipherSuite,
     RNG: CryptoRng + RngCore + 'static,
 {
+    /// Create a new context with a given random number generator, record buffer and config.
+    ///
+    /// NOTE: The record buffer should be sized to fit an encrypted TLS record and the TLS handshake
+    /// record. The maximum value of a TLS record is 16 kB, which should be a safe value to use.
     pub fn new_with_config(
         rng: RNG,
         record_buf: &'a mut [u8],
@@ -80,6 +84,10 @@ where
         }
     }
 
+    /// Create a new context with a given random number generator, record buffer and config.
+    ///
+    /// NOTE: The record buffer should be sized to fit an encrypted TLS record and the TLS handshake
+    /// record. The maximum value of a TLS record is 16 kB, which should be a safe value to use.
     pub fn new(rng: RNG, record_buf: &'a mut [u8]) -> Self {
         if record_buf.len() < TLS_RECORD_MAX {
             warn!("Record buffer length is smaller than TLS max record size");
@@ -91,6 +99,8 @@ where
         }
     }
 
+    /// Configure the Server Name Indication (SNI) extension to be used, passing the provided server name
+    /// in the handshake.
     pub fn with_server_name(mut self, server_name: &'a str) -> Self {
         self.config = self.config.with_server_name(server_name);
         self
