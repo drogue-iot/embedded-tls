@@ -165,6 +165,7 @@ where
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ServerRecord<'a, N: ArrayLength<u8>> {
     Handshake(ServerHandshake<'a, N>),
     ChangeCipherSpec(ChangeCipherSpec),

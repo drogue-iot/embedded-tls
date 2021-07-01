@@ -4,6 +4,7 @@ use crate::TlsError;
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Certificate<'a> {
     entries: Vec<CertificateEntry<'a>, U16>,
 }
@@ -40,6 +41,7 @@ impl<'a> Certificate<'a> {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum CertificateEntry<'a> {
     X509(&'a [u8]),
     RawPublicKey(&'a [u8]),

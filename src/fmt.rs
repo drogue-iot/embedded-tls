@@ -196,6 +196,7 @@ macro_rules! unwrap {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct NoneError;
 
 pub trait Try {

@@ -2,6 +2,7 @@ use crate::named_groups::NamedGroup;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyShareEntry<'a> {
     pub(crate) group: NamedGroup,
     pub(crate) opaque: &'a [u8],

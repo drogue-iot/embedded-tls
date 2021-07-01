@@ -66,6 +66,7 @@ pub use config::*;
 pub use tls_connection::*;
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TlsError {
     Unimplemented,
     MissingHandshake,

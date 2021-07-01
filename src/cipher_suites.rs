@@ -4,6 +4,7 @@ use crate::cipher_suites::CipherSuite::{
 };
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum CipherSuite {
     TlsAes128GcmSha256 = 0x1301,
     TlsAes256GcmSha384 = 0x1302,

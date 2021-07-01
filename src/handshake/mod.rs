@@ -36,6 +36,7 @@ const HELLO_RETRY_REQUEST_RANDOM: [u8; 32] = [
 ];
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum HandshakeType {
     ClientHello = 1,
     ServerHello = 2,

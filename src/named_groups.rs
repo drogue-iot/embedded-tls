@@ -1,4 +1,5 @@
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum NamedGroup {
     /* Elliptic Curve Groups (ECDHE) */
     Secp256r1 = 0x0017,

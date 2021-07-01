@@ -33,6 +33,7 @@ impl TlsCipherSuite for Aes128GcmSha256 {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TlsConfig<'a, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
@@ -46,6 +47,7 @@ where
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TlsContext<'a, CipherSuite, RNG>
 where
     CipherSuite: TlsCipherSuite,

@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ContentType {
     Invalid = 0,
     ChangeCipherSpec = 20,

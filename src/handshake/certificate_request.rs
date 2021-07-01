@@ -2,6 +2,7 @@ use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateRequest {}
 
 impl CertificateRequest {

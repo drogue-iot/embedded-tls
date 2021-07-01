@@ -12,6 +12,7 @@ use p256::PublicKey;
 use sha2::Digest;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ServerHello<'a> {
     random: Random,
     legacy_session_id_echo: &'a [u8],

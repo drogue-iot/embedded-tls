@@ -2,6 +2,7 @@ use crate::TlsError;
 use heapless::{ArrayLength, Vec};
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ParseError {
     InsufficientBytes,
     InsufficientSpace,

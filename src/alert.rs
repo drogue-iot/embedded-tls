@@ -3,6 +3,7 @@ use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AlertLevel {
     Warning = 1,
     Fatal = 2,
@@ -19,6 +20,7 @@ impl AlertLevel {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AlertDescription {
     CloseNotify = 0,
     UnexpectedMessage = 10,
@@ -85,6 +87,7 @@ impl AlertDescription {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Alert {
     level: AlertLevel,
     description: AlertDescription,

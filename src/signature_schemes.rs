@@ -1,4 +1,5 @@
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SignatureScheme {
     /* RSASSA-PKCS1-v1_5 algorithms */
     RsaPkcs1Sha256 = 0x0401,

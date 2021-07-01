@@ -4,6 +4,7 @@ use crate::TlsError;
 use heapless::ArrayLength;
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ChangeCipherSpec {}
 
 impl ChangeCipherSpec {

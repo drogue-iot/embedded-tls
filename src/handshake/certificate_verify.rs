@@ -3,6 +3,7 @@ use crate::signature_schemes::SignatureScheme;
 use crate::TlsError;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateVerify<'a> {
     signature_scheme: SignatureScheme,
     signature: &'a [u8],

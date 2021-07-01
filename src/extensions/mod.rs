@@ -11,6 +11,7 @@ use crate::TlsError;
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ExtensionType {
     ServerName = 0,
     MaxFragmentLength = 1,

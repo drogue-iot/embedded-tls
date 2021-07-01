@@ -5,6 +5,7 @@ use crate::TlsError;
 use heapless::{consts::*, Vec};
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct EncryptedExtensions<'a> {
     extensions: Vec<ServerExtension<'a>, U16>,
 }
