@@ -87,26 +87,17 @@ async fn main_task(spawner: Spawner) {
     info!("connected!");
 
     let tls_config: TlsConfig<Aes128GcmSha256> = TlsConfig::new().with_server_name("example.com");
-    let mut tls: TlsConnection<OsRng, Socket, Aes128GcmSha256, 16384> =
-        TlsConnection::new(tls_config, OsRng, Socket { socket });
+    let mut tls: TlsConnection<OsRng, TcpSocket, Aes128GcmSha256, 16384> =
+        TlsConnection::new(tls_config, OsRng, socket);
 
     tls.open().await.expect("error establishing TLS connection");
 
     tls.write(b"ping").await.expect("error writing data");
 
-    let mut rx_buf = [0; 4096];
-    let sz = tls.read(&mut rx_buf).await.expect("error reading data");
+    let mut rx_buf = [0; 128];
+    let sz = tls.read(&mut rx_buf[..]).await.expect("error reading data");
 
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
-    /*
-    loop {
-        let r = tls.write(b"Hello!\n").await;
-        if let Err(e) = r {
-            warn!("write error: {:?}", e);
-            return;
-        }
-    }
-    */
 }
 
 #[no_mangle]
@@ -128,30 +119,4 @@ fn main() {
     executor.run(|spawner| {
         spawner.spawn(main_task(spawner)).unwrap();
     });
-}
-
-pub struct Socket<'a> {
-    socket: TcpSocket<'a>,
-}
-
-impl<'a> AsyncWrite for Socket<'a> {
-    #[rustfmt::skip]
-    type WriteFuture<'m> where 'a: 'm, Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
-    fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-        async move {
-            Ok(self
-                .socket
-                .write(buf)
-                .await
-                .map_err(|_| TlsError::IoError)?)
-        }
-    }
-}
-
-impl<'a> AsyncRead for Socket<'a> {
-    #[rustfmt::skip]
-    type ReadFuture<'m> where 'a: 'm, Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
-    fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-        async move { Ok(self.socket.read(buf).await.map_err(|_| TlsError::IoError)?) }
-    }
 }
