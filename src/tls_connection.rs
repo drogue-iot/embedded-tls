@@ -53,9 +53,9 @@ impl Debug for State {
 }
 
 // Split records at 8k of data
-const FRAME_MTU: usize = 8192;
+const RECORD_MTU: usize = 8192;
 
-pub struct TlsConnection<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
+pub struct TlsConnection<'a, RNG, Socket, CipherSuite, const RECORD_BUF_LEN: usize>
 where
     RNG: CryptoRng + RngCore + 'static,
     Socket: AsyncRead + AsyncWrite + 'a,
@@ -65,13 +65,13 @@ where
     rng: RNG,
     config: TlsConfig<'a, CipherSuite>,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    frame_buf: [u8; FRAME_BUF_LEN],
+    frame_buf: [u8; RECORD_BUF_LEN],
     cert_requested: bool,
     state: Option<State>,
 }
 
-impl<'a, RNG, Socket, CipherSuite, const FRAME_BUF_LEN: usize>
-    TlsConnection<'a, RNG, Socket, CipherSuite, FRAME_BUF_LEN>
+impl<'a, RNG, Socket, CipherSuite, const RECORD_BUF_LEN: usize>
+    TlsConnection<'a, RNG, Socket, CipherSuite, RECORD_BUF_LEN>
 where
     RNG: CryptoRng + RngCore + 'static,
     Socket: AsyncRead + AsyncWrite + 'a,
@@ -85,7 +85,7 @@ where
             rng: context.rng,
             state: Some(State::ClientHello),
             key_schedule: KeySchedule::new(),
-            frame_buf: [0; FRAME_BUF_LEN],
+            frame_buf: [0; RECORD_BUF_LEN],
             cert_requested: false,
         }
     }
@@ -533,7 +533,7 @@ where
                 let delegate = &mut self.delegate;
                 let frame_buf = &mut self.frame_buf;
                 let key_schedule = &mut self.key_schedule;
-                let to_write = core::cmp::min(remaining, FRAME_MTU);
+                let to_write = core::cmp::min(remaining, RECORD_MTU);
                 // trace!("Writing {} bytes", buf.len());
                 /*info!(
                     "SIZE of client handhake : {}",
