@@ -10,6 +10,8 @@ use heapless::{consts::*, Vec};
 use rand_core::{CryptoRng, RngCore};
 pub use sha2::Sha256;
 
+const TLS_RECORD_MAX: usize = 16384;
+
 pub trait TlsCipherSuite {
     const CODE_POINT: u16;
     type Cipher: NewAead<KeySize = Self::KeyLen> + AeadInPlace<NonceSize = Self::IvLen>;
@@ -55,6 +57,7 @@ where
 {
     pub(crate) config: TlsConfig<'a, CipherSuite>,
     pub(crate) rng: RNG,
+    pub(crate) record_buf: &'a mut [u8],
 }
 
 impl<'a, CipherSuite, RNG> TlsContext<'a, CipherSuite, RNG>
@@ -62,13 +65,28 @@ where
     CipherSuite: TlsCipherSuite,
     RNG: CryptoRng + RngCore + 'static,
 {
-    pub fn new_with_config(rng: RNG, config: TlsConfig<'a, CipherSuite>) -> Self {
-        Self { config, rng }
+    pub fn new_with_config(
+        rng: RNG,
+        record_buf: &'a mut [u8],
+        config: TlsConfig<'a, CipherSuite>,
+    ) -> Self {
+        if record_buf.len() < TLS_RECORD_MAX {
+            warn!("Record buffer length is smaller than TLS max record size");
+        }
+        Self {
+            config,
+            record_buf,
+            rng,
+        }
     }
 
-    pub fn new(rng: RNG) -> Self {
+    pub fn new(rng: RNG, record_buf: &'a mut [u8]) -> Self {
+        if record_buf.len() < TLS_RECORD_MAX {
+            warn!("Record buffer length is smaller than TLS max record size");
+        }
         Self {
             config: TlsConfig::new(),
+            record_buf,
             rng,
         }
     }

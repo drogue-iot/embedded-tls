@@ -37,11 +37,12 @@ async fn test_ping() {
         .expect("error connecting to server");
 
     log::info!("Connected");
-    let tls_context = TlsContext::new(OsRng);
-    let mut tls: TlsConnection<OsRng, TcpStream, Aes128GcmSha256, 16384> =
+    let mut record_buffer = [0; 16384];
+    let tls_context = TlsContext::new(OsRng, &mut record_buffer);
+    let mut tls: TlsConnection<OsRng, TcpStream, Aes128GcmSha256> =
         TlsConnection::new(tls_context, stream);
 
-    let sz = std::mem::size_of::<TlsConnection<OsRng, TcpStream, Aes128GcmSha256, 16384>>();
+    let sz = std::mem::size_of::<TlsConnection<OsRng, TcpStream, Aes128GcmSha256>>();
     log::info!("SIZE of connection is {}", sz);
 
     let open_fut = tls.open();
