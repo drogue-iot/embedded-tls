@@ -91,7 +91,7 @@ where
     }
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
-    pub async fn close(self) -> Result<(TlsConfig<'a, CipherSuite>, RNG, Socket), TlsError> {
+    pub async fn close(self) -> Result<(TlsContext<'a, CipherSuite, RNG>, Socket), TlsError> {
         let record = if let Some(State::ApplicationData) = self.state {
             ClientRecord::Alert(
                 Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
@@ -119,7 +119,7 @@ where
         )
         .await?;
 
-        Ok((config, rng, delegate))
+        Ok((TlsContext::new_with_config(rng, config), delegate))
     }
 
     async fn transmit<'m>(
