@@ -4,9 +4,12 @@ use crate::record::{ClientRecord, ServerRecord};
 use crate::{alert::*, handshake::certificate::Certificate};
 use crate::{
     buffer::CryptoBuffer,
-    config::{TlsCipherSuite, TlsConfig},
+    config::{TlsCipherSuite, TlsConfig, TlsContext},
 };
-use crate::{AsyncRead, AsyncWrite, TlsError};
+use crate::{
+    traits::{AsyncRead, AsyncWrite},
+    TlsError,
+};
 use core::fmt::Debug;
 use digest::generic_array::typenum::Unsigned;
 use p256::ecdh::EphemeralSecret;
@@ -75,11 +78,11 @@ where
     CipherSuite: TlsCipherSuite + 'static,
 {
     /// Create a new TLS connection with the provided config, a random generator and a async I/O implementation
-    pub fn new(config: TlsConfig<'a, CipherSuite>, rng: RNG, delegate: Socket) -> Self {
+    pub fn new(context: TlsContext<'a, CipherSuite, RNG>, delegate: Socket) -> Self {
         Self {
             delegate,
-            config,
-            rng,
+            config: context.config,
+            rng: context.rng,
             state: Some(State::ClientHello),
             key_schedule: KeySchedule::new(),
             frame_buf: [0; FRAME_BUF_LEN],

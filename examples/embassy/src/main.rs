@@ -7,10 +7,8 @@
 #![allow(incomplete_features)]
 
 use clap::{AppSettings, Clap};
-use core::future::Future;
 use drogue_tls::*;
 use embassy::executor::Spawner;
-use embassy::io::{AsyncBufReadExt, AsyncWriteExt};
 use embassy::util::Forever;
 use embassy_net::*;
 use embassy_std::Executor;
@@ -86,9 +84,9 @@ async fn main_task(spawner: Spawner) {
     }
     info!("connected!");
 
-    let tls_config: TlsConfig<Aes128GcmSha256> = TlsConfig::new().with_server_name("example.com");
+    let tls_context = TlsContext::new(OsRng).with_server_name("example.com");
     let mut tls: TlsConnection<OsRng, TcpSocket, Aes128GcmSha256, 16384> =
-        TlsConnection::new(tls_config, OsRng, socket);
+        TlsConnection::new(tls_context, socket);
 
     tls.open().await.expect("error establishing TLS connection");
 

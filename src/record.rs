@@ -6,7 +6,10 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::{AsyncRead, AsyncWrite, TlsError};
+use crate::{
+    traits::{AsyncRead, AsyncWrite},
+    TlsError,
+};
 use core::fmt::Debug;
 use core::ops::Range;
 use digest::{BlockInput, FixedOutput, Reset, Update};

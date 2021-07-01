@@ -2,13 +2,11 @@
 #![allow(incomplete_features)]
 #![feature(generic_associated_types)]
 #![feature(min_type_alias_impl_trait)]
-use core::future::Future;
-use drogue_tls::{config::*, tls_connection::*, AsyncRead, AsyncWrite, TlsError};
+use drogue_tls::*;
 use mio::net::TcpListener;
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
 use std::sync::Once;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 mod tlsserver;
@@ -39,9 +37,9 @@ async fn test_ping() {
         .expect("error connecting to server");
 
     log::info!("Connected");
-    let tls_config: TlsConfig<Aes128GcmSha256> = TlsConfig::new();
+    let tls_context = TlsContext::new(OsRng);
     let mut tls: TlsConnection<OsRng, TcpStream, Aes128GcmSha256, 16384> =
-        TlsConnection::new(tls_config, OsRng, stream);
+        TlsConnection::new(tls_context, stream);
 
     let sz = std::mem::size_of::<TlsConnection<OsRng, TcpStream, Aes128GcmSha256, 16384>>();
     log::info!("SIZE of connection is {}", sz);

@@ -7,6 +7,7 @@ use core::marker::PhantomData;
 use digest::{BlockInput, FixedOutput, Reset, Update};
 use generic_array::ArrayLength;
 use heapless::{consts::*, Vec};
+use rand_core::{CryptoRng, RngCore};
 pub use sha2::Sha256;
 
 pub trait TlsCipherSuite {
@@ -42,6 +43,38 @@ where
     pub(crate) signature_schemes: Vec<SignatureScheme, U16>,
     pub(crate) named_groups: Vec<NamedGroup, U16>,
     pub(crate) max_fragment_length: MaxFragmentLength,
+}
+
+#[derive(Debug)]
+pub struct TlsContext<'a, CipherSuite, RNG>
+where
+    CipherSuite: TlsCipherSuite,
+    RNG: CryptoRng + RngCore + 'static,
+{
+    pub(crate) config: TlsConfig<'a, CipherSuite>,
+    pub(crate) rng: RNG,
+}
+
+impl<'a, CipherSuite, RNG> TlsContext<'a, CipherSuite, RNG>
+where
+    CipherSuite: TlsCipherSuite,
+    RNG: CryptoRng + RngCore + 'static,
+{
+    pub fn new_with_config(rng: RNG, config: TlsConfig<'a, CipherSuite>) -> Self {
+        Self { config, rng }
+    }
+
+    pub fn new(rng: RNG) -> Self {
+        Self {
+            config: TlsConfig::new(),
+            rng,
+        }
+    }
+
+    pub fn with_server_name(mut self, server_name: &'a str) -> Self {
+        self.config = self.config.with_server_name(server_name);
+        self
+    }
 }
 
 impl<'a, CipherSuite> TlsConfig<'a, CipherSuite>

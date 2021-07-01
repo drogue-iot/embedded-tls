@@ -27,9 +27,10 @@
 //!     let stream = TcpStream::connect("http.sandbox.drogue.cloud:443").await.expect("error creating TCP connection");
 //!
 //!     println!("TCP connection opened");
-//!     let tls_config: TlsConfig<Aes128GcmSha256> = TlsConfig::new().with_server_name("http.sandbox.drogue.cloud");
+//!     let tls_context = TlsContext::new(OsRng)
+//!         .with_server_name("http.sandbox.drogue.cloud");
 //!     let mut tls: TlsConnection<OsRng, TcpStream, Aes128GcmSha256, 16384> =
-//!         TlsConnection::new(tls_config, OsRng, stream);
+//!         TlsConnection::new(tls_context, stream);
 //!
 //!     tls.open().await.expect("error establishing TLS connection");
 //!
@@ -39,7 +40,6 @@
 
 pub(crate) mod fmt;
 
-use core::future::Future;
 use parse_buffer::ParseError;
 pub mod alert;
 pub mod application_data;
@@ -60,6 +60,7 @@ pub mod record;
 pub mod signature_schemes;
 pub mod supported_versions;
 pub mod tls_connection;
+pub mod traits;
 
 pub use config::*;
 pub use tls_connection::*;
@@ -93,23 +94,12 @@ pub enum TlsError {
     DecodeError,
 }
 
-pub trait AsyncWrite {
-    type WriteFuture<'m>: Future<Output = Result<usize, TlsError>>
-    where
-        Self: 'm;
-    fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m>;
-}
-
-pub trait AsyncRead {
-    type ReadFuture<'m>: Future<Output = Result<usize, TlsError>>
-    where
-        Self: 'm;
-    fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m>;
-}
-
 #[cfg(feature = "tokio")]
 mod runtime {
-    use super::{AsyncRead, AsyncWrite, TlsError};
+    use crate::{
+        traits::{AsyncRead, AsyncWrite},
+        TlsError,
+    };
     use core::future::Future;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
@@ -141,7 +131,10 @@ mod runtime {
 
 #[cfg(feature = "embassy")]
 mod runtime {
-    use super::{AsyncRead, AsyncWrite, TlsError};
+    use crate::{
+        traits::{AsyncRead, AsyncWrite},
+        TlsError,
+    };
     use core::future::Future;
     use embassy::io::{AsyncBufReadExt, AsyncWriteExt};
 
@@ -149,7 +142,11 @@ mod runtime {
         #[rustfmt::skip]
         type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
         fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-            async move { Ok(AsyncWriteExt::write(self, buf).await.map_err(|_| TlsError::IoError)?) }
+            async move {
+                Ok(AsyncWriteExt::write(self, buf)
+                    .await
+                    .map_err(|_| TlsError::IoError)?)
+            }
         }
     }
 
@@ -157,23 +154,33 @@ mod runtime {
         #[rustfmt::skip]
         type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
         fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-            async move { Ok(AsyncBufReadExt::read(self, buf).await.map_err(|_| TlsError::IoError)?) }
+            async move {
+                Ok(AsyncBufReadExt::read(self, buf)
+                    .await
+                    .map_err(|_| TlsError::IoError)?)
+            }
         }
     }
 }
 
 #[cfg(feature = "futures")]
 mod runtime {
-    use super::{AsyncRead, AsyncWrite, TlsError};
+    use crate::{
+        traits::{AsyncRead, AsyncWrite},
+        TlsError,
+    };
     use core::future::Future;
     use futures::io::{AsyncReadExt, AsyncWriteExt};
-
 
     impl<W: AsyncWriteExt + Unpin> AsyncWrite for W {
         #[rustfmt::skip]
         type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
         fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-            async move { Ok(AsyncWriteExt::write(self, buf).await.map_err(|_| TlsError::IoError)?) }
+            async move {
+                Ok(AsyncWriteExt::write(self, buf)
+                    .await
+                    .map_err(|_| TlsError::IoError)?)
+            }
         }
     }
 
@@ -181,7 +188,11 @@ mod runtime {
         #[rustfmt::skip]
         type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
         fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-            async move { Ok(AsyncReadExt::read(self, buf).await.map_err(|_| TlsError::IoError)?) }
+            async move {
+                Ok(AsyncReadExt::read(self, buf)
+                    .await
+                    .map_err(|_| TlsError::IoError)?)
+            }
         }
     }
 }
