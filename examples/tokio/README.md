@@ -5,7 +5,7 @@ This example show how you can use drogue-tls with the tokio async runtime. It wi
 You can use the [rustls-mio](https://github.com/ctz/rustls/tree/main/rustls-mio) server example to test it as follows:
 
 
-```
+```sh
 # In the rustls-mio folder
 openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout key.pem -out cert.pem -batch
 cargo run --example tlsserver -- -p 12345 --certs cert.pem --key key.pem --protover 1.3 --tickets --verbose echo
