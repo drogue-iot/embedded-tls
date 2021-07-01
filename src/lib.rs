@@ -168,11 +168,12 @@ mod runtime {
     use core::future::Future;
     use futures::io::{AsyncReadExt, AsyncWriteExt};
 
+
     impl<W: AsyncWriteExt + Unpin> AsyncWrite for W {
         #[rustfmt::skip]
         type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
         fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-            async move { Ok(self.write(buf).await.map_err(|_| TlsError::IoError)?) }
+            async move { Ok(AsyncWriteExt::write(self, buf).await.map_err(|_| TlsError::IoError)?) }
         }
     }
 
@@ -180,7 +181,7 @@ mod runtime {
         #[rustfmt::skip]
         type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
         fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-            async move { Ok(self.read(buf).await.map_err(|_| TlsError::IoError)?) }
+            async move { Ok(AsyncReadExt::read(self, buf).await.map_err(|_| TlsError::IoError)?) }
         }
     }
 }
