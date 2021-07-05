@@ -12,7 +12,7 @@ impl Clone for KeyShareEntry<'_> {
     fn clone(&self) -> Self {
         Self {
             group: self.group,
-            opaque: self.opaque.clone(),
+            opaque: self.opaque,
         }
     }
 }

@@ -18,13 +18,6 @@ const LISTENER: mio::Token = mio::Token(0);
 enum ServerMode {
     /// Write back received bytes
     Echo,
-
-    /// Do one read, then write a bodged HTTP response and
-    /// cleanly close the connection.
-    Http,
-
-    /// Forward traffic to/from given port on localhost.
-    Forward(u16),
 }
 
 /// This binds together a TCP listening socket, some outstanding
@@ -105,17 +98,11 @@ struct Connection {
     mode: ServerMode,
     tls_session: rustls::ServerSession,
     back: Option<TcpStream>,
-    sent_http_response: bool,
 }
 
 /// Open a plaintext TCP-level connection for forwarded connections.
 fn open_back(mode: &ServerMode) -> Option<TcpStream> {
     match *mode {
-        ServerMode::Forward(ref port) => {
-            let addr = net::SocketAddrV4::new(net::Ipv4Addr::new(127, 0, 0, 1), *port);
-            let conn = TcpStream::connect(net::SocketAddr::V4(addr)).unwrap();
-            Some(conn)
-        }
         _ => None,
     }
 }
@@ -151,7 +138,6 @@ impl Connection {
             mode,
             tls_session,
             back,
-            sent_http_response: false,
         }
     }
 
@@ -278,22 +264,6 @@ impl Connection {
             ServerMode::Echo => {
                 self.tls_session.write_all(buf).unwrap();
             }
-            ServerMode::Http => {
-                self.send_http_response_once();
-            }
-            ServerMode::Forward(_) => {
-                self.back.as_mut().unwrap().write_all(buf).unwrap();
-            }
-        }
-    }
-
-    fn send_http_response_once(&mut self) {
-        let response =
-            b"HTTP/1.0 200 OK\r\nConnection: close\r\n\r\nHello world from rustls tlsserver\r\n";
-        if !self.sent_http_response {
-            self.tls_session.write_all(response).unwrap();
-            self.sent_http_response = true;
-            self.tls_session.send_close_notify();
         }
     }
 
@@ -405,7 +375,7 @@ pub fn run(mut listener: TcpListener) {
 
     config.ciphersuites = suites;
     config.versions = versions;
-    config.set_single_cert(certs, privkey);
+    config.set_single_cert(certs, privkey).unwrap();
 
     let mut poll = mio::Poll::new().unwrap();
     poll.registry()

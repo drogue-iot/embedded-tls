@@ -44,11 +44,13 @@ pub(crate) mod fmt;
 use parse_buffer::ParseError;
 pub mod alert;
 pub mod application_data;
+//pub mod blocking;
 pub mod buffer;
 pub mod certificate_types;
 pub mod change_cipher_spec;
 pub mod cipher_suites;
 pub mod config;
+mod connection;
 pub mod content_types;
 pub mod crypto_engine;
 pub mod extensions;
@@ -69,6 +71,7 @@ pub use tls_connection::*;
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TlsError {
+    ConnectionClosed,
     Unimplemented,
     MissingHandshake,
     IoError,

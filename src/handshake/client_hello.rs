@@ -34,7 +34,7 @@ where
 
         Self {
             config,
-            random: random,
+            random,
             secret: EphemeralSecret::random(rng),
         }
     }

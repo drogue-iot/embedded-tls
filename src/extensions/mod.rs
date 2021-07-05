@@ -181,7 +181,7 @@ impl ClientExtension<'_> {
             }
             ClientExtension::KeyShare { group, opaque } => {
                 //info!("key_share ext");
-                buf.extend_from_slice(&(2 + 2 as u16 + opaque.len() as u16).to_be_bytes())
+                buf.extend_from_slice(&(2 + 2 + opaque.len() as u16).to_be_bytes())
                     .map_err(|_| TlsError::EncodeError)?;
                 // one key-share
                 buf.extend_from_slice(&(*group as u16).to_be_bytes())

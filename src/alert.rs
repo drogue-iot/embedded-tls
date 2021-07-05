@@ -89,8 +89,8 @@ impl AlertDescription {
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Alert {
-    level: AlertLevel,
-    description: AlertDescription,
+    pub(crate) level: AlertLevel,
+    pub(crate) description: AlertDescription,
 }
 
 impl Alert {

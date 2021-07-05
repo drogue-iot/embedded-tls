@@ -79,8 +79,8 @@ where
         }
         Self {
             config,
-            record_buf,
             rng,
+            record_buf,
         }
     }
 
@@ -143,5 +143,14 @@ where
     pub fn with_server_name(mut self, server_name: &'a str) -> Self {
         self.server_name = Some(server_name);
         self
+    }
+}
+
+impl<'a, CipherSuite> Default for TlsConfig<'a, CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    fn default() -> Self {
+        TlsConfig::new()
     }
 }

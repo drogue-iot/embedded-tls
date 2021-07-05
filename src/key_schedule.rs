@@ -62,8 +62,8 @@ where
         self.transcript_hash.as_mut().unwrap()
     }
 
-    pub(crate) fn replace_transcript_hash(&mut self, digest: D) {
-        self.transcript_hash.replace(digest);
+    pub(crate) fn replace_transcript_hash(&mut self, hash: D) {
+        self.transcript_hash.replace(hash);
     }
 
     pub(crate) fn increment_read_counter(&mut self) {
@@ -318,5 +318,18 @@ where
             }
         }
         Ok(hkdf_label)
+    }
+}
+
+impl<D, KeyLen, IvLen> Default for KeySchedule<D, KeyLen, IvLen>
+where
+    D: Update + BlockInput + FixedOutput + Reset + Default + Clone,
+    D::BlockSize: ArrayLength<u8>,
+    D::OutputSize: ArrayLength<u8>,
+    KeyLen: ArrayLength<u8>,
+    IvLen: ArrayLength<u8>,
+{
+    fn default() -> Self {
+        KeySchedule::new()
     }
 }
