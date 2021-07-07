@@ -42,7 +42,7 @@ rand = "0.8"
 log = "0.4"
 
 [features]
-default = ["log", "std", "async"]
+default = ["log", "std", "async", "tokio"]
 std = []
 async = []
 defmt-trace = [ ]
