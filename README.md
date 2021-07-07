@@ -8,7 +8,9 @@
 Drogue-TLS is a Rust-native TLS 1.3 implementation that aims to work in a no-std environment. The
 implementation is work in progress, but the example clients should work against the [rustls](https://github.com/ctz/rustls) echo server.
 
-The client supports both async and blocking modes. To use the async mode, import `drogue_tls::*`. To use the blocking mode, import `drogue_tls::blocking::*`.
+The client supports both async and blocking modes. By default, the `async` and `std` features are enabled. The `async` feature requires Rust nightly, while the blocking feature works on Rust stable.
+
+To use the async mode, import `drogue_tls::*`. To use the blocking mode, import `drogue_tls::blocking::*`.
 
 Some features are still not implemented, have a look at [open issues](https://github.com/drogue-iot/drogue-tls/issues).
 Only supports writing/receiving one frame at a time, hence using a frame buffer larger than 16k is not currently needed.  You may use a lower frame buffer size, but there is no guarantee that it will be able to parse any TLS 1.3 frame.

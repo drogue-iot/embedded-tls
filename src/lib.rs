@@ -2,8 +2,9 @@
 #![no_std]
 #![allow(incomplete_features)]
 #![allow(dead_code)]
-#![feature(generic_associated_types)]
-#![feature(min_type_alias_impl_trait)]
+#![cfg_attr(feature = "async", feature(generic_associated_types))]
+#![cfg_attr(feature = "async", feature(min_type_alias_impl_trait))]
+
 //! An async, no-alloc TLS 1.3 client implementation for embedded devices.
 //!
 //!
@@ -63,9 +64,12 @@ pub mod parse_buffer;
 pub mod record;
 pub mod signature_schemes;
 pub mod supported_versions;
-pub mod tls_connection;
 pub mod traits;
 
+#[cfg(feature = "async")]
+pub mod tls_connection;
+
+#[cfg(feature = "async")]
 pub use tls_connection::*;
 
 #[derive(Debug, Copy, Clone)]
@@ -111,7 +115,7 @@ mod runtime {
 
     impl AsyncWrite for TcpStream {
         #[rustfmt::skip]
-        type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
+        type WriteFuture where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
         fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
             async move {
                 AsyncWriteExt::write(self, buf)

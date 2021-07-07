@@ -1,6 +1,9 @@
 use crate::TlsError;
+
+#[cfg(feature = "async")]
 use core::future::Future;
 
+#[cfg(feature = "async")]
 pub trait AsyncWrite {
     type WriteFuture<'m>: Future<Output = Result<usize, TlsError>>
     where
@@ -8,6 +11,7 @@ pub trait AsyncWrite {
     fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m>;
 }
 
+#[cfg(feature = "async")]
 pub trait AsyncRead {
     type ReadFuture<'m>: Future<Output = Result<usize, TlsError>>
     where
