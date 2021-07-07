@@ -5,7 +5,7 @@
 [![docs.rs](https://docs.rs/drogue-tls/badge.svg)](https://docs.rs/drogue-tls)
 [![Matrix](https://img.shields.io/matrix/drogue-iot:matrix.org)](https://matrix.to/#/#drogue-iot:matrix.org)
 
-Drogue-TLS is a Rust-native TLS 1.3 implementation that aims to work in a no-std environment. The
+Drogue-TLS is a Rust-native TLS 1.3 implementation that works in a no-std environment. The
 implementation is work in progress, but the [example clients](https://github.com/drogue-iot/drogue-tls/tree/main/examples) should work against the [rustls](https://github.com/ctz/rustls) echo server.
 
 The client supports both async and blocking modes. By default, the `async` and `std` features are enabled. The `async` feature requires Rust nightly, while the blocking feature works on Rust stable.
@@ -17,7 +17,7 @@ Only supports writing/receiving one frame at a time, hence using a frame buffer 
 
 Usage of this crate should fit in 20 kB of RAM assuming a frame buffer of 16 kB (max TLS record size). This is not including the space used to hold the CA and any client certificates.
 
-Some memory usage statistics:
+Some memory usage statistics for async operation:
 
 * TlsConnection: frame_buffer size + 2kB for the rest. This can probably be reduced with some additional tuning.
 * Handshake stack usage: currently at 1216 bytes

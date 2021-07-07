@@ -17,6 +17,9 @@ pub use crate::config::*;
 // Some space needed by TLS record
 const TLS_RECORD_OVERHEAD: usize = 128;
 
+/// Type representing an async TLS connection. An instance of this type can
+/// be used to establish a TLS connection, write and read encrypted data over this connection,
+/// and closing to free up the underlying resources.
 pub struct TlsConnection<'a, RNG, Socket, CipherSuite>
 where
     RNG: CryptoRng + RngCore + 'static,
@@ -37,7 +40,7 @@ where
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    /// Create a new TLS connection with the provided config, a random generator and a async I/O implementation
+    /// Create a new TLS connection with the provided context and a async I/O implementation
     pub fn new(context: TlsContext<'a, CipherSuite, RNG>, delegate: Socket) -> Self {
         Self {
             delegate,

@@ -5,13 +5,27 @@
 #![cfg_attr(feature = "async", feature(generic_associated_types))]
 #![cfg_attr(feature = "async", feature(min_type_alias_impl_trait))]
 
-//! An async, no-alloc TLS 1.3 client implementation for embedded devices.
+//! Drogue-TLS is a Rust-native TLS 1.3 implementation that works in a no-std environment. The
+//! implementation is work in progress, but the [example clients](https://github.com/drogue-iot/drogue-tls/tree/main/examples) should work against the [rustls](https://github.com/ctz/rustls) echo server.
 //!
+//! The client supports both async and blocking modes. By default, the `async` and `std` features are enabled. The `async` feature requires Rust nightly, while the blocking feature works on Rust stable.
 //!
+//! To use the async mode, import `drogue_tls::*`. To use the blocking mode, import `drogue_tls::blocking::*`.
+//!
+//! Some features are still not implemented, have a look at [open issues](https://github.com/drogue-iot/drogue-tls/issues).
 //! Only supports writing/receiving one frame at a time, hence using a frame buffer larger than 16k is not currently needed.  You may use a lower frame buffer size, but there is no guarantee that it will be able to parse any TLS 1.3 frame.
 //!
+//! Usage of this crate should fit in 20 kB of RAM assuming a frame buffer of 16 kB (max TLS record size). This is not including the space used to hold the CA and any client certificates.
 //!
-//! Usage of this crate should fit in 20 kB of RAM assuming a frame buffer of 16 kB (max TLS record size). Some memory usage statistics:
+//! Some memory usage statistics for async operation:
+//!
+//! * TlsConnection: frame_buffer size + 2kB for the rest. This can probably be reduced with some additional tuning.
+//! * Handshake stack usage: currently at 1216 bytes
+//! * Write stack usage: currently at 560 bytes
+//! * Read stack usage: currently at 232 bytes
+//!
+//!
+//! NOTE: This is very fresh and is probably not meeting all parts of the TLS 1.3 spec. If you find anything you'd like to get implemented, feel free to raise an issue.
 
 //! # Example
 //!
@@ -43,31 +57,30 @@
 pub(crate) mod fmt;
 
 use parse_buffer::ParseError;
-pub mod alert;
-pub mod application_data;
-//pub mod blocking;
+mod alert;
+mod application_data;
 pub mod blocking;
-pub mod buffer;
-pub mod certificate_types;
-pub mod change_cipher_spec;
-pub mod cipher_suites;
-pub mod config;
+mod buffer;
+mod certificate_types;
+mod change_cipher_spec;
+mod cipher_suites;
+mod config;
 mod connection;
-pub mod content_types;
-pub mod crypto_engine;
-pub mod extensions;
-pub mod handshake;
-pub mod key_schedule;
-pub mod max_fragment_length;
-pub mod named_groups;
-pub mod parse_buffer;
-pub mod record;
-pub mod signature_schemes;
-pub mod supported_versions;
+mod content_types;
+mod crypto_engine;
+mod extensions;
+mod handshake;
+mod key_schedule;
+mod max_fragment_length;
+mod named_groups;
+mod parse_buffer;
+mod record;
+mod signature_schemes;
+mod supported_versions;
 pub mod traits;
 
 #[cfg(feature = "async")]
-pub mod tls_connection;
+mod tls_connection;
 
 #[cfg(feature = "async")]
 pub use tls_connection::*;
@@ -176,7 +189,7 @@ mod runtime {
 pub use runtime::*;
 
 #[cfg(feature = "std")]
-pub mod stdlib {
+mod stdlib {
     extern crate std;
     use crate::{
         traits::{Read as TlsRead, Write as TlsWrite},
