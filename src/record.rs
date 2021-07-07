@@ -6,10 +6,7 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::{
-    traits::{AsyncRead, AsyncWrite, Read},
-    TlsError,
-};
+use crate::TlsError;
 use core::fmt::Debug;
 use core::ops::Range;
 use digest::{BlockInput, FixedOutput, Reset, Update};
@@ -192,82 +189,21 @@ impl RecordHeader {
         &self.header
     }
 
-    pub async fn read_async<T>(transport: &mut T) -> Result<RecordHeader, TlsError>
-    where
-        T: AsyncRead,
-    {
-        let mut pos: usize = 0;
-        let mut header: [u8; 5] = [0; 5];
-        loop {
-            pos += transport.read(&mut header[pos..5]).await?;
-            if pos == 5 {
-                break;
-            }
-        }
-        Self::decode(header)
-    }
-
-    pub fn read_blocking<T>(transport: &mut T) -> Result<RecordHeader, TlsError>
-    where
-        T: Read,
-    {
-        let mut pos: usize = 0;
-        let mut header: [u8; 5] = [0; 5];
-        loop {
-            pos += transport.read(&mut header[pos..5])?;
-            if pos == 5 {
-                break;
-            }
-        }
-        Self::decode(header)
-    }
-
-    fn decode(header: [u8; 5]) -> Result<RecordHeader, TlsError> {
+    pub fn decode(header: [u8; 5]) -> Result<RecordHeader, TlsError> {
         match ContentType::of(header[0]) {
             None => Err(TlsError::InvalidRecord),
-            Some(content_type) => Ok(RecordHeader { header }),
+            Some(_) => Ok(RecordHeader { header }),
         }
     }
 }
 
 impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
-    pub async fn read_async<T, D>(
-        transport: &mut T,
-        rx_buf: &'a mut [u8],
-        digest: &mut D,
-    ) -> Result<ServerRecord<'a, N>, TlsError>
-    where
-        T: AsyncRead,
-        D: Digest,
-    {
-        let header = RecordHeader::read_async(transport).await?;
-
-        // info!("receive header {:x?}", &header);
-
-        let content_length = header.content_length();
-        if content_length > rx_buf.len() {
-            return Err(TlsError::InsufficientSpace);
-        }
-
-        let mut pos = 0;
-        while pos < content_length {
-            let read = transport
-                .read(&mut rx_buf[pos..content_length])
-                .await
-                .map_err(|_| TlsError::InvalidRecord)?;
-            pos += read;
-        }
-
-        Self::decode::<T, D>(header, rx_buf, digest)
-    }
-
-    fn decode<T, D>(
+    pub fn decode<D>(
         header: RecordHeader,
         rx_buf: &'a mut [u8],
         digest: &mut D,
     ) -> Result<ServerRecord<'a, N>, TlsError>
     where
-        T: AsyncRead,
         D: Digest,
     {
         let content_length = header.content_length();
