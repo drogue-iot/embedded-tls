@@ -14,15 +14,15 @@ pub struct ParseBuffer<'b> {
     buffer: &'b [u8],
 }
 
-impl<'b> Into<ParseBuffer<'b>> for &'b [u8] {
-    fn into(self) -> ParseBuffer<'b> {
-        ParseBuffer::new(self)
+impl<'b> From<&'b [u8]> for ParseBuffer<'b> {
+    fn from(val: &'b [u8]) -> Self {
+        ParseBuffer::new(val)
     }
 }
 
-impl<'b, N: ArrayLength<u8>> Into<Result<Vec<u8, N>, ()>> for ParseBuffer<'b> {
-    fn into(self) -> Result<Vec<u8, N>, ()> {
-        Vec::from_slice(&self.buffer[self.pos..])
+impl<'b, N: ArrayLength<u8>> From<ParseBuffer<'b>> for Result<Vec<u8, N>, ()> {
+    fn from(val: ParseBuffer<'b>) -> Self {
+        Vec::from_slice(&val.buffer[val.pos..])
     }
 }
 
@@ -40,7 +40,7 @@ impl<'b> ParseBuffer<'b> {
     }
 
     pub fn as_slice(&self) -> &'b [u8] {
-        &self.buffer[..]
+        self.buffer
     }
 
     pub fn slice(&mut self, len: usize) -> Result<ParseBuffer<'b>, ParseError> {
@@ -54,7 +54,7 @@ impl<'b> ParseBuffer<'b> {
     }
 
     pub fn read_u8(&mut self) -> Result<u8, ParseError> {
-        if self.pos + 1 <= self.buffer.len() {
+        if self.pos < self.buffer.len() {
             let value = self.buffer[self.pos];
             self.pos += 1;
             Ok(value)

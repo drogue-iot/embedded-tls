@@ -77,3 +77,9 @@ impl<'a> CertificateEntry<'a> {
         Ok(entries)
     }
 }
+
+impl<'a> Default for Certificate<'a> {
+    fn default() -> Self {
+        Certificate::new()
+    }
+}

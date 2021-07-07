@@ -1,3 +1,4 @@
+use crate::TlsError;
 use aes_gcm::aead::Buffer;
 use aes_gcm::Error;
 
@@ -27,37 +28,37 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
-    pub fn push(&mut self, b: u8) -> Result<(), ()> {
+    pub fn push(&mut self, b: u8) -> Result<(), TlsError> {
         if self.capacity - (self.len + self.offset) > 0 {
             self.buf[self.offset + self.len] = b;
             self.len += 1;
             Ok(())
         } else {
-            Err(())
+            Err(TlsError::InsufficientSpace)
         }
     }
 
-    pub fn set(&mut self, idx: usize, val: u8) -> Result<(), ()> {
+    pub fn set(&mut self, idx: usize, val: u8) -> Result<(), TlsError> {
         if idx < self.len {
             self.buf[self.offset + idx] = val;
             Ok(())
         } else {
-            Err(())
+            Err(TlsError::InsufficientSpace)
         }
     }
 
-    pub fn as_mut_slice<'m>(&'m mut self) -> &'m mut [u8] {
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.buf[self.offset..self.offset + self.len]
     }
 
-    pub fn as_slice<'m>(&'m self) -> &'m [u8] {
+    pub fn as_slice(&self) -> &[u8] {
         &self.buf[self.offset..self.offset + self.len]
     }
 
-    fn extend_internal(&mut self, other: &[u8]) -> Result<(), ()> {
+    fn extend_internal(&mut self, other: &[u8]) -> Result<(), TlsError> {
         let start = self.offset + self.len;
         if self.capacity - start < other.len() {
-            Err(())
+            Err(TlsError::InsufficientSpace)
         } else {
             self.buf[start..start + other.len()].clone_from_slice(&other[..other.len()]);
             self.len += other.len();
@@ -65,7 +66,7 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
-    pub fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), ()> {
+    pub fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), TlsError> {
         self.extend_internal(other)
     }
 
@@ -81,6 +82,10 @@ impl<'b> CryptoBuffer<'b> {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
     }
 
     pub fn release(self) -> (&'b mut [u8], usize, usize) {

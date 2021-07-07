@@ -27,3 +27,9 @@ impl ChangeCipherSpec {
         Ok(())
     }
 }
+
+impl Default for ChangeCipherSpec {
+    fn default() -> Self {
+        ChangeCipherSpec::new()
+    }
+}

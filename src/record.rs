@@ -173,12 +173,12 @@ pub enum ServerRecord<'a, N: ArrayLength<u8>> {
     ApplicationData(ApplicationData<'a>),
 }
 
-impl<N: ArrayLength<u8>> ServerRecord<'_, N> {
-    pub async fn read<'m, T: AsyncWrite + AsyncRead, D: Digest>(
+impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
+    pub async fn read<T: AsyncWrite + AsyncRead, D: Digest>(
         socket: &mut T,
-        rx_buf: &'m mut [u8],
+        rx_buf: &'a mut [u8],
         digest: &mut D,
-    ) -> Result<ServerRecord<'m, N>, TlsError> {
+    ) -> Result<ServerRecord<'a, N>, TlsError> {
         let mut pos: usize = 0;
         let mut header: [u8; 5] = [0; 5];
         loop {
