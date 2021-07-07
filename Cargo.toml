@@ -40,7 +40,8 @@ rand = "0.8"
 log = "0.4"
 
 [features]
-default = ["log", "tokio"]
+default = ["log", "tokio", "std"]
+std = []
 defmt-trace = [ ]
 defmt-debug = [ ]
 defmt-info = [ ]

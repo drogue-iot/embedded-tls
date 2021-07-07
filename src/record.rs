@@ -6,10 +6,7 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::{
-    traits::{AsyncRead, AsyncWrite},
-    TlsError,
-};
+use crate::TlsError;
 use core::fmt::Debug;
 use core::ops::Range;
 use digest::{BlockInput, FixedOutput, Reset, Update};
@@ -173,71 +170,60 @@ pub enum ServerRecord<'a, N: ArrayLength<u8>> {
     ApplicationData(ApplicationData<'a>),
 }
 
-impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
-    pub async fn read<T: AsyncWrite + AsyncRead, D: Digest>(
-        socket: &mut T,
-        rx_buf: &'a mut [u8],
-        digest: &mut D,
-    ) -> Result<ServerRecord<'a, N>, TlsError> {
-        let mut pos: usize = 0;
-        let mut header: [u8; 5] = [0; 5];
-        loop {
-            pos += socket.read(&mut header[pos..5]).await?;
-            if pos == 5 {
-                break;
-            }
-        }
+pub struct RecordHeader {
+    header: [u8; 5],
+}
 
-        // info!("receive header {:x?}", &header);
+impl RecordHeader {
+    pub fn content_type(&self) -> ContentType {
+        // Content type already validated in read
+        ContentType::of(self.header[0]).unwrap()
+    }
 
+    pub fn content_length(&self) -> usize {
+        // Content lenth already validated in read
+        u16::from_be_bytes([self.header[3], self.header[4]]) as usize
+    }
+
+    pub fn data(&self) -> &[u8; 5] {
+        &self.header
+    }
+
+    pub fn decode(header: [u8; 5]) -> Result<RecordHeader, TlsError> {
         match ContentType::of(header[0]) {
             None => Err(TlsError::InvalidRecord),
-            Some(content_type) => {
-                let content_length = u16::from_be_bytes([header[3], header[4]]) as usize;
-                /*info!(
-                    "Content length: {}, rx_buf: {}, pos: {}",
-                    content_length,
-                    rx_buf.len(),
-                    pos
-                );*/
-                if content_length > rx_buf.len() - pos {
-                    return Err(TlsError::InsufficientSpace);
-                }
+            Some(_) => Ok(RecordHeader { header }),
+        }
+    }
+}
 
-                let rx_buf = &mut rx_buf[pos..];
-                let mut pos = 0;
-                while pos < content_length {
-                    let read = socket
-                        .read(&mut rx_buf[pos..content_length])
-                        .await
-                        .map_err(|_| TlsError::InvalidRecord)?;
-                    pos += read;
-                    /*info!(
-                        "Read block of {} bytes. Remaining: {}",
-                        read,
-                        content_length - pos
-                    );*/
-                }
-                // info!("Read {} bytes", content_length);
+impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
+    pub fn decode<D>(
+        header: RecordHeader,
+        rx_buf: &'a mut [u8],
+        digest: &mut D,
+    ) -> Result<ServerRecord<'a, N>, TlsError>
+    where
+        D: Digest,
+    {
+        let content_length = header.content_length();
+        match header.content_type() {
+            ContentType::Invalid => Err(TlsError::Unimplemented),
+            ContentType::ChangeCipherSpec => Ok(ServerRecord::ChangeCipherSpec(
+                ChangeCipherSpec::read(&mut rx_buf[..content_length])?,
+            )),
+            ContentType::Alert => Err(TlsError::Unimplemented),
+            ContentType::Handshake => Ok(ServerRecord::Handshake(ServerHandshake::read(
+                &mut rx_buf[..content_length],
+                digest,
+            )?)),
+            ContentType::ApplicationData => {
+                let mut buf = CryptoBuffer::wrap(rx_buf);
+                buf.truncate(content_length);
 
-                match content_type {
-                    ContentType::Invalid => Err(TlsError::Unimplemented),
-                    ContentType::ChangeCipherSpec => Ok(ServerRecord::ChangeCipherSpec(
-                        ChangeCipherSpec::read(&mut rx_buf[..content_length]).await?,
-                    )),
-                    ContentType::Alert => Err(TlsError::Unimplemented),
-                    ContentType::Handshake => Ok(ServerRecord::Handshake(
-                        ServerHandshake::read(&mut rx_buf[..content_length], digest).await?,
-                    )),
-                    ContentType::ApplicationData => {
-                        let mut buf = CryptoBuffer::wrap(rx_buf);
-                        buf.truncate(content_length);
-
-                        Ok(ServerRecord::ApplicationData(ApplicationData::new(
-                            buf, header,
-                        )))
-                    }
-                }
+                Ok(ServerRecord::ApplicationData(ApplicationData::new(
+                    buf, header,
+                )))
             }
         }
     }

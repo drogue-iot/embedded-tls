@@ -1,0 +1,14 @@
+[package]
+name = "ping-std"
+version = "0.2.0"
+edition = "2018"
+authors = [
+    "Bob McWhirter <bmcwhirt@redhat.com>",
+    "Ulf Lilleengen <lulf@redhat.com>"
+]
+
+[dependencies]
+drogue-tls = { path = "../..", features = ["log", "std"], default-features = false }
+env_logger = "0.8"
+rand = "0.8"
+log = "0.4"

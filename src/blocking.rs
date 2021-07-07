@@ -4,7 +4,7 @@ use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
 use crate::{
-    traits::{AsyncRead, AsyncWrite},
+    traits::{Read, Write},
     TlsError,
 };
 use rand_core::{CryptoRng, RngCore};
@@ -20,7 +20,7 @@ const TLS_RECORD_OVERHEAD: usize = 128;
 pub struct TlsConnection<'a, RNG, Socket, CipherSuite>
 where
     RNG: CryptoRng + RngCore + 'static,
-    Socket: AsyncRead + AsyncWrite + 'a,
+    Socket: Read + Write + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
@@ -34,10 +34,10 @@ where
 impl<'a, RNG, Socket, CipherSuite> TlsConnection<'a, RNG, Socket, CipherSuite>
 where
     RNG: CryptoRng + RngCore + 'static,
-    Socket: AsyncRead + AsyncWrite + 'a,
+    Socket: Read + Write + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    /// Create a new TLS connection with the provided config, a random generator and a async I/O implementation
+    /// Create a new TLS connection with the provided config, a random generator and a I/O implementation
     pub fn new(context: TlsContext<'a, CipherSuite, RNG>, delegate: Socket) -> Self {
         Self {
             delegate,
@@ -54,7 +54,7 @@ where
     ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection instance
     /// must be recreated.
-    pub async fn open<'m>(&mut self) -> Result<(), TlsError>
+    pub fn open<'m>(&mut self) -> Result<(), TlsError>
     where
         'a: 'm,
     {
@@ -62,16 +62,14 @@ where
         let mut state = State::ClientHello;
 
         loop {
-            let next_state = state
-                .process(
-                    &mut self.delegate,
-                    &mut handshake,
-                    &mut self.record_buf,
-                    &mut self.key_schedule,
-                    &self.config,
-                    &mut self.rng,
-                )
-                .await?;
+            let next_state = state.process_blocking(
+                &mut self.delegate,
+                &mut handshake,
+                &mut self.record_buf,
+                &mut self.key_schedule,
+                &self.config,
+                &mut self.rng,
+            )?;
             trace!("State {:?} -> {:?}", state, next_state);
             state = next_state;
             if let State::ApplicationData = state {
@@ -87,7 +85,7 @@ where
     /// must be opened before writing.
     ///
     /// Returns the number of bytes written.
-    pub async fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
+    pub fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
         if self.opened {
             let mut wp = 0;
             let mut remaining = buf.len();
@@ -102,7 +100,7 @@ where
 
                 let (_, len) = encode_record(&mut self.record_buf, key_schedule, &record)?;
 
-                delegate.write(&self.record_buf[..len]).await?;
+                delegate.write(&self.record_buf[..len])?;
                 key_schedule.increment_write_counter();
                 wp += to_write;
                 remaining -= to_write;
@@ -117,19 +115,18 @@ where
     /// Read and decrypt data filling the provided slice. The slice must be able to
     /// keep the expected amount of data that can be received in one record to avoid
     /// loosing data.
-    pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
+    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
         if self.opened {
             let mut remaining = buf.len();
             // Note: Read only a single ApplicationData record for now, as we don't do any buffering.
             while remaining == buf.len() {
                 let socket = &mut self.delegate;
                 let key_schedule = &mut self.key_schedule;
-                let record = decode_record::<Socket, CipherSuite>(
+                let record = decode_record_blocking::<Socket, CipherSuite>(
                     socket,
                     &mut self.record_buf,
                     key_schedule,
-                )
-                .await?;
+                )?;
                 let mut records = Queue::new();
                 decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
                 while let Some(record) = records.dequeue() {
@@ -172,8 +169,8 @@ where
         }
     }
 
-    /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
-    pub async fn close(self) -> Result<(TlsContext<'a, CipherSuite, RNG>, Socket), TlsError> {
+    /// Close a connection instance, returning the ownership of the config, random generator and the I/O provider.
+    pub fn close(self) -> Result<(TlsContext<'a, CipherSuite, RNG>, Socket), TlsError> {
         let record = if self.opened {
             ClientRecord::Alert(
                 Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
@@ -194,7 +191,7 @@ where
 
         let (_, len) = encode_record::<CipherSuite>(&mut record_buf, &mut key_schedule, &record)?;
 
-        delegate.write(&record_buf[..len]).await?;
+        delegate.write(&record_buf[..len])?;
 
         key_schedule.increment_write_counter();
 

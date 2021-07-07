@@ -150,7 +150,7 @@ impl<'a, N: ArrayLength<u8>> Debug for ServerHandshake<'a, N> {
 }
 
 impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
-    pub async fn read<D: Digest>(
+    pub fn read<D: Digest>(
         rx_buf: &'a mut [u8],
         digest: &mut D,
     ) -> Result<ServerHandshake<'a, N>, TlsError> {
@@ -163,9 +163,10 @@ impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
                     HandshakeType::ServerHello => {
                         // info!("hash [{:x?}]", &header);
                         digest.update(&header);
-                        Ok(ServerHandshake::ServerHello(
-                            ServerHello::read(&rx_buf[4..length + 4], digest).await?,
-                        ))
+                        Ok(ServerHandshake::ServerHello(ServerHello::read(
+                            &rx_buf[4..length + 4],
+                            digest,
+                        )?))
                     }
                     _ => Err(TlsError::Unimplemented), /*
                                                        HandshakeType::ClientHello => Err(TlsError::Unimplemented),

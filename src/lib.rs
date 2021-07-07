@@ -45,6 +45,7 @@ use parse_buffer::ParseError;
 pub mod alert;
 pub mod application_data;
 //pub mod blocking;
+pub mod blocking;
 pub mod buffer;
 pub mod certificate_types;
 pub mod change_cipher_spec;
@@ -65,7 +66,6 @@ pub mod supported_versions;
 pub mod tls_connection;
 pub mod traits;
 
-pub use config::*;
 pub use tls_connection::*;
 
 #[derive(Debug, Copy, Clone)]
@@ -204,3 +204,36 @@ mod runtime {
 
 #[cfg(any(feature = "tokio", feature = "embassy", feature = "futures"))]
 pub use runtime::*;
+
+#[cfg(feature = "std")]
+pub mod stdlib {
+    extern crate std;
+    use crate::{
+        traits::{Read as TlsRead, Write as TlsWrite},
+        TlsError,
+    };
+    use std::io::{Read, Write};
+
+    impl<R> TlsRead for R
+    where
+        R: Read,
+    {
+        fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Result<usize, TlsError> {
+            let len = Read::read(self, buf).map_err(|_| TlsError::IoError)?;
+            Ok(len)
+        }
+    }
+
+    impl<W> TlsWrite for W
+    where
+        W: Write,
+    {
+        fn write<'m>(&'m mut self, buf: &'m [u8]) -> Result<usize, TlsError> {
+            let len = Write::write(self, buf).map_err(|_| TlsError::IoError)?;
+            Ok(len)
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+pub use stdlib::*;

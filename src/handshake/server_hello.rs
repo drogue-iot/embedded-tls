@@ -21,10 +21,7 @@ pub struct ServerHello<'a> {
 }
 
 impl<'a> ServerHello<'a> {
-    pub async fn read<D: Digest>(
-        buf: &'a [u8],
-        digest: &mut D,
-    ) -> Result<ServerHello<'a>, TlsError> {
+    pub fn read<D: Digest>(buf: &'a [u8], digest: &mut D) -> Result<ServerHello<'a>, TlsError> {
         //trace!("server hello hash [{:x?}]", &buf[..]);
         digest.update(&buf);
         Self::parse(&mut ParseBuffer::new(&buf))
