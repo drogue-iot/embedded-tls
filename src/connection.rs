@@ -4,7 +4,7 @@ use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
 use crate::{alert::*, handshake::certificate::Certificate};
 use crate::{
-    traits::{AsyncRead, AsyncWrite},
+    traits::{AsyncRead, AsyncWrite, Read},
     TlsError,
 };
 use core::fmt::Debug;
@@ -56,7 +56,11 @@ where
         // let nonce = &key_schedule.get_server_nonce();
         // info!("server write nonce {:x?}", nonce);
         crypto
-            .decrypt_in_place(&key_schedule.get_server_nonce()?, &header, &mut app_data)
+            .decrypt_in_place(
+                &key_schedule.get_server_nonce()?,
+                header.data(),
+                &mut app_data,
+            )
             .map_err(|_| TlsError::CryptoError)?;
         // info!("decrypted with padding {:x?}", app_data.as_slice());
         let padding = app_data
@@ -197,7 +201,7 @@ where
     Ok(())
 }
 
-pub async fn fetch_record<'m, Transport, CipherSuite>(
+pub async fn decode_record<'m, Transport, CipherSuite>(
     transport: &mut Transport,
     rx_buf: &'m mut [u8],
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
@@ -206,8 +210,26 @@ where
     Transport: AsyncWrite + AsyncRead + 'm,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    Ok(ServerRecord::read(transport, rx_buf, key_schedule.transcript_hash()).await?)
+    Ok(ServerRecord::read_async(transport, rx_buf, key_schedule.transcript_hash()).await?)
 }
+
+/*
+pub fn decode_record_blocking<'m, Transport, CipherSuite>(
+    transport: &mut Transport,
+    rx_buf: &'m mut [u8],
+    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+) -> Result<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError>
+where
+    Transport: Read + 'm,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    Ok(ServerRecord::read_blocking(
+        transport,
+        rx_buf,
+        key_schedule.transcript_hash(),
+    )?)
+}
+*/
 
 pub struct Handshake<CipherSuite>
 where
@@ -272,24 +294,10 @@ impl<'a> State {
             }
             State::ServerHello => {
                 let record =
-                    fetch_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
+                    decode_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
                         .await?;
-                match record {
-                    ServerRecord::Handshake(server_handshake) => match server_handshake {
-                        ServerHandshake::ServerHello(server_hello) => {
-                            trace!("********* ServerHello");
-                            let secret =
-                                handshake.secret.take().ok_or(TlsError::InvalidHandshake)?;
-                            let shared = server_hello
-                                .calculate_shared_secret(&secret)
-                                .ok_or(TlsError::InvalidKeyShare)?;
-                            key_schedule.initialize_handshake_secret(shared.as_bytes())?;
-                            Ok(State::ServerVerify)
-                        }
-                        _ => Err(TlsError::InvalidHandshake),
-                    },
-                    _ => Err(TlsError::InvalidRecord),
-                }
+                process_server_hello(handshake, key_schedule, record)?;
+                Ok(State::ServerVerify)
             }
             State::ServerVerify => {
                 let mut records = Queue::new();
@@ -298,7 +306,7 @@ impl<'a> State {
                     core::mem::size_of_val(&records)
                 );*/
                 let record =
-                    fetch_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
+                    decode_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
                         .await?;
                 let mut cert_requested = false;
                 decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
@@ -376,6 +384,33 @@ impl<'a> State {
                 Ok(State::ApplicationData)
             }
             State::ApplicationData => Ok(State::ApplicationData),
+        }
+    }
+}
+
+fn process_server_hello<CipherSuite>(
+    handshake: &mut Handshake<CipherSuite>,
+    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    record: ServerRecord<'_, <CipherSuite::Hash as FixedOutput>::OutputSize>,
+) -> Result<(), TlsError>
+where
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    {
+        match record {
+            ServerRecord::Handshake(server_handshake) => match server_handshake {
+                ServerHandshake::ServerHello(server_hello) => {
+                    trace!("********* ServerHello");
+                    let secret = handshake.secret.take().ok_or(TlsError::InvalidHandshake)?;
+                    let shared = server_hello
+                        .calculate_shared_secret(&secret)
+                        .ok_or(TlsError::InvalidKeyShare)?;
+                    key_schedule.initialize_handshake_secret(shared.as_bytes())?;
+                    Ok(())
+                }
+                _ => Err(TlsError::InvalidHandshake),
+            },
+            _ => Err(TlsError::InvalidRecord),
         }
     }
 }

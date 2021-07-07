@@ -1,8 +1,9 @@
 use crate::buffer::*;
+use crate::record::RecordHeader;
 use core::fmt::{Debug, Formatter};
 
 pub struct ApplicationData<'a> {
-    pub(crate) header: [u8; 5],
+    pub(crate) header: RecordHeader,
     pub(crate) data: CryptoBuffer<'a>,
 }
 
@@ -13,7 +14,7 @@ impl<'a> Debug for ApplicationData<'a> {
 }
 
 impl<'a> ApplicationData<'a> {
-    pub fn new(rx_buf: CryptoBuffer<'a>, header: [u8; 5]) -> ApplicationData<'a> {
+    pub fn new(rx_buf: CryptoBuffer<'a>, header: RecordHeader) -> ApplicationData<'a> {
         Self {
             header,
             data: rx_buf,
