@@ -86,8 +86,8 @@ async fn main_task(spawner: Spawner) {
 
     let mut record_buffer = [0; 16384];
     let tls_context = TlsContext::new(OsRng, &mut record_buffer).with_server_name("example.com");
-    let mut tls: TlsConnection<OsRng, TcpSocket, Aes128GcmSha256> =
-        TlsConnection::new(tls_context, socket);
+    let mut tls: TlsConnection<OsRng, Transport<TcpSocket>, Aes128GcmSha256> =
+        TlsConnection::new(tls_context, Transport { transport: socket });
 
     tls.open().await.expect("error establishing TLS connection");
 
@@ -118,4 +118,40 @@ fn main() {
     executor.run(|spawner| {
         spawner.spawn(main_task(spawner)).unwrap();
     });
+}
+
+// Keep this here until embassy crate is published
+use core::future::Future;
+use drogue_tls::{
+    traits::{AsyncRead, AsyncWrite},
+    TlsError,
+};
+use embassy::io::{AsyncBufReadExt, AsyncWriteExt};
+
+pub struct Transport<W: AsyncWriteExt + AsyncBufReadExt + Unpin> {
+    transport: W,
+}
+
+impl<W: AsyncWriteExt + AsyncBufReadExt + Unpin> AsyncWrite for Transport<W> {
+    #[rustfmt::skip]
+    type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
+    fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
+        async move {
+            Ok(AsyncWriteExt::write(&mut self.transport, buf)
+                .await
+                .map_err(|_| TlsError::IoError)?)
+        }
+    }
+}
+
+impl<R: AsyncBufReadExt + AsyncWriteExt + Unpin> AsyncRead for Transport<R> {
+    #[rustfmt::skip]
+    type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
+    fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
+        async move {
+            Ok(AsyncBufReadExt::read(&mut self.transport, buf)
+                .await
+                .map_err(|_| TlsError::IoError)?)
+        }
+    }
 }

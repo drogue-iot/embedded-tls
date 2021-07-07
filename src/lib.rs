@@ -103,7 +103,7 @@ pub enum TlsError {
     DecodeError,
 }
 
-#[cfg(feature = "tokio")]
+#[cfg(all(feature = "tokio", feature = "async"))]
 mod runtime {
     use crate::{
         traits::{AsyncRead, AsyncWrite},
@@ -115,7 +115,7 @@ mod runtime {
 
     impl AsyncWrite for TcpStream {
         #[rustfmt::skip]
-        type WriteFuture where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
+        type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
         fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
             async move {
                 AsyncWriteExt::write(self, buf)
@@ -138,41 +138,7 @@ mod runtime {
     }
 }
 
-#[cfg(feature = "embassy")]
-mod runtime {
-    use crate::{
-        traits::{AsyncRead, AsyncWrite},
-        TlsError,
-    };
-    use core::future::Future;
-    use embassy::io::{AsyncBufReadExt, AsyncWriteExt};
-
-    impl<W: AsyncWriteExt + Unpin> AsyncWrite for W {
-        #[rustfmt::skip]
-        type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
-        fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-            async move {
-                Ok(AsyncWriteExt::write(self, buf)
-                    .await
-                    .map_err(|_| TlsError::IoError)?)
-            }
-        }
-    }
-
-    impl<R: AsyncBufReadExt + Unpin> AsyncRead for R {
-        #[rustfmt::skip]
-        type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
-        fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-            async move {
-                Ok(AsyncBufReadExt::read(self, buf)
-                    .await
-                    .map_err(|_| TlsError::IoError)?)
-            }
-        }
-    }
-}
-
-#[cfg(feature = "futures")]
+#[cfg(all(feature = "futures", feature = "async"))]
 mod runtime {
     use crate::{
         traits::{AsyncRead, AsyncWrite},
@@ -206,7 +172,7 @@ mod runtime {
     }
 }
 
-#[cfg(any(feature = "tokio", feature = "embassy", feature = "futures"))]
+#[cfg(all(feature = "async", any(feature = "tokio", feature = "futures")))]
 pub use runtime::*;
 
 #[cfg(feature = "std")]
