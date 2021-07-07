@@ -1,13 +1,21 @@
-use crate::config::{TlsCipherSuite, TlsConfig};
+use crate::config::{TlsCipherSuite, TlsClock, TlsConfig};
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, RecordHeader, ServerRecord};
-use crate::{alert::*, handshake::certificate::Certificate};
+use crate::verify::{verify_certificate, verify_signature};
+use crate::{
+    alert::*,
+    handshake::{
+        certificate::{Certificate, CertificateRef},
+        certificate_request::CertificateRequest,
+    },
+};
 use crate::{
     traits::{Read, Write},
     TlsError,
 };
-use core::fmt::Debug;
+use core::{convert::TryInto, fmt::Debug};
+use heapless::Vec;
 use rand_core::{CryptoRng, RngCore};
 
 #[cfg(feature = "async")]
@@ -264,6 +272,9 @@ where
 {
     traffic_hash: Option<CipherSuite::Hash>,
     secret: Option<EphemeralSecret>,
+    certificate_transcript: Option<CipherSuite::Hash>,
+    certificate_request: Option<CertificateRequest>,
+    certificate: Option<Certificate>,
 }
 
 impl<'a, CipherSuite> Handshake<CipherSuite>
@@ -274,6 +285,9 @@ where
         Handshake {
             traffic_hash: None,
             secret: None,
+            certificate_transcript: None,
+            certificate: None,
+            certificate_request: None,
         }
     }
 }
@@ -290,7 +304,7 @@ pub enum State {
 
 impl<'a> State {
     #[cfg(feature = "async")]
-    pub async fn process<Transport, CipherSuite, RNG>(
+    pub async fn process<Transport, CipherSuite, RNG, Clock>(
         self,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite>,
@@ -303,6 +317,7 @@ impl<'a> State {
         Transport: AsyncRead + AsyncWrite + 'a,
         RNG: CryptoRng + RngCore + 'static,
         CipherSuite: TlsCipherSuite + 'static,
+        Clock: TlsClock + 'static,
     {
         match self {
             State::ClientHello => {
@@ -338,14 +353,30 @@ impl<'a> State {
                     decode_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
                         .await?;
 
-                Ok(process_server_verify(handshake, key_schedule, record)?)
+                Ok(process_server_verify::<_, Clock>(
+                    handshake,
+                    key_schedule,
+                    config,
+                    record,
+                )?)
             }
             State::ClientCert => {
                 handshake
                     .traffic_hash
                     .replace(key_schedule.transcript_hash().clone());
 
-                let client_handshake = ClientHandshake::ClientCert(Certificate::new());
+                let request_context = handshake
+                    .certificate
+                    .as_ref()
+                    .ok_or(TlsError::InvalidHandshake)?
+                    .request_context();
+
+                let mut certificate = CertificateRef::with_context(request_context);
+
+                if let Some(cert) = &config.cert {
+                    certificate.add(cert.into())?;
+                }
+                let client_handshake = ClientHandshake::ClientCert(certificate);
                 let client_cert: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::Handshake(client_handshake, true);
 
@@ -381,7 +412,7 @@ impl<'a> State {
         }
     }
 
-    pub fn process_blocking<Transport, CipherSuite, RNG>(
+    pub fn process_blocking<Transport, CipherSuite, RNG, Clock>(
         self,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite>,
@@ -394,6 +425,7 @@ impl<'a> State {
         Transport: Read + Write + 'a,
         RNG: CryptoRng + RngCore + 'static,
         CipherSuite: TlsCipherSuite + 'static,
+        Clock: TlsClock + 'static,
     {
         match self {
             State::ClientHello => {
@@ -433,14 +465,29 @@ impl<'a> State {
                     key_schedule,
                 )?;
 
-                Ok(process_server_verify(handshake, key_schedule, record)?)
+                Ok(process_server_verify::<_, Clock>(
+                    handshake,
+                    key_schedule,
+                    config,
+                    record,
+                )?)
             }
             State::ClientCert => {
                 handshake
                     .traffic_hash
                     .replace(key_schedule.transcript_hash().clone());
 
-                let client_handshake = ClientHandshake::ClientCert(Certificate::new());
+                let request_context = handshake
+                    .certificate
+                    .as_ref()
+                    .ok_or(TlsError::InvalidHandshake)?
+                    .request_context();
+
+                let mut certificate = CertificateRef::with_context(request_context);
+                if let Some(cert) = &config.cert {
+                    certificate.add(cert.into())?;
+                }
+                let client_handshake = ClientHandshake::ClientCert(certificate);
                 let client_cert: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::Handshake(client_handshake, true);
 
@@ -499,18 +546,23 @@ where
                 }
                 _ => Err(TlsError::InvalidHandshake),
             },
+            ServerRecord::Alert(alert) => {
+                Err(TlsError::HandshakeAborted(alert.level, alert.description))
+            }
             _ => Err(TlsError::InvalidRecord),
         }
     }
 }
 
-fn process_server_verify<CipherSuite>(
+fn process_server_verify<'a, CipherSuite, Clock>(
     handshake: &mut Handshake<CipherSuite>,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    config: &TlsConfig<'a, CipherSuite>,
     record: ServerRecord<'_, <CipherSuite::Hash as FixedOutput>::OutputSize>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
+    Clock: TlsClock + 'static,
 {
     let mut records = Queue::new();
     let mut cert_requested = false;
@@ -522,10 +574,34 @@ where
             let result = match record {
                 ServerRecord::Handshake(server_handshake) => match server_handshake {
                     ServerHandshake::EncryptedExtensions(_) => Ok(State::ServerVerify),
-                    ServerHandshake::Certificate(_) => Ok(State::ServerVerify),
-                    ServerHandshake::CertificateVerify(_) => Ok(State::ServerVerify),
-                    ServerHandshake::CertificateRequest(_) => {
+                    ServerHandshake::Certificate(certificate) => {
+                        trace!("Verifying certificate!");
+                        verify_certificate(config, &certificate, Clock::now())?;
+                        handshake.certificate.replace(certificate.try_into()?);
+                        handshake
+                            .certificate_transcript
+                            .replace(key_schedule.transcript_hash().clone());
+                        trace!("Certificate verified!");
+                        Ok(State::ServerVerify)
+                    }
+                    ServerHandshake::CertificateVerify(verify) => {
+                        let certificate = handshake.certificate.as_ref().unwrap().try_into()?;
+                        let handshake_hash = handshake.certificate_transcript.take().unwrap();
+                        let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
+                        let mut msg: Vec<u8, 130> = Vec::new();
+                        msg.resize(64, 0x20u8).map_err(|_| TlsError::EncodeError)?;
+                        msg.extend_from_slice(ctx_str)
+                            .map_err(|_| TlsError::EncodeError)?;
+                        msg.extend_from_slice(&handshake_hash.finalize())
+                            .map_err(|_| TlsError::EncodeError)?;
+                        verify_signature(config, &msg[..], certificate, verify)?;
+                        Ok(State::ServerVerify)
+                    }
+                    ServerHandshake::CertificateRequest(request) => {
+                        trace!("Certificate request");
+                        handshake.certificate_request.replace(request.into());
                         cert_requested = true;
+                        trace!("Certificate requested: {}", cert_requested);
                         Ok(State::ServerVerify)
                     }
                     ServerHandshake::Finished(finished) => {

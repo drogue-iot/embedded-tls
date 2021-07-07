@@ -34,19 +34,26 @@ fn setup() -> SocketAddr {
 #[tokio::test]
 async fn test_ping() {
     use drogue_tls::*;
+    use std::time::SystemTime;
     use tokio::net::TcpStream;
     let addr = setup();
+    let pem = include_str!("data/ca-cert.pem");
+    let der = pem_parser::pem_to_der(pem);
+
     let stream = TcpStream::connect(addr)
         .await
         .expect("error connecting to server");
 
     log::info!("Connected");
     let mut record_buffer = [0; 16384];
-    let tls_context = TlsContext::new(OsRng, &mut record_buffer);
-    let mut tls: TlsConnection<OsRng, TcpStream, Aes128GcmSha256> =
+    let tls_context = TlsContext::new(OsRng, &mut record_buffer)
+        .with_ca(Certificate::X509(&der[..]))
+        .with_server_name("localhost");
+
+    let mut tls: TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256> =
         TlsConnection::new(tls_context, stream);
 
-    let sz = core::mem::size_of::<TlsConnection<OsRng, TcpStream, Aes128GcmSha256>>();
+    let sz = core::mem::size_of::<TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256>>();
     log::info!("SIZE of connection is {}", sz);
 
     let open_fut = tls.open();
@@ -75,14 +82,19 @@ async fn test_ping() {
 fn test_blocking_ping() {
     use drogue_tls::blocking::*;
     use std::net::TcpStream;
+    use std::time::SystemTime;
 
     let addr = setup();
+    let pem = include_str!("data/ca-cert.pem");
+    let der = pem_parser::pem_to_der(pem);
     let stream = TcpStream::connect(addr).expect("error connecting to server");
 
     log::info!("Connected");
     let mut record_buffer = [0; 16384];
-    let tls_context = TlsContext::new(OsRng, &mut record_buffer);
-    let mut tls: TlsConnection<OsRng, TcpStream, Aes128GcmSha256> =
+    let tls_context = TlsContext::new(OsRng, &mut record_buffer)
+        .with_ca(Certificate::X509(&der[..]))
+        .with_server_name("localhost");
+    let mut tls: TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256> =
         TlsConnection::new(tls_context, stream);
 
     tls.open().expect("error establishing TLS connection");

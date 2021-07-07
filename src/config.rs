@@ -47,24 +47,43 @@ where
     pub(crate) signature_schemes: Vec<SignatureScheme, 16>,
     pub(crate) named_groups: Vec<NamedGroup, 16>,
     pub(crate) max_fragment_length: MaxFragmentLength,
+    pub(crate) ca: Option<Certificate<'a>>,
+    pub(crate) cert: Option<Certificate<'a>>,
+    pub(crate) verify_host: bool,
+    pub(crate) verify_cert: bool,
+}
+
+pub trait TlsClock {
+    fn now() -> Option<u64>;
+}
+
+pub struct NoClock;
+
+impl TlsClock for NoClock {
+    fn now() -> Option<u64> {
+        None
+    }
 }
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TlsContext<'a, CipherSuite, RNG>
+pub struct TlsContext<'a, CipherSuite, RNG, Clock>
 where
     CipherSuite: TlsCipherSuite,
     RNG: CryptoRng + RngCore + 'static,
+    Clock: TlsClock + 'static,
 {
     pub(crate) config: TlsConfig<'a, CipherSuite>,
     pub(crate) rng: RNG,
+    clock: core::marker::PhantomData<&'a Clock>,
     pub(crate) record_buf: &'a mut [u8],
 }
 
-impl<'a, CipherSuite, RNG> TlsContext<'a, CipherSuite, RNG>
+impl<'a, CipherSuite, RNG, Clock> TlsContext<'a, CipherSuite, RNG, Clock>
 where
     CipherSuite: TlsCipherSuite,
     RNG: CryptoRng + RngCore + 'static,
+    Clock: TlsClock + 'static,
 {
     /// Create a new context with a given random number generator, record buffer and config.
     ///
@@ -81,6 +100,7 @@ where
         Self {
             config,
             rng,
+            clock: core::marker::PhantomData,
             record_buf,
         }
     }
@@ -99,6 +119,30 @@ where
         self.config = self.config.with_server_name(server_name);
         self
     }
+
+    /// Enable/disable verification of server certificate.
+    pub fn verify_cert(mut self, verify_cert: bool) -> Self {
+        self.config = self.config.verify_cert(verify_cert);
+        self
+    }
+
+    /// Enable/disable verification of server hostname.
+    pub fn verify_hostname(mut self, verify_hostname: bool) -> Self {
+        self.config = self.config.verify_hostname(verify_hostname);
+        self
+    }
+
+    /// Trust the provided CA.
+    pub fn with_ca(mut self, ca: Certificate<'a>) -> Self {
+        self.config = self.config.with_ca(ca);
+        self
+    }
+
+    /// Use provided cert as client certificate.
+    pub fn with_cert(mut self, cert: Certificate<'a>) -> Self {
+        self.config = self.config.with_cert(cert);
+        self
+    }
 }
 
 impl<'a, CipherSuite> TlsConfig<'a, CipherSuite>
@@ -112,21 +156,53 @@ where
             named_groups: Vec::new(),
             max_fragment_length: MaxFragmentLength::Bits10,
             server_name: None,
+            verify_cert: true,
+            verify_host: true,
+            ca: None,
+            cert: None,
         };
 
         //config.cipher_suites.push(CipherSuite::TlsAes128GcmSha256);
 
+        #[cfg(feature = "alloc")]
+        {
+            config
+                .signature_schemes
+                .push(SignatureScheme::RsaPkcs1Sha256)
+                .unwrap();
+            config
+                .signature_schemes
+                .push(SignatureScheme::RsaPkcs1Sha384)
+                .unwrap();
+            config
+                .signature_schemes
+                .push(SignatureScheme::RsaPkcs1Sha512)
+                .unwrap();
+            config
+                .signature_schemes
+                .push(SignatureScheme::RsaPssRsaeSha256)
+                .unwrap();
+            config
+                .signature_schemes
+                .push(SignatureScheme::RsaPssRsaeSha384)
+                .unwrap();
+            config
+                .signature_schemes
+                .push(SignatureScheme::RsaPssRsaeSha512)
+                .unwrap();
+        }
+
         config
             .signature_schemes
-            .push(SignatureScheme::RsaPssRsaeSha256)
+            .push(SignatureScheme::EcdsaSecp256r1Sha256)
             .unwrap();
         config
             .signature_schemes
-            .push(SignatureScheme::RsaPssRsaeSha384)
+            .push(SignatureScheme::EcdsaSecp384r1Sha384)
             .unwrap();
         config
             .signature_schemes
-            .push(SignatureScheme::RsaPssRsaeSha512)
+            .push(SignatureScheme::Ed25519)
             .unwrap();
 
         config.named_groups.push(NamedGroup::Secp256r1).unwrap();
@@ -138,6 +214,26 @@ where
         self.server_name = Some(server_name);
         self
     }
+
+    pub fn verify_hostname(mut self, verify_host: bool) -> Self {
+        self.verify_host = verify_host;
+        self
+    }
+
+    pub fn verify_cert(mut self, verify_cert: bool) -> Self {
+        self.verify_cert = verify_cert;
+        self
+    }
+
+    pub fn with_ca(mut self, ca: Certificate<'a>) -> Self {
+        self.ca = Some(ca);
+        self
+    }
+
+    pub fn with_cert(mut self, cert: Certificate<'a>) -> Self {
+        self.cert = Some(cert);
+        self
+    }
 }
 
 impl<'a, CipherSuite> Default for TlsConfig<'a, CipherSuite>
@@ -147,4 +243,11 @@ where
     fn default() -> Self {
         TlsConfig::new()
     }
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Certificate<'a> {
+    X509(&'a [u8]),
+    RawPublicKey(&'a [u8]),
 }

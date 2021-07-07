@@ -130,6 +130,8 @@ pub struct Transport<W: AsyncWriteExt + AsyncBufReadExt + Unpin> {
     transport: W,
 }
 
+pub struct Clock;
+
 impl<W: AsyncWriteExt + AsyncBufReadExt + Unpin> AsyncWrite for Transport<W> {
     #[rustfmt::skip]
     type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;

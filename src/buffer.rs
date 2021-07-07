@@ -38,6 +38,15 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
+    pub fn push_u24(&mut self, num: u32) -> Result<(), TlsError> {
+        if self.capacity - (self.len + self.offset) > 2 {
+            let data = num.to_be_bytes();
+            self.extend_from_slice(&[data[0], data[1], data[2]])
+        } else {
+            Err(TlsError::InsufficientSpace)
+        }
+    }
+
     pub fn set(&mut self, idx: usize, val: u8) -> Result<(), TlsError> {
         if idx < self.len {
             self.buf[self.offset + idx] = val;
@@ -149,6 +158,15 @@ impl<'b> Buffer for CryptoBuffer<'b> {
 #[cfg(test)]
 mod test {
     use super::CryptoBuffer;
+
+    #[test]
+    fn encode() {
+        let mut buf = [0; 4];
+        let mut c = CryptoBuffer::wrap(&mut buf);
+        c.push_u24(1024).unwrap();
+        let decoded = u32::from_be_bytes(buf);
+        assert_eq!(1024, decoded);
+    }
 
     #[test]
     fn offset_calc() {

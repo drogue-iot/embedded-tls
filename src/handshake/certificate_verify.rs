@@ -5,8 +5,8 @@ use crate::TlsError;
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateVerify<'a> {
-    signature_scheme: SignatureScheme,
-    signature: &'a [u8],
+    pub(crate) signature_scheme: SignatureScheme,
+    pub(crate) signature: &'a [u8],
 }
 
 impl<'a> CertificateVerify<'a> {
