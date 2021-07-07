@@ -3,9 +3,7 @@ use crate::connection::*;
 use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
-use crate::{
-    traits::{Read, Write},
-};
+use crate::traits::{Read, Write};
 use rand_core::{CryptoRng, RngCore};
 
 use crate::application_data::ApplicationData;
@@ -20,32 +18,36 @@ const TLS_RECORD_OVERHEAD: usize = 128;
 /// Type representing an async TLS connection. An instance of this type can
 /// be used to establish a TLS connection, write and read encrypted data over this connection,
 /// and closing to free up the underlying resources.
-pub struct TlsConnection<'a, RNG, Socket, CipherSuite>
+pub struct TlsConnection<'a, RNG, Clock, Socket, CipherSuite>
 where
     RNG: CryptoRng + RngCore + 'static,
+    Clock: TlsClock + 'static,
     Socket: Read + Write + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
     rng: RNG,
+    clock: core::marker::PhantomData<&'a Clock>,
     config: TlsConfig<'a, CipherSuite>,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record_buf: &'a mut [u8],
     opened: bool,
 }
 
-impl<'a, RNG, Socket, CipherSuite> TlsConnection<'a, RNG, Socket, CipherSuite>
+impl<'a, RNG, Clock, Socket, CipherSuite> TlsConnection<'a, RNG, Clock, Socket, CipherSuite>
 where
     RNG: CryptoRng + RngCore + 'static,
+    Clock: TlsClock + 'static,
     Socket: Read + Write + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
     /// Create a new TLS connection with the provided context and a I/O implementation
-    pub fn new(context: TlsContext<'a, CipherSuite, RNG>, delegate: Socket) -> Self {
+    pub fn new(context: TlsContext<'a, CipherSuite, RNG, Clock>, delegate: Socket) -> Self {
         Self {
             delegate,
             config: context.config,
             rng: context.rng,
+            clock: core::marker::PhantomData,
             opened: false,
             key_schedule: KeySchedule::new(),
             record_buf: context.record_buf,
@@ -65,7 +67,7 @@ where
         let mut state = State::ClientHello;
 
         loop {
-            let next_state = state.process_blocking(
+            let next_state = state.process_blocking::<_, _, _, Clock>(
                 &mut self.delegate,
                 &mut handshake,
                 &mut self.record_buf,
@@ -173,15 +175,17 @@ where
     }
 
     /// Close a connection instance, returning the ownership of the config, random generator and the I/O provider.
-    pub fn close(self) -> Result<(TlsContext<'a, CipherSuite, RNG>, Socket), TlsError> {
+    pub fn close(self) -> Result<(TlsContext<'a, CipherSuite, RNG, Clock>, Socket), TlsError> {
         let record = ClientRecord::Alert(
             Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
-            self.opened);
+            self.opened,
+        );
 
         let mut key_schedule = self.key_schedule;
         let mut delegate = self.delegate;
         let mut record_buf = self.record_buf;
         let rng = self.rng;
+        let clock = self.clock;
         let config = self.config;
 
         let (_, len) = encode_record::<CipherSuite>(&mut record_buf, &mut key_schedule, &record)?;

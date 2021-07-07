@@ -1,3 +1,6 @@
+use crate::TlsError;
+use core::convert::TryInto;
+
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SignatureScheme {
@@ -58,6 +61,77 @@ impl SignatureScheme {
             0x0201 => Some(Self::RsaPkcs1Sha1),
             0x0203 => Some(Self::EcdsaSha1),
             _ => None,
+        }
+    }
+}
+
+#[cfg(not(feature = "alloc"))]
+impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
+    type Error = TlsError;
+    fn try_into(self) -> Result<&'static webpki::SignatureAlgorithm, Self::Error> {
+        // TODO: support other schemes via 'alloc' feature
+        match self {
+            SignatureScheme::RsaPkcs1Sha256 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPkcs1Sha384 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPkcs1Sha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* ECDSA algorithms */
+            SignatureScheme::EcdsaSecp256r1Sha256 => Ok(&webpki::ECDSA_P256_SHA256),
+            SignatureScheme::EcdsaSecp384r1Sha384 => Ok(&webpki::ECDSA_P384_SHA384),
+            SignatureScheme::EcdsaSecp521r1Sha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* RSASSA-PSS algorithms with public key OID rsaEncryption */
+            SignatureScheme::RsaPssRsaeSha256 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssRsaeSha384 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssRsaeSha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* EdDSA algorithms */
+            Ed25519 => Ok(&webpki::ED25519),
+            Ed448 => Err(TlsError::InvalidSignatureScheme),
+
+            /* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
+            SignatureScheme::RsaPssPssSha256 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssPssSha384 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssPssSha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* Legacy algorithms */
+            SignatureScheme::RsaPkcs1Sha1 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::EcdsaSha1 => Err(TlsError::InvalidSignatureScheme),
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
+    type Error = TlsError;
+    fn try_into(self) -> Result<&'static webpki::SignatureAlgorithm, Self::Error> {
+        match self {
+            SignatureScheme::RsaPkcs1Sha256 => Ok(&webpki::RSA_PKCS1_2048_8192_SHA256),
+            SignatureScheme::RsaPkcs1Sha384 => Ok(&webpki::RSA_PKCS1_2048_8192_SHA384),
+            SignatureScheme::RsaPkcs1Sha512 => Ok(&webpki::RSA_PKCS1_2048_8192_SHA512),
+
+            /* ECDSA algorithms */
+            SignatureScheme::EcdsaSecp256r1Sha256 => Ok(&webpki::ECDSA_P256_SHA256),
+            SignatureScheme::EcdsaSecp384r1Sha384 => Ok(&webpki::ECDSA_P384_SHA384),
+            SignatureScheme::EcdsaSecp521r1Sha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* RSASSA-PSS algorithms with public key OID rsaEncryption */
+            SignatureScheme::RsaPssRsaeSha256 => Ok(&webpki::RSA_PSS_2048_8192_SHA256_LEGACY_KEY),
+            SignatureScheme::RsaPssRsaeSha384 => Ok(&webpki::RSA_PSS_2048_8192_SHA384_LEGACY_KEY),
+            SignatureScheme::RsaPssRsaeSha512 => Ok(&webpki::RSA_PSS_2048_8192_SHA512_LEGACY_KEY),
+
+            /* EdDSA algorithms */
+            Ed25519 => Ok(&webpki::ED25519),
+            Ed448 => Err(TlsError::InvalidSignatureScheme),
+
+            /* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
+            SignatureScheme::RsaPssPssSha256 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssPssSha384 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssPssSha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* Legacy algorithms */
+            SignatureScheme::RsaPkcs1Sha1 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::EcdsaSha1 => Err(TlsError::InvalidSignatureScheme),
         }
     }
 }

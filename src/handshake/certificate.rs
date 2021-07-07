@@ -1,69 +1,92 @@
-use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
+use crate::{buffer::CryptoBuffer, parse_buffer::ParseError};
+use core::convert::TryFrom;
 use heapless::Vec;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Certificate<'a> {
-    entries: Vec<CertificateEntry<'a>, 16>,
+pub struct CertificateRef<'a> {
+    raw_entries: &'a [u8],
+    request_context: &'a [u8],
+
+    pub(crate) entries: Vec<CertificateEntryRef<'a>, 16>,
 }
 
-impl<'a> Certificate<'a> {
-    pub fn new() -> Self {
+impl<'a> CertificateRef<'a> {
+    pub fn with_context(request_context: &'a [u8]) -> Self {
         Self {
+            raw_entries: &[],
+            request_context,
             entries: Vec::new(),
         }
     }
 
+    pub fn add(&mut self, entry: CertificateEntryRef<'a>) -> Result<(), TlsError> {
+        self.entries
+            .push(entry)
+            .map_err(|_| TlsError::InsufficientSpace)
+    }
+
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, TlsError> {
         let request_context_len = buf.read_u8().map_err(|_| TlsError::InvalidCertificate)?;
-        let _request_context = buf
+        let request_context = buf
             .slice(request_context_len as usize)
             .map_err(|_| TlsError::InvalidCertificate)?;
         let entries_len = buf.read_u24().map_err(|_| TlsError::InvalidCertificate)?;
-        let mut entries = buf
+        let mut raw_entries = buf
             .slice(entries_len as usize)
             .map_err(|_| TlsError::InvalidCertificate)?;
 
-        let entries = CertificateEntry::parse_vector(&mut entries)?;
+        let entries = CertificateEntryRef::parse_vector(&mut raw_entries)?;
 
-        Ok(Self { entries })
+        Ok(Self {
+            raw_entries: raw_entries.as_slice(),
+            request_context: request_context.as_slice(),
+            entries,
+        })
     }
 
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
-        // TODO: Implement
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
-        buf.extend_from_slice(&[0x00, 0x00, 0x00])
+        buf.push(self.request_context.len() as u8)
             .map_err(|_| TlsError::EncodeError)?;
+        buf.extend_from_slice(self.request_context)
+            .map_err(|_| TlsError::EncodeError)?;
+
+        buf.push_u24(self.entries.len() as u32)?;
+        for entry in self.entries.iter() {
+            entry.encode(buf)?;
+        }
         Ok(())
     }
 }
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum CertificateEntry<'a> {
+pub enum CertificateEntryRef<'a> {
     X509(&'a [u8]),
     RawPublicKey(&'a [u8]),
 }
 
-impl<'a> CertificateEntry<'a> {
+impl<'a> CertificateEntryRef<'a> {
     pub fn parse_vector(
         buf: &mut ParseBuffer<'a>,
-    ) -> Result<Vec<CertificateEntry<'a>, 16>, TlsError> {
+    ) -> Result<Vec<CertificateEntryRef<'a>, 16>, TlsError> {
         let mut entries = Vec::new();
         loop {
-            let entry_len = buf.read_u24().map_err(|_| TlsError::InvalidCertificate)?;
-            // info!("cert len: {}", entry_len);
+            let entry_len = buf
+                .read_u24()
+                .map_err(|_| TlsError::InvalidCertificateEntry)?;
+            //info!("cert len: {}", entry_len);
             let cert = buf
                 .slice(entry_len as usize)
-                .map_err(|_| TlsError::InvalidCertificate)?;
+                .map_err(|e| TlsError::InvalidCertificateEntry)?;
 
             //let cert: Result<Vec<u8, _>, ()> = cert.into();
             // let cert: Result<Vec<u8, _>, ()> = Ok(Vec::new());
 
             entries
-                .push(CertificateEntry::X509(cert.as_slice()))
+                .push(CertificateEntryRef::X509(cert.as_slice()))
                 .map_err(|_| TlsError::DecodeError)?;
 
             let _extensions_len = buf
@@ -76,10 +99,77 @@ impl<'a> CertificateEntry<'a> {
         }
         Ok(entries)
     }
+
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+        /*
+        match self {
+            CertificateEntry::RawPublicKey(key) => {
+                let entry_len = (key.len() as u32).to_be_bytes();
+            }
+            CertificateEntry::X509(cert) => {
+                let entry_len = (cert.len() as u32).to_be_bytes();
+            }
+        }
+        */
+        Ok(())
+    }
 }
 
-impl<'a> Default for Certificate<'a> {
-    fn default() -> Self {
-        Certificate::new()
+impl<'a> From<&crate::config::Certificate<'a>> for CertificateEntryRef<'a> {
+    fn from(cert: &crate::config::Certificate<'a>) -> Self {
+        match cert {
+            crate::config::Certificate::X509(data) => CertificateEntryRef::X509(data),
+            crate::config::Certificate::RawPublicKey(data) => {
+                CertificateEntryRef::RawPublicKey(data)
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct Certificate {
+    request_context: Vec<u8, 256>,
+    num_entries: usize,
+    entries_data: Vec<u8, 8192>,
+}
+
+impl Certificate {
+    pub fn request_context(&self) -> &[u8] {
+        &self.request_context[..]
+    }
+}
+
+impl<'a> TryFrom<CertificateRef<'a>> for Certificate {
+    type Error = TlsError;
+    fn try_from(cert: CertificateRef<'a>) -> Result<Self, Self::Error> {
+        let mut request_context = Vec::new();
+        request_context
+            .extend_from_slice(cert.request_context)
+            .map_err(|_| TlsError::OutOfMemory)?;
+        let mut entries_data = Vec::new();
+        entries_data
+            .extend_from_slice(cert.raw_entries)
+            .map_err(|_| TlsError::OutOfMemory)?;
+
+        Ok(Self {
+            request_context,
+            num_entries: cert.entries.len(),
+            entries_data,
+        })
+    }
+}
+
+impl<'a> TryFrom<&'a Certificate> for CertificateRef<'a> {
+    type Error = TlsError;
+    fn try_from(cert: &'a Certificate) -> Result<Self, Self::Error> {
+        let request_context = cert.request_context();
+        let entries =
+            CertificateEntryRef::parse_vector(&mut ParseBuffer::from(&cert.entries_data[..]))?;
+        Ok(Self {
+            raw_entries: &cert.entries_data[..],
+            request_context,
+            entries,
+        })
     }
 }

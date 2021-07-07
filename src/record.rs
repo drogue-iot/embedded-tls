@@ -1,4 +1,3 @@
-use crate::alert::*;
 use crate::application_data::ApplicationData;
 use crate::buffer::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
@@ -7,6 +6,7 @@ use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::TlsError;
+use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
 use core::ops::Range;
 use digest::{BlockInput, FixedOutput, Reset, Update};
@@ -212,7 +212,11 @@ impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
             ContentType::ChangeCipherSpec => Ok(ServerRecord::ChangeCipherSpec(
                 ChangeCipherSpec::read(&mut rx_buf[..content_length])?,
             )),
-            ContentType::Alert => Err(TlsError::Unimplemented),
+            ContentType::Alert => {
+                let mut parse = ParseBuffer::from(&rx_buf[..content_length]);
+                let alert = Alert::parse(&mut parse)?;
+                Ok(ServerRecord::Alert(alert))
+            }
             ContentType::Handshake => Ok(ServerRecord::Handshake(ServerHandshake::read(
                 &mut rx_buf[..content_length],
                 digest,

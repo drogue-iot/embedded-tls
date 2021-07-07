@@ -368,8 +368,8 @@ pub fn run(mut listener: TcpListener) {
 
     let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
 
-    let certs = load_certs(&test_dir.join("testcert.pem"));
-    let privkey = load_private_key(&test_dir.join("testkey.pem"));
+    let certs = load_certs(&test_dir.join("data").join("server-cert.pem"));
+    let privkey = load_private_key(&test_dir.join("data").join("server-key.pem"));
 
     let mut config = rustls::ServerConfig::new(client_auth);
 

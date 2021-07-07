@@ -12,13 +12,18 @@ The client supports both async and blocking modes. By default, the `async` and `
 
 To use the async mode, import `drogue_tls::*`. To use the blocking mode, import `drogue_tls::blocking::*`.
 
-Some features like certificate validation are still not implemented, have a look at [open issues](https://github.com/drogue-iot/drogue-tls/issues).
+Some features and extensions are not yet implemented, have a look at [open issues](https://github.com/drogue-iot/drogue-tls/issues).
+
 Only supports writing/receiving one frame at a time, hence using a frame buffer larger than 16k is not currently needed.  You may use a lower frame buffer size, but there is no guarantee that it will be able to parse any TLS 1.3 frame.
 
-Usage of this crate should fit in 20 kB of RAM assuming a frame buffer of 16 kB (max TLS record size). This is not including the space used to hold the CA and any client certificates, which is not yet supported.
+Usage of this crate should fit in 21 kB of RAM assuming a frame buffer of 17 kB (max TLS record size + EC server certificate size). This is not including the space used to hold the CA and any client certificates.
 
-NOTE: This is very fresh and is probably not meeting all parts of the TLS 1.3 spec. Things like certificate validation and client certificate support is not complete.
-If you find anything you'd like to get implemented, feel free to raise an issue.
+Some memory usage statistics for async operation:
+
+* TlsConnection: frame_buffer size + 2kB for the rest. This can probably be reduced with some additional tuning.
+* Handshake stack usage: currently at 2 kB
+* Write stack usage: currently at 560 B
+* Read stack usage: currently at 232 B
 
 ## Community
 

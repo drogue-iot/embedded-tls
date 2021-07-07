@@ -20,9 +20,10 @@ const TLS_RECORD_OVERHEAD: usize = 128;
 /// Type representing an async TLS connection. An instance of this type can
 /// be used to establish a TLS connection, write and read encrypted data over this connection,
 /// and closing to free up the underlying resources.
-pub struct TlsConnection<'a, RNG, Socket, CipherSuite>
+pub struct TlsConnection<'a, RNG, Clock, Socket, CipherSuite>
 where
     RNG: CryptoRng + RngCore + 'static,
+    Clock: TlsClock + 'static,
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -32,16 +33,18 @@ where
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record_buf: &'a mut [u8],
     opened: bool,
+    clock: core::marker::PhantomData<&'a Clock>,
 }
 
-impl<'a, RNG, Socket, CipherSuite> TlsConnection<'a, RNG, Socket, CipherSuite>
+impl<'a, RNG, Clock, Socket, CipherSuite> TlsConnection<'a, RNG, Clock, Socket, CipherSuite>
 where
     RNG: CryptoRng + RngCore + 'static,
+    Clock: TlsClock,
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
     /// Create a new TLS connection with the provided context and a async I/O implementation
-    pub fn new(context: TlsContext<'a, CipherSuite, RNG>, delegate: Socket) -> Self {
+    pub fn new(context: TlsContext<'a, CipherSuite, RNG, Clock>, delegate: Socket) -> Self {
         Self {
             delegate,
             config: context.config,
@@ -49,6 +52,7 @@ where
             opened: false,
             key_schedule: KeySchedule::new(),
             record_buf: context.record_buf,
+            clock: core::marker::PhantomData,
         }
     }
 
@@ -66,7 +70,7 @@ where
 
         loop {
             let next_state = state
-                .process(
+                .process::<_, _, _, Clock>(
                     &mut self.delegate,
                     &mut handshake,
                     &mut self.record_buf,
@@ -176,10 +180,13 @@ where
     }
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
-    pub async fn close(self) -> Result<(TlsContext<'a, CipherSuite, RNG>, Socket), TlsError> {
+    pub async fn close(
+        self,
+    ) -> Result<(TlsContext<'a, CipherSuite, RNG, Clock>, Socket), TlsError> {
         let record = ClientRecord::Alert(
             Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
-            self.opened);
+            self.opened,
+        );
 
         let mut key_schedule = self.key_schedule;
         let mut delegate = self.delegate;
