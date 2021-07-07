@@ -24,10 +24,12 @@ nom = { version = "6.1.2", default-features = false }
 log = { version = "0.4", optional = true }
 defmt = { version = "0.2", optional = true }
 
-# Supported runtimes
+# Runtimes supported out of the box
 tokio = { version = "1.7", features = ["net"], optional = true }
 futures = { version = "0.3", optional = true }
-embassy = {git = "https://github.com/embassy-rs/embassy.git", branch = "master", default-features = false, optional = true }
+
+# NOTE: Disabled until embassy crate is published
+# embassy = {git = "https://github.com/embassy-rs/embassy.git", branch = "master", default-features = false, optional = true }
 
 [dev-dependencies]
 env_logger = "0.8"
@@ -40,8 +42,9 @@ rand = "0.8"
 log = "0.4"
 
 [features]
-default = ["log", "tokio", "std"]
+default = ["log", "std", "async", "tokio"]
 std = []
+async = []
 defmt-trace = [ ]
 defmt-debug = [ ]
 defmt-info = [ ]

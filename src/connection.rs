@@ -4,11 +4,14 @@ use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, RecordHeader, ServerRecord};
 use crate::{alert::*, handshake::certificate::Certificate};
 use crate::{
-    traits::{AsyncRead, AsyncWrite, Read, Write},
+    traits::{Read, Write},
     TlsError,
 };
 use core::fmt::Debug;
 use rand_core::{CryptoRng, RngCore};
+
+#[cfg(feature = "async")]
+use crate::traits::{AsyncRead, AsyncWrite};
 
 use crate::application_data::ApplicationData;
 // use crate::handshake::certificate_request::CertificateRequest;
@@ -186,6 +189,7 @@ where
     Ok((next_hash, len))
 }
 
+#[cfg(feature = "async")]
 pub async fn decode_record<'m, Transport, CipherSuite>(
     transport: &mut Transport,
     rx_buf: &'m mut [u8],
@@ -288,6 +292,7 @@ pub enum State {
 }
 
 impl<'a> State {
+    #[cfg(feature = "async")]
     pub async fn process<Transport, CipherSuite, RNG>(
         self,
         transport: &mut Transport,

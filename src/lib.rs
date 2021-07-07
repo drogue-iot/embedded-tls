@@ -2,8 +2,9 @@
 #![no_std]
 #![allow(incomplete_features)]
 #![allow(dead_code)]
-#![feature(generic_associated_types)]
-#![feature(min_type_alias_impl_trait)]
+#![cfg_attr(feature = "async", feature(generic_associated_types))]
+#![cfg_attr(feature = "async", feature(min_type_alias_impl_trait))]
+
 //! An async, no-alloc TLS 1.3 client implementation for embedded devices.
 //!
 //!
@@ -63,9 +64,12 @@ pub mod parse_buffer;
 pub mod record;
 pub mod signature_schemes;
 pub mod supported_versions;
-pub mod tls_connection;
 pub mod traits;
 
+#[cfg(feature = "async")]
+pub mod tls_connection;
+
+#[cfg(feature = "async")]
 pub use tls_connection::*;
 
 #[derive(Debug, Copy, Clone)]
@@ -99,7 +103,7 @@ pub enum TlsError {
     DecodeError,
 }
 
-#[cfg(feature = "tokio")]
+#[cfg(all(feature = "tokio", feature = "async"))]
 mod runtime {
     use crate::{
         traits::{AsyncRead, AsyncWrite},
@@ -134,41 +138,7 @@ mod runtime {
     }
 }
 
-#[cfg(feature = "embassy")]
-mod runtime {
-    use crate::{
-        traits::{AsyncRead, AsyncWrite},
-        TlsError,
-    };
-    use core::future::Future;
-    use embassy::io::{AsyncBufReadExt, AsyncWriteExt};
-
-    impl<W: AsyncWriteExt + Unpin> AsyncWrite for W {
-        #[rustfmt::skip]
-        type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
-        fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-            async move {
-                Ok(AsyncWriteExt::write(self, buf)
-                    .await
-                    .map_err(|_| TlsError::IoError)?)
-            }
-        }
-    }
-
-    impl<R: AsyncBufReadExt + Unpin> AsyncRead for R {
-        #[rustfmt::skip]
-        type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
-        fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-            async move {
-                Ok(AsyncBufReadExt::read(self, buf)
-                    .await
-                    .map_err(|_| TlsError::IoError)?)
-            }
-        }
-    }
-}
-
-#[cfg(feature = "futures")]
+#[cfg(all(feature = "futures", feature = "async"))]
 mod runtime {
     use crate::{
         traits::{AsyncRead, AsyncWrite},
@@ -202,7 +172,7 @@ mod runtime {
     }
 }
 
-#[cfg(any(feature = "tokio", feature = "embassy", feature = "futures"))]
+#[cfg(all(feature = "async", any(feature = "tokio", feature = "futures")))]
 pub use runtime::*;
 
 #[cfg(feature = "std")]

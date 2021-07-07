@@ -8,7 +8,7 @@ authors = [
 ]
 
 [dependencies]
-drogue-tls = { path = "../..", features = ["embassy", "log"], default-features = false }
+drogue-tls = { path = "../..", features = ["async", "log"], default-features = false }
 env_logger = "0.8"
 rand_core = { version = "0.6.2", default-features = false }
 rand = "0.8"
