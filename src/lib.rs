@@ -213,16 +213,21 @@ pub mod stdlib {
         TlsError,
     };
     use std::io::{Read, Write};
-    use std::net::TcpStream;
 
-    impl TlsRead for TcpStream {
+    impl<R> TlsRead for R
+    where
+        R: Read,
+    {
         fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Result<usize, TlsError> {
             let len = Read::read(self, buf).map_err(|_| TlsError::IoError)?;
             Ok(len)
         }
     }
 
-    impl TlsWrite for TcpStream {
+    impl<W> TlsWrite for W
+    where
+        W: Write,
+    {
         fn write<'m>(&'m mut self, buf: &'m [u8]) -> Result<usize, TlsError> {
             let len = Write::write(self, buf).map_err(|_| TlsError::IoError)?;
             Ok(len)
