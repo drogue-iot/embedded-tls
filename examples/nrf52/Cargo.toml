@@ -1,0 +1,21 @@
+[package]
+name = "nrf52"
+version = "0.2.0"
+edition = "2018"
+authors = [
+    "Bob McWhirter <bmcwhirt@redhat.com>",
+    "Ulf Lilleengen <lulf@redhat.com>"
+]
+
+[dependencies]
+drogue-tls = { path = "../..", features = ["log", "async"], default-features = false }
+rand_core = { version = "0.6.3", default-features = false }
+cortex-m = { version = "0.6", features = ["inline-asm"] }
+cortex-m-rt = { version = "0.6", features = ["device"] }
+
+rtt-target = {version = "0.2.0", features = ["cortex-m"] }
+panic-halt = "0.2.0"
+nrf52833-hal = { git = "https://github.com/nrf-rs/nrf-hal.git", rev = "45d236aa7d6020c55aa125cb70eb87e1b00be837", features = ["rt"] }
+log = "0.4.11"
+rtt-logger = "0.1.0"
+embedded-hal = { version = "0.2.3", features = ["unproven"] }
