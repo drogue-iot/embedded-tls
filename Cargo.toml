@@ -12,7 +12,7 @@ readme = "README.md"
 homepage = "https://drogue.io"
 repository = "https://github.com/drogue-iot/drogue-tls"
 license = "Apache-2.0"
-keywords = ["embedded", "async", "tls", "no_std", "tls1.3", "network"]
+keywords = ["embedded", "async", "tls", "no_std", "tls13", "network"]
 exclude = [".github"]
 
 [dependencies]
