@@ -9,7 +9,6 @@ use nrf52833_hal as hal;
 use panic_halt as _;
 
 use drogue_tls::blocking::*;
-use drogue_tls::TlsError;
 
 use cortex_m_rt::entry;
 use log::LevelFilter;

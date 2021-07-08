@@ -5,7 +5,6 @@ use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
 use crate::{
     traits::{Read, Write},
-    TlsError,
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -13,6 +12,7 @@ use crate::application_data::ApplicationData;
 use heapless::spsc::Queue;
 
 pub use crate::config::*;
+pub use crate::TlsError;
 
 // Some space needed by TLS record
 const TLS_RECORD_OVERHEAD: usize = 128;

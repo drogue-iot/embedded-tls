@@ -26,4 +26,4 @@ jobs:
         run: cargo test
 
       - name: Build examples
-        run: for i in embassy blocking tokio; do pushd examples/$i; cargo build; popd; done;
+        run: for i in embassy blocking tokio nrf52; do pushd examples/$i; cargo build; popd; done;
