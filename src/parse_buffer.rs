@@ -1,5 +1,5 @@
 use crate::TlsError;
-use heapless::{ArrayLength, Vec};
+use heapless::Vec;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -20,7 +20,7 @@ impl<'b> From<&'b [u8]> for ParseBuffer<'b> {
     }
 }
 
-impl<'b, N: ArrayLength<u8>> From<ParseBuffer<'b>> for Result<Vec<u8, N>, ()> {
+impl<'b, const N: usize> From<ParseBuffer<'b>> for Result<Vec<u8, N>, ()> {
     fn from(val: ParseBuffer<'b>) -> Self {
         Vec::from_slice(&val.buffer[val.pos..])
     }
@@ -115,7 +115,7 @@ impl<'b> ParseBuffer<'b> {
         }
     }
 
-    pub fn copy<N: ArrayLength<u8>>(
+    pub fn copy<const N: usize>(
         &mut self,
         dest: &mut Vec<u8, N>,
         num_bytes: usize,

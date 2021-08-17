@@ -1,4 +1,4 @@
-use heapless::{consts::*, Vec};
+use heapless::Vec;
 use p256::ecdh::EphemeralSecret;
 use p256::elliptic_curve::rand_core::{CryptoRng, RngCore};
 use p256::EncodedPoint;
@@ -66,28 +66,36 @@ where
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
         // extensions (1+)
-        let mut extensions = Vec::<ClientExtension, U16>::new();
+        let mut extensions = Vec::<ClientExtension, 16>::new();
         let extension_length_marker = buf.len();
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
-        let mut versions = Vec::<ProtocolVersion, U16>::new();
+        let mut versions = Vec::<ProtocolVersion, 16>::new();
         versions.push(TLS13).map_err(|_| TlsError::EncodeError)?;
 
         extensions
             .push(ClientExtension::SupportedVersions { versions })
             .map_err(|_| TlsError::EncodeError)?;
 
-        let mut supported_signature_algorithms = Vec::<SignatureScheme, U16>::new();
-        supported_signature_algorithms.extend(self.config.signature_schemes.iter());
+        let mut supported_signature_algorithms = Vec::<SignatureScheme, 16>::new();
+        for scheme in self.config.signature_schemes.iter() {
+            supported_signature_algorithms
+                .push(*scheme)
+                .map_err(|_| TlsError::EncodeError)?;
+        }
         extensions
             .push(ClientExtension::SignatureAlgorithms {
                 supported_signature_algorithms,
             })
             .map_err(|_| TlsError::EncodeError)?;
 
-        let mut supported_groups = Vec::<NamedGroup, U16>::new();
-        supported_groups.extend(self.config.named_groups.iter());
+        let mut supported_groups = Vec::<NamedGroup, 16>::new();
+        for named_group in self.config.named_groups.iter() {
+            supported_groups
+                .push(*named_group)
+                .map_err(|_| TlsError::EncodeError)?;
+        }
         extensions
             .push(ClientExtension::SupportedGroups { supported_groups })
             .map_err(|_| TlsError::EncodeError)?;

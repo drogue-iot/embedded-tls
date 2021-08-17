@@ -3,7 +3,7 @@ use crate::extensions::ExtensionType;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::supported_versions::ProtocolVersion;
 use crate::TlsError;
-use heapless::{consts::*, Vec};
+use heapless::Vec;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -38,7 +38,7 @@ impl<'a> KeyShare<'a> {
 impl<'a> ServerExtension<'a> {
     pub fn parse_vector(
         buf: &mut ParseBuffer<'a>,
-    ) -> Result<Vec<ServerExtension<'a>, U16>, TlsError> {
+    ) -> Result<Vec<ServerExtension<'a>, 16>, TlsError> {
         let mut extensions = Vec::new();
 
         loop {

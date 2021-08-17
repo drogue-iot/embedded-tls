@@ -1,7 +1,7 @@
 use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
-use heapless::ArrayLength;
+use generic_array::ArrayLength;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

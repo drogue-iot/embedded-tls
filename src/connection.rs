@@ -35,14 +35,11 @@ use crate::content_types::ContentType;
 use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadInPlace, NewAead};
 use digest::FixedOutput;
-use heapless::{consts, spsc::Queue};
+use heapless::spsc::Queue;
 
 pub(crate) fn decrypt_record<'m, CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    records: &mut Queue<
-        ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>,
-        consts::U4,
-    >,
+    records: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, 4>,
     record: ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>,
 ) -> Result<(), TlsError>
 where

@@ -11,6 +11,13 @@ pub struct Finished<N: ArrayLength<u8>> {
     pub hash: Option<GenericArray<u8, N>>,
 }
 
+#[cfg(feature = "defmt")]
+impl<N: ArrayLength<u8>> defmt::Format for Finished<N> {
+    fn format(&self, f: defmt::Formatter<'_>) {
+        defmt::write!(f, "verify length:{}", &self.verify.len());
+    }
+}
+
 impl<N: ArrayLength<u8>> Debug for Finished<N> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Finished")

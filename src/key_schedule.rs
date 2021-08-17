@@ -3,7 +3,7 @@ use crate::TlsError;
 use core::marker::PhantomData;
 use digest::generic_array::ArrayLength;
 use digest::{BlockInput, FixedOutput, Reset, Update};
-use heapless::{consts::*, Vec};
+use heapless::Vec;
 use hkdf::Hkdf;
 use hmac::crypto_mac::NewMac;
 use hmac::{Hmac, Mac};
@@ -276,7 +276,7 @@ where
         label: &[u8],
         context_type: ContextType,
         len: u16,
-    ) -> Result<Vec<u8, U512>, TlsError> {
+    ) -> Result<Vec<u8, 512>, TlsError> {
         //info!("make label {:?} {}", label, len);
         let mut hkdf_label = Vec::new();
         hkdf_label

@@ -1,4 +1,4 @@
-use heapless::{consts::*, Vec};
+use heapless::Vec;
 
 use crate::extensions::server::ServerExtension;
 use crate::parse_buffer::ParseBuffer;
@@ -11,7 +11,7 @@ pub struct NewSessionTicket<'a> {
     age_add: u32,
     nonce: &'a [u8],
     ticket: &'a [u8],
-    extensions: Vec<ServerExtension<'a>, U16>,
+    extensions: Vec<ServerExtension<'a>, 16>,
 }
 
 impl<'a> NewSessionTicket<'a> {

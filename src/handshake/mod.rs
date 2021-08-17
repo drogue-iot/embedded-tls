@@ -1,4 +1,4 @@
-use heapless::ArrayLength;
+use generic_array::ArrayLength;
 
 //use p256::elliptic_curve::AffinePoint;
 use crate::buffer::*;
@@ -145,6 +145,21 @@ impl<'a, N: ArrayLength<u8>> Debug for ServerHandshake<'a, N> {
             ServerHandshake::CertificateVerify(inner) => Debug::fmt(inner, f),
             ServerHandshake::Finished(inner) => Debug::fmt(inner, f),
             ServerHandshake::NewSessionTicket(inner) => Debug::fmt(inner, f),
+        }
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl<'a, N: ArrayLength<u8>> defmt::Format for ServerHandshake<'a, N> {
+    fn format(&self, f: defmt::Formatter<'_>) {
+        match self {
+            ServerHandshake::ServerHello(inner) => defmt::write!(f, "{}", inner),
+            ServerHandshake::EncryptedExtensions(inner) => defmt::write!(f, "{}", inner),
+            ServerHandshake::Certificate(inner) => defmt::write!(f, "{}", inner),
+            ServerHandshake::CertificateRequest(inner) => defmt::write!(f, "{}", inner),
+            ServerHandshake::CertificateVerify(inner) => defmt::write!(f, "{}", inner),
+            ServerHandshake::Finished(inner) => defmt::write!(f, "{}", inner),
+            ServerHandshake::NewSessionTicket(inner) => defmt::write!(f, "{}", inner),
         }
     }
 }

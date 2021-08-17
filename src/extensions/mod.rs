@@ -8,7 +8,7 @@ use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
 use crate::supported_versions::ProtocolVersions;
 use crate::TlsError;
-use heapless::{consts::*, Vec};
+use heapless::Vec;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -76,17 +76,17 @@ pub enum ClientExtension<'a> {
         versions: ProtocolVersions,
     },
     SignatureAlgorithms {
-        supported_signature_algorithms: Vec<SignatureScheme, U16>,
+        supported_signature_algorithms: Vec<SignatureScheme, 16>,
     },
     SupportedGroups {
-        supported_groups: Vec<NamedGroup, U16>,
+        supported_groups: Vec<NamedGroup, 16>,
     },
     KeyShare {
         group: NamedGroup,
         opaque: &'a [u8],
     },
     SignatureAlgorithmsCert {
-        supported_signature_algorithms: Vec<SignatureScheme, U16>,
+        supported_signature_algorithms: Vec<SignatureScheme, 16>,
     },
     MaxFragmentLength(MaxFragmentLength),
 }

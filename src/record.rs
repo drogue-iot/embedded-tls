@@ -10,7 +10,7 @@ use crate::TlsError;
 use core::fmt::Debug;
 use core::ops::Range;
 use digest::{BlockInput, FixedOutput, Reset, Update};
-use heapless::ArrayLength;
+use generic_array::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
 

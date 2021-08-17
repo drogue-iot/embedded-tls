@@ -1,4 +1,4 @@
-use heapless::{consts::*, Vec};
+use heapless::Vec;
 
 use crate::cipher_suites::CipherSuite;
 use crate::crypto_engine::CryptoEngine;
@@ -17,7 +17,7 @@ pub struct ServerHello<'a> {
     random: Random,
     legacy_session_id_echo: &'a [u8],
     cipher_suite: CipherSuite,
-    extensions: Vec<ServerExtension<'a>, U16>,
+    extensions: Vec<ServerExtension<'a>, 16>,
 }
 
 impl<'a> ServerHello<'a> {

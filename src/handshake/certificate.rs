@@ -1,12 +1,12 @@
 use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
-use heapless::{consts::*, Vec};
+use heapless::Vec;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Certificate<'a> {
-    entries: Vec<CertificateEntry<'a>, U16>,
+    entries: Vec<CertificateEntry<'a>, 16>,
 }
 
 impl<'a> Certificate<'a> {
@@ -50,7 +50,7 @@ pub enum CertificateEntry<'a> {
 impl<'a> CertificateEntry<'a> {
     pub fn parse_vector(
         buf: &mut ParseBuffer<'a>,
-    ) -> Result<Vec<CertificateEntry<'a>, U16>, TlsError> {
+    ) -> Result<Vec<CertificateEntry<'a>, 16>, TlsError> {
         let mut entries = Vec::new();
         loop {
             let entry_len = buf.read_u24().map_err(|_| TlsError::InvalidCertificate)?;

@@ -24,7 +24,7 @@ sha2 = { version = "0.9.3", default-features = false }
 aes-gcm = { version = "0.8.0", default-features = false, features = ["aes"] }
 digest = { version = "0.9.0", default-features = false }
 typenum = "1.13.0"
-heapless = "0.6"
+heapless = { version = "0.7", features = ["defmt-impl"] }
 generic-array = "0.14"
 nom = { version = "6.1.2", default-features = false }
 

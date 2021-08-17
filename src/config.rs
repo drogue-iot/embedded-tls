@@ -6,9 +6,10 @@ use aes_gcm::{AeadInPlace, Aes128Gcm, NewAead};
 use core::marker::PhantomData;
 use digest::{BlockInput, FixedOutput, Reset, Update};
 use generic_array::ArrayLength;
-use heapless::{consts::*, Vec};
+use heapless::Vec;
 use rand_core::{CryptoRng, RngCore};
 pub use sha2::Sha256;
+use typenum::{U12, U16};
 
 const TLS_RECORD_MAX: usize = 16384;
 
@@ -43,8 +44,8 @@ where
     //pub(crate) cipher_suites: Vec<CipherSuite, U16>,
     pub(crate) server_name: Option<&'a str>,
     pub(crate) cipher_suite: PhantomData<CipherSuite>,
-    pub(crate) signature_schemes: Vec<SignatureScheme, U16>,
-    pub(crate) named_groups: Vec<NamedGroup, U16>,
+    pub(crate) signature_schemes: Vec<SignatureScheme, 16>,
+    pub(crate) named_groups: Vec<NamedGroup, 16>,
     pub(crate) max_fragment_length: MaxFragmentLength,
 }
 
