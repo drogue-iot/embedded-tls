@@ -1,7 +1,7 @@
 #![macro_use]
 #![allow(incomplete_features)]
 #![feature(generic_associated_types)]
-#![feature(min_type_alias_impl_trait)]
+#![feature(type_alias_impl_trait)]
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
 use std::sync::Once;
