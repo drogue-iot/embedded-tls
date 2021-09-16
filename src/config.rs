@@ -85,19 +85,12 @@ where
         }
     }
 
-    /// Create a new context with a given random number generator, record buffer and config.
+    /// Create a new context with a given random number generator and a record buffer.
     ///
     /// NOTE: The record buffer should be sized to fit an encrypted TLS record and the TLS handshake
     /// record. The maximum value of a TLS record is 16 kB, which should be a safe value to use.
     pub fn new(rng: RNG, record_buf: &'a mut [u8]) -> Self {
-        if record_buf.len() < TLS_RECORD_MAX {
-            warn!("Record buffer length is smaller than TLS max record size");
-        }
-        Self {
-            config: TlsConfig::new(),
-            record_buf,
-            rng,
-        }
+        Self::new_with_config(rng, record_buf, TlsConfig::new())
     }
 
     /// Configure the Server Name Indication (SNI) extension to be used, passing the provided server name
