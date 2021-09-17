@@ -174,17 +174,9 @@ where
 
     /// Close a connection instance, returning the ownership of the config, random generator and the I/O provider.
     pub fn close(self) -> Result<(TlsContext<'a, CipherSuite, RNG>, Socket), TlsError> {
-        let record = if self.opened {
-            ClientRecord::Alert(
-                Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
-                true,
-            )
-        } else {
-            ClientRecord::Alert(
-                Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
-                false,
-            )
-        };
+        let record = ClientRecord::Alert(
+            Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
+            self.opened);
 
         let mut key_schedule = self.key_schedule;
         let mut delegate = self.delegate;
