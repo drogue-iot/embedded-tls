@@ -85,20 +85,12 @@ where
 {
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<Range<usize>, TlsError> {
         let content_marker = buf.len();
-        match self {
-            ClientHandshake::ClientHello(_) => {
-                buf.push(HandshakeType::ClientHello as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-            ClientHandshake::Finished(_) => {
-                buf.push(HandshakeType::Finished as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-            ClientHandshake::ClientCert(_) => {
-                buf.push(HandshakeType::Certificate as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-        }
+        let handshake_type = match self {
+            ClientHandshake::ClientHello(_) => HandshakeType::ClientHello as u8,
+            ClientHandshake::Finished(_) => HandshakeType::Finished as u8,
+            ClientHandshake::ClientCert(_) => HandshakeType::Certificate as u8,
+        };
+        buf.push(handshake_type).map_err(|_| TlsError::EncodeError)?;
 
         let content_length_marker = buf.len();
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
