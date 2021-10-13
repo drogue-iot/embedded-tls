@@ -1,5 +1,6 @@
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
+use core::convert::TryFrom;
 use heapless::Vec;
 
 #[derive(Debug)]
@@ -41,10 +42,13 @@ pub struct CertificateRequest {
     pub(crate) request_context: Vec<u8, 256>,
 }
 
-impl<'a> From<CertificateRequestRef<'a>> for CertificateRequest {
-    fn from(cert: CertificateRequestRef<'a>) -> Self {
+impl<'a> TryFrom<CertificateRequestRef<'a>> for CertificateRequest {
+    type Error = TlsError;
+    fn try_from(cert: CertificateRequestRef<'a>) -> Result<Self, Self::Error> {
         let mut request_context = Vec::new();
-        request_context.extend_from_slice(cert.request_context);
-        Self { request_context }
+        request_context
+            .extend_from_slice(cert.request_context)
+            .map_err(|_| TlsError::InsufficientSpace)?;
+        Ok(Self { request_context })
     }
 }

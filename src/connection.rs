@@ -599,7 +599,7 @@ where
                     }
                     ServerHandshake::CertificateRequest(request) => {
                         trace!("Certificate request");
-                        handshake.certificate_request.replace(request.into());
+                        handshake.certificate_request.replace(request.try_into()?);
                         cert_requested = true;
                         trace!("Certificate requested: {}", cert_requested);
                         Ok(State::ServerVerify)

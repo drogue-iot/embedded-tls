@@ -185,7 +185,6 @@ where
         let mut delegate = self.delegate;
         let mut record_buf = self.record_buf;
         let rng = self.rng;
-        let clock = self.clock;
         let config = self.config;
 
         let (_, len) = encode_record::<CipherSuite>(&mut record_buf, &mut key_schedule, &record)?;

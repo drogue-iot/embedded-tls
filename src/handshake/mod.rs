@@ -90,7 +90,8 @@ where
             ClientHandshake::Finished(_) => HandshakeType::Finished as u8,
             ClientHandshake::ClientCert(_) => HandshakeType::Certificate as u8,
         };
-        buf.push(handshake_type).map_err(|_| TlsError::EncodeError)?;
+        buf.push(handshake_type)
+            .map_err(|_| TlsError::EncodeError)?;
 
         let content_length_marker = buf.len();
         buf.push(0).map_err(|_| TlsError::EncodeError)?;

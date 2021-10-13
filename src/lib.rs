@@ -80,7 +80,36 @@ mod record;
 mod signature_schemes;
 mod supported_versions;
 pub mod traits;
+
+#[cfg(feature = "webpki")]
 mod verify;
+
+// TODO: Fix `ring` crate to build for ARM embedded targets
+#[cfg(not(feature = "webpki"))]
+mod verify {
+    pub(crate) fn verify_signature<'a, CipherSuite>(
+        _config: &crate::config::TlsConfig<'a, CipherSuite>,
+        _message: &[u8],
+        _certificate: crate::handshake::certificate::CertificateRef,
+        _verify: crate::handshake::certificate_verify::CertificateVerify,
+    ) -> Result<(), crate::TlsError>
+    where
+        CipherSuite: crate::config::TlsCipherSuite + 'static,
+    {
+        todo!("Not implemented!");
+    }
+
+    pub(crate) fn verify_certificate<'a, CipherSuite>(
+        _config: &crate::config::TlsConfig<'a, CipherSuite>,
+        _certificate: &crate::handshake::certificate::CertificateRef,
+        _now: Option<u64>,
+    ) -> Result<(), crate::TlsError>
+    where
+        CipherSuite: crate::config::TlsCipherSuite + 'static,
+    {
+        todo!("Not implemented!");
+    }
+}
 
 #[cfg(feature = "async")]
 mod tls_connection;

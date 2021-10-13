@@ -1,6 +1,6 @@
+use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
-use crate::{buffer::CryptoBuffer, parse_buffer::ParseError};
 use core::convert::TryFrom;
 use heapless::Vec;
 
@@ -80,7 +80,7 @@ impl<'a> CertificateEntryRef<'a> {
             //info!("cert len: {}", entry_len);
             let cert = buf
                 .slice(entry_len as usize)
-                .map_err(|e| TlsError::InvalidCertificateEntry)?;
+                .map_err(|_| TlsError::InvalidCertificateEntry)?;
 
             //let cert: Result<Vec<u8, _>, ()> = cert.into();
             // let cert: Result<Vec<u8, _>, ()> = Ok(Vec::new());
@@ -100,7 +100,8 @@ impl<'a> CertificateEntryRef<'a> {
         Ok(entries)
     }
 
-    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+    pub(crate) fn encode(&self, _buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+        todo!("not implemented");
         /*
         match self {
             CertificateEntry::RawPublicKey(key) => {
@@ -110,8 +111,8 @@ impl<'a> CertificateEntryRef<'a> {
                 let entry_len = (cert.len() as u32).to_be_bytes();
             }
         }
-        */
         Ok(())
+        */
     }
 }
 
