@@ -9,7 +9,6 @@ use drogue_tls::*;
 use embassy::executor::Spawner;
 use embassy::util::Forever;
 use embassy_net::*;
-use embassy_std::Executor;
 use heapless::Vec;
 use log::*;
 use rand::rngs::OsRng;
@@ -84,7 +83,7 @@ async fn main_task(spawner: Spawner) {
 
     let mut record_buffer = [0; 16384];
     let tls_context = TlsContext::new(OsRng, &mut record_buffer).with_server_name("example.com");
-    let mut tls: TlsConnection<OsRng, Transport<TcpSocket>, Aes128GcmSha256> =
+    let mut tls: TlsConnection<OsRng, NoClock, Transport<TcpSocket>, Aes128GcmSha256> =
         TlsConnection::new(tls_context, Transport { transport: socket });
 
     tls.open().await.expect("error establishing TLS connection");
@@ -103,19 +102,15 @@ fn _embassy_rand(buf: &mut [u8]) {
     OsRng.fill_bytes(buf);
 }
 
-static EXECUTOR: Forever<Executor> = Forever::new();
-
-fn main() {
+#[embassy::main]
+async fn main(spawner: Spawner) {
     env_logger::builder()
         .filter_level(log::LevelFilter::Debug)
         .filter_module("async_io", log::LevelFilter::Info)
         .format_timestamp_nanos()
         .init();
 
-    let executor = EXECUTOR.put(Executor::new());
-    executor.run(|spawner| {
-        spawner.spawn(main_task(spawner)).unwrap();
-    });
+    spawner.spawn(main_task(spawner));
 }
 
 // Keep this here until embassy crate is published

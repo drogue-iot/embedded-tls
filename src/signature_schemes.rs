@@ -86,8 +86,8 @@ impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
             SignatureScheme::RsaPssRsaeSha512 => Err(TlsError::InvalidSignatureScheme),
 
             /* EdDSA algorithms */
-            Ed25519 => Ok(&webpki::ED25519),
-            Ed448 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::Ed25519 => Ok(&webpki::ED25519),
+            SignatureScheme::Ed448 => Err(TlsError::InvalidSignatureScheme),
 
             /* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
             SignatureScheme::RsaPssPssSha256 => Err(TlsError::InvalidSignatureScheme),
