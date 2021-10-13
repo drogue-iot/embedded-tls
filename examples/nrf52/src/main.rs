@@ -30,7 +30,7 @@ fn main() -> ! {
     log::info!("Connected");
     let mut record_buffer = [0; 16384];
     let tls_context = TlsContext::new(rng, &mut record_buffer).with_server_name("example.com");
-    let mut tls: TlsConnection<Rng, Dummy, Aes128GcmSha256> =
+    let mut tls: TlsConnection<Rng, NoClock, Dummy, Aes128GcmSha256> =
         TlsConnection::new(tls_context, Dummy {});
 
     tls.open().expect("error establishing TLS connection");

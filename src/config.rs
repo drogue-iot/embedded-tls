@@ -162,6 +162,12 @@ where
             cert: None,
         };
 
+        #[cfg(not(feature = "webpki"))]
+        {
+            config.verify_cert = false;
+            config.verify_host = false;
+        }
+
         //config.cipher_suites.push(CipherSuite::TlsAes128GcmSha256);
 
         #[cfg(feature = "alloc")]

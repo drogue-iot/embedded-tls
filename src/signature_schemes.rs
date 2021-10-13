@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use crate::TlsError;
 use core::convert::TryInto;
 
@@ -65,7 +66,7 @@ impl SignatureScheme {
     }
 }
 
-#[cfg(not(feature = "alloc"))]
+#[cfg(all(not(feature = "alloc"), feature = "webpki"))]
 impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
     type Error = TlsError;
     fn try_into(self) -> Result<&'static webpki::SignatureAlgorithm, Self::Error> {
@@ -101,7 +102,7 @@ impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
     }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", feature = "webpki"))]
 impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
     type Error = TlsError;
     fn try_into(self) -> Result<&'static webpki::SignatureAlgorithm, Self::Error> {
