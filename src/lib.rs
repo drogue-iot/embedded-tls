@@ -2,6 +2,7 @@
 #![no_std]
 #![allow(incomplete_features)]
 #![allow(dead_code)]
+#![allow(non_snake_case)]
 #![cfg_attr(feature = "async", feature(generic_associated_types))]
 #![cfg_attr(feature = "async", feature(type_alias_impl_trait))]
 
