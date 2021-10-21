@@ -4,7 +4,7 @@
 #![feature(type_alias_impl_trait)]
 #![allow(incomplete_features)]
 
-use clap::{AppSettings, Clap};
+use clap::{ColorChoice, Parser};
 use drogue_tls::*;
 use embassy::executor::Spawner;
 use embassy::util::Forever;
@@ -22,9 +22,9 @@ static DEVICE: Forever<TunTapDevice> = Forever::new();
 static CONFIG: Forever<StaticConfigurator> = Forever::new();
 static NET_RESOURCES: Forever<StackResources<1, 2, 8>> = Forever::new();
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(version = "1.0")]
-#[clap(setting = AppSettings::ColoredHelp)]
+#[clap(color = ColorChoice::Always)]
 struct Opts {
     /// TAP device name
     #[clap(long, default_value = "tap0")]
