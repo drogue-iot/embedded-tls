@@ -31,12 +31,12 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let stream = TcpStream::connect("http.sandbox.drogue.cloud:443").await.expect("error creating TCP connection");
+//!     let stream = TcpStream::connect("https://sandbox.drogue.cloud:443").await.expect("error creating TCP connection");
 //!
 //!     println!("TCP connection opened");
 //!     let mut record_buffer = [0; 16384];
 //!     let tls_context = TlsContext::new(OsRng, &mut record_buffer)
-//!         .with_server_name("http.sandbox.drogue.cloud");
+//!         .with_server_name("sandbox.drogue.cloud");
 //!     let mut tls: TlsConnection<OsRng, TcpStream, Aes128GcmSha256> =
 //!         TlsConnection::new(tls_context, stream);
 //!
