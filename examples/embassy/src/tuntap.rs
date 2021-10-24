@@ -7,9 +7,13 @@ use std::io::{Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 
 pub const SIOCGIFMTU: libc::c_ulong = 0x8921;
+#[allow(dead_code)]
 pub const SIOCGIFINDEX: libc::c_ulong = 0x8933;
+#[allow(dead_code)]
 pub const ETH_P_ALL: libc::c_short = 0x0003;
+#[allow(dead_code)]
 pub const TUNSETIFF: libc::c_ulong = 0x400454CA;
+#[allow(dead_code)]
 pub const IFF_TUN: libc::c_int = 0x0001;
 pub const IFF_TAP: libc::c_int = 0x0002;
 pub const IFF_NO_PI: libc::c_int = 0x1000;
