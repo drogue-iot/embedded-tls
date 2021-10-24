@@ -6,7 +6,7 @@ use crate::handshake::{
 use crate::TlsError;
 use core::convert::TryFrom;
 use core::convert::TryInto;
-use webpki::{DnsNameRef, Error as PkiError};
+use webpki::{DnsNameRef};
 
 static ALL_SIGALGS: &[&webpki::SignatureAlgorithm] = &[
     &webpki::ECDSA_P256_SHA256,
@@ -123,12 +123,10 @@ where
         host_verified = true;
     }
     if !verified && config.verify_cert {
-        panic!("CERT NOT VERIFIED");
         return Err(TlsError::InvalidCertificate);
     }
 
     if !host_verified && config.verify_host {
-        panic!("HOST NOT VERIFIED");
         return Err(TlsError::InvalidCertificate);
     }
     Ok(())
