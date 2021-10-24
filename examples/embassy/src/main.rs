@@ -110,7 +110,7 @@ async fn main(spawner: Spawner) {
         .format_timestamp_nanos()
         .init();
 
-    spawner.spawn(main_task(spawner));
+    spawner.spawn(main_task(spawner)).unwrap();
 }
 
 // Keep this here until embassy crate is published
