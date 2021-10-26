@@ -32,10 +32,7 @@
 //!
 //! ```
 //! use drogue_tls::*;
-//! use core::future::Future;
 //! use rand::rngs::OsRng;
-//! use std::error::Error;
-//! use tokio::io::{AsyncReadExt, AsyncWriteExt};
 //! use tokio::net::TcpStream;
 //!
 //! #[tokio::main]
