@@ -98,7 +98,6 @@ where
     /// Returns the number of bytes written.
     pub async fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
         if self.opened {
-            trace!("TLS WRITE");
             let mut wp = 0;
             let mut remaining = buf.len();
 
@@ -129,7 +128,6 @@ where
     /// loosing data.
     pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
         if self.opened {
-            trace!("TLS READ");
             let mut remaining = buf.len();
             // Note: Read only a single ApplicationData record for now, as we don't do any buffering.
             while remaining == buf.len() {
