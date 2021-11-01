@@ -47,7 +47,7 @@
 //!     let mut tls: TlsConnection<OsRng, std::time::SystemTime, TcpStream, Aes128GcmSha256> =
 //!         TlsConnection::new(tls_context, stream);
 //!
-//!     tls.open().await.expect("error establishing TLS connection");
+//!     tls.open::<4096>().await.expect("error establishing TLS connection");
 //!
 //!     println!("TLS session opened");
 //! }

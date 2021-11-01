@@ -56,7 +56,7 @@ async fn test_ping() {
     let sz = core::mem::size_of::<TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256>>();
     log::info!("SIZE of connection is {}", sz);
 
-    let open_fut = tls.open();
+    let open_fut = tls.open::<4096>();
     log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
     open_fut.await.expect("error establishing TLS connection");
 
@@ -97,7 +97,8 @@ fn test_blocking_ping() {
     let mut tls: TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256> =
         TlsConnection::new(tls_context, stream);
 
-    tls.open().expect("error establishing TLS connection");
+    tls.open::<4096>()
+        .expect("error establishing TLS connection");
 
     tls.write(b"ping").expect("error writing data");
 
