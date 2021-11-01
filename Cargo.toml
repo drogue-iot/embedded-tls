@@ -55,7 +55,6 @@ pem-parser = "0.1.1"
 
 [features]
 default = ["std", "async", "tokio", "log"]
-alloc = ["webpki/alloc"]
 std = []
 async = []
 defmt-trace = [ ]
