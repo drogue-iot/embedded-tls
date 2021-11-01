@@ -365,17 +365,20 @@ impl<'a> State {
                     .traffic_hash
                     .replace(key_schedule.transcript_hash().clone());
 
-                let request_context = handshake
-                    .certificate
+                let request_context = &handshake
+                    .certificate_request
                     .as_ref()
                     .ok_or(TlsError::InvalidHandshake)?
-                    .request_context();
+                    .request_context;
 
-                let mut certificate = CertificateRef::with_context(request_context);
-
-                if let Some(cert) = &config.cert {
+                let certificate = if let Some(cert) = &config.cert {
+                    let mut certificate = CertificateRef::with_context(request_context);
                     certificate.add(cert.into())?;
-                }
+                    certificate
+                } else {
+                    CertificateRef::with_context(&[])
+                };
+
                 let client_handshake = ClientHandshake::ClientCert(certificate);
                 let client_cert: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::Handshake(client_handshake, true);
@@ -477,11 +480,11 @@ impl<'a> State {
                     .traffic_hash
                     .replace(key_schedule.transcript_hash().clone());
 
-                let request_context = handshake
-                    .certificate
+                let request_context = &handshake
+                    .certificate_request
                     .as_ref()
                     .ok_or(TlsError::InvalidHandshake)?
-                    .request_context();
+                    .request_context;
 
                 let mut certificate = CertificateRef::with_context(request_context);
                 if let Some(cert) = &config.cert {
@@ -565,7 +568,6 @@ where
     Clock: TlsClock + 'static,
 {
     let mut records = Queue::new();
-    let mut cert_requested = false;
     decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
 
     let mut state = State::ServerVerify;
@@ -598,10 +600,8 @@ where
                         Ok(State::ServerVerify)
                     }
                     ServerHandshake::CertificateRequest(request) => {
-                        trace!("Certificate request");
+                        trace!("Certificate requested");
                         handshake.certificate_request.replace(request.try_into()?);
-                        cert_requested = true;
-                        trace!("Certificate requested: {}", cert_requested);
                         Ok(State::ServerVerify)
                     }
                     ServerHandshake::Finished(finished) => {
@@ -609,7 +609,7 @@ where
                         let verified = key_schedule.verify_server_finished(&finished)?;
                         if verified {
                             // trace!("server verified {}", verified);
-                            if cert_requested {
+                            if handshake.certificate_request.is_some() {
                                 Ok(State::ClientCert)
                             } else {
                                 handshake
