@@ -29,7 +29,7 @@ generic-array = "0.14"
 nom = { version = "6.1.2", default-features = false }
 #webpki = { version = "0.22.0", default-features = false }
 #webpki = { path = "../../webpki", default-features = false }
-webpki = { git = "https://github.com/lulf/webpki", rev = "d5188bd8c0a2c9cb14ec7835e63253e793e720a1", default-features = false, optional = true }
+#webpki = { git = "https://github.com/lulf/webpki", rev = "d5188bd8c0a2c9cb14ec7835e63253e793e720a1", default-features = false, optional = true }
 
 # Logging alternatives
 log = { version = "0.4", optional = true }
@@ -55,8 +55,8 @@ pem-parser = "0.1.1"
 
 [features]
 default = ["std", "async", "tokio", "log", "alloc", "certverify"]
-certverify = ["webpki"]
-alloc = ["webpki/alloc"]
+#certverify = ["webpki"]
+#alloc = ["webpki/alloc"]
 std = []
 async = []
 defmt-trace = [ ]
