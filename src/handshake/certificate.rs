@@ -129,19 +129,19 @@ impl<'a> From<&crate::config::Certificate<'a>> for CertificateEntryRef<'a> {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Certificate {
+pub struct Certificate<const N: usize> {
     request_context: Vec<u8, 256>,
     num_entries: usize,
-    entries_data: Vec<u8, 8192>,
+    entries_data: Vec<u8, N>,
 }
 
-impl Certificate {
+impl<const N: usize> Certificate<N> {
     pub fn request_context(&self) -> &[u8] {
         &self.request_context[..]
     }
 }
 
-impl<'a> TryFrom<CertificateRef<'a>> for Certificate {
+impl<'a, const N: usize> TryFrom<CertificateRef<'a>> for Certificate<N> {
     type Error = TlsError;
     fn try_from(cert: CertificateRef<'a>) -> Result<Self, Self::Error> {
         let mut request_context = Vec::new();
@@ -161,9 +161,9 @@ impl<'a> TryFrom<CertificateRef<'a>> for Certificate {
     }
 }
 
-impl<'a> TryFrom<&'a Certificate> for CertificateRef<'a> {
+impl<'a, const N: usize> TryFrom<&'a Certificate<N>> for CertificateRef<'a> {
     type Error = TlsError;
-    fn try_from(cert: &'a Certificate) -> Result<Self, Self::Error> {
+    fn try_from(cert: &'a Certificate<N>) -> Result<Self, Self::Error> {
         let request_context = cert.request_context();
         let entries =
             CertificateEntryRef::parse_vector(&mut ParseBuffer::from(&cert.entries_data[..]))?;

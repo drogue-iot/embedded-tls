@@ -6,7 +6,7 @@ use crate::handshake::{
 use crate::TlsError;
 use core::convert::TryFrom;
 use core::convert::TryInto;
-use webpki::{DnsNameRef};
+use webpki::DnsNameRef;
 
 static ALL_SIGALGS: &[&webpki::SignatureAlgorithm] = &[
     &webpki::ECDSA_P256_SHA256,

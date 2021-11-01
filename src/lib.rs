@@ -85,7 +85,7 @@ mod verify;
 #[cfg(not(feature = "webpki"))]
 mod verify {
     pub(crate) fn verify_signature<'a, CipherSuite>(
-        _config: &crate::config::TlsConfig<'a, CipherSuite>,
+        config: &crate::config::TlsConfig<'a, CipherSuite>,
         _message: &[u8],
         _certificate: crate::handshake::certificate::CertificateRef,
         _verify: crate::handshake::certificate_verify::CertificateVerify,
@@ -93,18 +93,26 @@ mod verify {
     where
         CipherSuite: crate::config::TlsCipherSuite + 'static,
     {
-        todo!("Not implemented!");
+        if config.verify_cert {
+            todo!("Not implemented!")
+        } else {
+            Ok(())
+        }
     }
 
     pub(crate) fn verify_certificate<'a, CipherSuite>(
-        _config: &crate::config::TlsConfig<'a, CipherSuite>,
+        config: &crate::config::TlsConfig<'a, CipherSuite>,
         _certificate: &crate::handshake::certificate::CertificateRef,
         _now: Option<u64>,
     ) -> Result<(), crate::TlsError>
     where
         CipherSuite: crate::config::TlsCipherSuite + 'static,
     {
-        todo!("Not implemented!");
+        if config.verify_cert {
+            todo!("Not implemented!")
+        } else {
+            Ok(())
+        }
     }
 }
 
