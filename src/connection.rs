@@ -293,6 +293,7 @@ where
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum State {
     ClientHello,
     ServerHello,
