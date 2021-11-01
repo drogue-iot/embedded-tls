@@ -581,7 +581,9 @@ where
                         trace!("Verifying certificate!");
                         verify_certificate(config, &certificate, Clock::now())?;
 
-                        handshake.certificate.replace(certificate.try_into()?);
+                        if config.verify_cert {
+                            handshake.certificate.replace(certificate.try_into()?);
+                        }
                         handshake
                             .certificate_transcript
                             .replace(key_schedule.transcript_hash().clone());
@@ -589,7 +591,6 @@ where
                         Ok(State::ServerVerify)
                     }
                     ServerHandshake::CertificateVerify(verify) => {
-                        let certificate = handshake.certificate.as_ref().unwrap().try_into()?;
                         let handshake_hash = handshake.certificate_transcript.take().unwrap();
                         let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
                         let mut msg: Vec<u8, 130> = Vec::new();
@@ -598,7 +599,11 @@ where
                             .map_err(|_| TlsError::EncodeError)?;
                         msg.extend_from_slice(&handshake_hash.finalize())
                             .map_err(|_| TlsError::EncodeError)?;
-                        verify_signature(config, &msg[..], certificate, verify)?;
+
+                        if config.verify_cert {
+                            let certificate = handshake.certificate.as_ref().unwrap().try_into()?;
+                            verify_signature(config, &msg[..], certificate, verify)?;
+                        }
                         Ok(State::ServerVerify)
                     }
                     ServerHandshake::CertificateRequest(request) => {
