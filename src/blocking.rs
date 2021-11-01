@@ -57,17 +57,19 @@ where
     /// Open a TLS connection, performing the handshake with the configuration provided when creating
     /// the connection instance.
     ///
+    /// The handshake may support certificates up to CERT_SIZE.
+    ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection instance
     /// must be recreated.
-    pub fn open<'m>(&mut self) -> Result<(), TlsError>
+    pub fn open<'m, const CERT_SIZE: usize>(&mut self) -> Result<(), TlsError>
     where
         'a: 'm,
     {
-        let mut handshake: Handshake<CipherSuite> = Handshake::new();
+        let mut handshake: Handshake<CipherSuite, CERT_SIZE> = Handshake::new();
         let mut state = State::ClientHello;
 
         loop {
-            let next_state = state.process_blocking::<_, _, _, Clock>(
+            let next_state = state.process_blocking::<_, _, _, Clock, CERT_SIZE>(
                 &mut self.delegate,
                 &mut handshake,
                 &mut self.record_buf,

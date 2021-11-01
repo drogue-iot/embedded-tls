@@ -86,7 +86,9 @@ async fn main_task(spawner: Spawner) {
     let mut tls: TlsConnection<OsRng, NoClock, Transport<TcpSocket>, Aes128GcmSha256> =
         TlsConnection::new(tls_context, Transport { transport: socket });
 
-    tls.open().await.expect("error establishing TLS connection");
+    tls.open::<4096>()
+        .await
+        .expect("error establishing TLS connection");
 
     tls.write(b"ping").await.expect("error writing data");
 

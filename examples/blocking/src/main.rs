@@ -15,7 +15,8 @@ fn main() {
     let mut tls: TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256> =
         TlsConnection::new(tls_context, stream);
 
-    tls.open().expect("error establishing TLS connection");
+    tls.open::<4096>()
+        .expect("error establishing TLS connection");
 
     tls.write(b"ping").expect("error writing data");
 

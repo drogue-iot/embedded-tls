@@ -266,7 +266,7 @@ where
     ServerRecord::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
 }
 
-pub struct Handshake<CipherSuite>
+pub struct Handshake<CipherSuite, const CERT_SIZE: usize>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -274,14 +274,14 @@ where
     secret: Option<EphemeralSecret>,
     certificate_transcript: Option<CipherSuite::Hash>,
     certificate_request: Option<CertificateRequest>,
-    certificate: Option<Certificate>,
+    certificate: Option<Certificate<CERT_SIZE>>,
 }
 
-impl<'a, CipherSuite> Handshake<CipherSuite>
+impl<'a, CipherSuite, const CERT_SIZE: usize> Handshake<CipherSuite, CERT_SIZE>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    pub fn new() -> Handshake<CipherSuite> {
+    pub fn new() -> Handshake<CipherSuite, CERT_SIZE> {
         Handshake {
             traffic_hash: None,
             secret: None,
@@ -305,10 +305,10 @@ pub enum State {
 
 impl<'a> State {
     #[cfg(feature = "async")]
-    pub async fn process<Transport, CipherSuite, RNG, Clock>(
+    pub async fn process<Transport, CipherSuite, RNG, Clock, const CERT_SIZE: usize>(
         self,
         transport: &mut Transport,
-        handshake: &mut Handshake<CipherSuite>,
+        handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
         record_buf: &mut [u8],
         key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         config: &TlsConfig<'a, CipherSuite>,
@@ -354,7 +354,7 @@ impl<'a> State {
                     decode_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
                         .await?;
 
-                Ok(process_server_verify::<_, Clock>(
+                Ok(process_server_verify::<_, Clock, CERT_SIZE>(
                     handshake,
                     key_schedule,
                     config,
@@ -416,10 +416,10 @@ impl<'a> State {
         }
     }
 
-    pub fn process_blocking<Transport, CipherSuite, RNG, Clock>(
+    pub fn process_blocking<Transport, CipherSuite, RNG, Clock, const CERT_SIZE: usize>(
         self,
         transport: &mut Transport,
-        handshake: &mut Handshake<CipherSuite>,
+        handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
         record_buf: &mut [u8],
         key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         config: &TlsConfig<'a, CipherSuite>,
@@ -469,7 +469,7 @@ impl<'a> State {
                     key_schedule,
                 )?;
 
-                Ok(process_server_verify::<_, Clock>(
+                Ok(process_server_verify::<_, Clock, CERT_SIZE>(
                     handshake,
                     key_schedule,
                     config,
@@ -528,8 +528,8 @@ impl<'a> State {
     }
 }
 
-fn process_server_hello<CipherSuite>(
-    handshake: &mut Handshake<CipherSuite>,
+fn process_server_hello<CipherSuite, const CERT_SIZE: usize>(
+    handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record: ServerRecord<'_, <CipherSuite::Hash as FixedOutput>::OutputSize>,
 ) -> Result<(), TlsError>
@@ -558,8 +558,8 @@ where
     }
 }
 
-fn process_server_verify<'a, CipherSuite, Clock>(
-    handshake: &mut Handshake<CipherSuite>,
+fn process_server_verify<'a, CipherSuite, Clock, const CERT_SIZE: usize>(
+    handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     config: &TlsConfig<'a, CipherSuite>,
     record: ServerRecord<'_, <CipherSuite::Hash as FixedOutput>::OutputSize>,
@@ -580,6 +580,7 @@ where
                     ServerHandshake::Certificate(certificate) => {
                         trace!("Verifying certificate!");
                         verify_certificate(config, &certificate, Clock::now())?;
+
                         handshake.certificate.replace(certificate.try_into()?);
                         handshake
                             .certificate_transcript
