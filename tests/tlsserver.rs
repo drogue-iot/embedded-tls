@@ -185,7 +185,7 @@ impl Connection {
                 return;
             }
 
-            log::error!("read error {:?}", err);
+            log::warn!("read error {:?}", err);
             self.closing = true;
             return;
         }
@@ -199,7 +199,7 @@ impl Connection {
         // Process newly-received TLS messages.
         let processed = self.tls_session.process_new_packets();
         if processed.is_err() {
-            log::error!("cannot process packet: {:?}", processed);
+            log::warn!("cannot process packet: {:?}", processed);
 
             // last gasp write to send any alerts
             self.do_tls_write_and_handle_error();
@@ -215,7 +215,7 @@ impl Connection {
 
         let rc = self.tls_session.read_to_end(&mut buf);
         if rc.is_err() {
-            log::error!("plaintext read failed: {:?}", rc);
+            log::warn!("plaintext read failed: {:?}", rc);
             self.closing = true;
             return;
         }
@@ -237,7 +237,7 @@ impl Connection {
         let rc = try_read(back.read(&mut buf));
 
         if rc.is_err() {
-            log::error!("backend read failed: {:?}", rc);
+            log::warn!("backend read failed: {:?}", rc);
             self.closing = true;
             return;
         }
@@ -274,7 +274,7 @@ impl Connection {
     fn do_tls_write_and_handle_error(&mut self) {
         let rc = self.tls_write();
         if rc.is_err() {
-            log::error!("write failed {:?}", rc);
+            log::warn!("write failed {:?}", rc);
             self.closing = true;
             return;
         }
