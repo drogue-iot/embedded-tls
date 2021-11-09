@@ -20,39 +20,32 @@ const TLS_RECORD_OVERHEAD: usize = 128;
 /// Type representing an async TLS connection. An instance of this type can
 /// be used to establish a TLS connection, write and read encrypted data over this connection,
 /// and closing to free up the underlying resources.
-pub struct TlsConnection<'a, RNG, Clock, Socket, CipherSuite>
+pub struct TlsConnection<'a, Socket, CipherSuite>
 where
-    RNG: CryptoRng + RngCore + 'static,
-    Clock: TlsClock + 'static,
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
-    rng: RNG,
-    config: TlsConfig<'a, CipherSuite>,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record_buf: &'a mut [u8],
     opened: bool,
-    clock: core::marker::PhantomData<&'a Clock>,
 }
 
-impl<'a, RNG, Clock, Socket, CipherSuite> TlsConnection<'a, RNG, Clock, Socket, CipherSuite>
+impl<'a, Socket, CipherSuite> TlsConnection<'a, Socket, CipherSuite>
 where
-    RNG: CryptoRng + RngCore + 'static,
-    Clock: TlsClock,
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
     /// Create a new TLS connection with the provided context and a async I/O implementation
-    pub fn new(context: TlsContext<'a, CipherSuite, RNG, Clock>, delegate: Socket) -> Self {
+    ///
+    /// NOTE: The record buffer should be sized to fit an encrypted TLS record and the TLS handshake
+    /// record. The maximum value of a TLS record is 16 kB, which should be a safe value to use.
+    pub fn new(delegate: Socket, record_buf: &'a mut [u8]) -> Self {
         Self {
             delegate,
-            config: context.config,
-            rng: context.rng,
             opened: false,
             key_schedule: KeySchedule::new(),
-            record_buf: context.record_buf,
-            clock: core::marker::PhantomData,
+            record_buf,
         }
     }
 
@@ -63,7 +56,15 @@ where
     ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection instance
     /// must be recreated.
-    pub async fn open<'m, const CERT_SIZE: usize>(&mut self) -> Result<(), TlsError>
+    pub async fn open<
+        'm,
+        RNG: CryptoRng + RngCore + 'static,
+        Clock: TlsClock + 'static,
+        const CERT_SIZE: usize,
+    >(
+        &mut self,
+        context: TlsContext<'m, CipherSuite, RNG>,
+    ) -> Result<(), TlsError>
     where
         'a: 'm,
     {
@@ -77,8 +78,8 @@ where
                     &mut handshake,
                     &mut self.record_buf,
                     &mut self.key_schedule,
-                    &self.config,
-                    &mut self.rng,
+                    context.config,
+                    context.rng,
                 )
                 .await?;
             trace!("State {:?} -> {:?}", state, next_state);
@@ -182,9 +183,7 @@ where
     }
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
-    pub async fn close(
-        self,
-    ) -> Result<(TlsContext<'a, CipherSuite, RNG, Clock>, Socket), TlsError> {
+    pub async fn close(self) -> Result<Socket, TlsError> {
         let record = ClientRecord::Alert(
             Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
             self.opened,
@@ -193,8 +192,6 @@ where
         let mut key_schedule = self.key_schedule;
         let mut delegate = self.delegate;
         let mut record_buf = self.record_buf;
-        let rng = self.rng;
-        let config = self.config;
 
         let (_, len) = encode_record::<CipherSuite>(&mut record_buf, &mut key_schedule, &record)?;
 
@@ -202,9 +199,6 @@ where
 
         key_schedule.increment_write_counter();
 
-        Ok((
-            TlsContext::new_with_config(rng, record_buf, config),
-            delegate,
-        ))
+        Ok(delegate)
     }
 }

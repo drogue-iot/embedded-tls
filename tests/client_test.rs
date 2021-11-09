@@ -46,17 +46,18 @@ async fn test_ping() {
 
     log::info!("Connected");
     let mut record_buffer = [0; 16384];
-    let tls_context = TlsContext::new(OsRng, &mut record_buffer)
+    let config = TlsConfig::new()
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256> =
-        TlsConnection::new(tls_context, stream);
+    let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
+        TlsConnection::new(stream, &mut record_buffer);
 
-    let sz = core::mem::size_of::<TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256>>();
+    let sz = core::mem::size_of::<TlsConnection<TcpStream, Aes128GcmSha256>>();
     log::info!("SIZE of connection is {}", sz);
 
-    let open_fut = tls.open::<4096>();
+    let mut rng = OsRng;
+    let open_fut = tls.open::<OsRng, SystemTime, 4096>(TlsContext::new(&config, &mut rng));
     log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
     open_fut.await.expect("error establishing TLS connection");
 
