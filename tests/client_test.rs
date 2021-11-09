@@ -92,13 +92,14 @@ fn test_blocking_ping() {
 
     log::info!("Connected");
     let mut record_buffer = [0; 16384];
-    let tls_context = TlsContext::new(OsRng, &mut record_buffer)
+    let config = TlsConfig::new()
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
-    let mut tls: TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256> =
-        TlsConnection::new(tls_context, stream);
 
-    tls.open::<4096>()
+    let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
+        TlsConnection::new(stream, &mut record_buffer);
+
+    tls.open::<OsRng, SystemTime, 4096>(TlsContext::new(&config, &mut OsRng))
         .expect("error establishing TLS connection");
 
     tls.write(b"ping").expect("error writing data");

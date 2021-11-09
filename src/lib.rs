@@ -45,7 +45,7 @@
 //!         .verify_cert(false)
 //!         .with_server_name("http.sandbox.drogue.cloud");
 //!     let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
-//!         TlsConnection::new(&mut record_buffer[..], stream);
+//!         TlsConnection::new(stream, &mut record_buffer);
 //!
 //!     tls.open::<OsRng, NoClock, 4096>(TlsContext::new(&config, &mut OsRng)).await.expect("error establishing TLS connection");
 //!
