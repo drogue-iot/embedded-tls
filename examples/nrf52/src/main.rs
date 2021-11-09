@@ -26,14 +26,14 @@ fn main() -> ! {
     log::set_max_level(log::LevelFilter::Info);
 
     let p = hal::pac::Peripherals::take().unwrap();
-    let rng = Rng::new(p.RNG);
+    let mut rng = Rng::new(p.RNG);
     log::info!("Connected");
     let mut record_buffer = [0; 16384];
-    let tls_context = TlsContext::new(rng, &mut record_buffer).with_server_name("example.com");
-    let mut tls: TlsConnection<Rng, NoClock, Dummy, Aes128GcmSha256> =
-        TlsConnection::new(tls_context, Dummy {});
+    let config = TlsConfig::new().with_server_name("example.com");
+    let mut tls: TlsConnection<Dummy, Aes128GcmSha256> =
+        TlsConnection::new(Dummy {}, &mut record_buffer[..]);
 
-    tls.open::<4096>()
+    tls.open::<Rng, NoClock, 4096>(TlsContext::new(&config, &mut rng))
         .expect("error establishing TLS connection");
 
     tls.write(b"ping").expect("error writing data");

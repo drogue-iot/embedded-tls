@@ -41,13 +41,13 @@
 //!
 //!     println!("TCP connection opened");
 //!     let mut record_buffer = [0; 16384];
-//!     let tls_context = TlsContext::new(OsRng, &mut record_buffer)
+//!     let config = TlsConfig::new()
 //!         .verify_cert(false)
 //!         .with_server_name("http.sandbox.drogue.cloud");
-//!     let mut tls: TlsConnection<OsRng, std::time::SystemTime, TcpStream, Aes128GcmSha256> =
-//!         TlsConnection::new(tls_context, stream);
+//!     let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
+//!         TlsConnection::new(&mut record_buffer[..], stream);
 //!
-//!     tls.open::<4096>().await.expect("error establishing TLS connection");
+//!     tls.open::<OsRng, NoClock, 4096>(TlsContext::new(&config, &mut OsRng)).await.expect("error establishing TLS connection");
 //!
 //!     println!("TLS session opened");
 //! }

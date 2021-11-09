@@ -82,11 +82,12 @@ async fn main_task(spawner: Spawner) {
     info!("connected!");
 
     let mut record_buffer = [0; 16384];
-    let tls_context = TlsContext::new(OsRng, &mut record_buffer).with_server_name("example.com");
-    let mut tls: TlsConnection<OsRng, NoClock, Transport<TcpSocket>, Aes128GcmSha256> =
-        TlsConnection::new(tls_context, Transport { transport: socket });
+    let mut rng = OsRng;
+    let config = TlsConfig::new().with_server_name("example.com");
+    let mut tls: TlsConnection<Transport<TcpSocket>, Aes128GcmSha256> =
+        TlsConnection::new(Transport { transport: socket }, &mut record_buffer);
 
-    tls.open::<4096>()
+    tls.open::<OsRng, NoClock, 4096>(TlsContext::new(&config, &mut rng))
         .await
         .expect("error establishing TLS connection");
 

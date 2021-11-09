@@ -9,13 +9,14 @@ fn main() {
 
     log::info!("Connected");
     let mut record_buffer = [0; 16384];
-    let tls_context = TlsContext::new(OsRng, &mut record_buffer)
+    let config = TlsConfig::new()
         .with_server_name("localhost")
         .verify_cert(false);
-    let mut tls: TlsConnection<OsRng, SystemTime, TcpStream, Aes128GcmSha256> =
-        TlsConnection::new(tls_context, stream);
+    let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
+        TlsConnection::new(stream, &mut record_buffer);
+    let mut rng = OsRng;
 
-    tls.open::<4096>()
+    tls.open::<OsRng, SystemTime, 4096>(TlsContext::new(&config, &mut rng))
         .expect("error establishing TLS connection");
 
     tls.write(b"ping").expect("error writing data");

@@ -67,81 +67,23 @@ impl TlsClock for NoClock {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TlsContext<'a, CipherSuite, RNG, Clock>
+pub struct TlsContext<'a, CipherSuite, RNG>
 where
     CipherSuite: TlsCipherSuite,
     RNG: CryptoRng + RngCore + 'static,
-    Clock: TlsClock + 'static,
 {
-    pub(crate) config: TlsConfig<'a, CipherSuite>,
-    pub(crate) rng: RNG,
-    clock: core::marker::PhantomData<&'a Clock>,
-    pub(crate) record_buf: &'a mut [u8],
+    pub(crate) config: &'a TlsConfig<'a, CipherSuite>,
+    pub(crate) rng: &'a mut RNG,
 }
 
-impl<'a, CipherSuite, RNG, Clock> TlsContext<'a, CipherSuite, RNG, Clock>
+impl<'a, CipherSuite, RNG> TlsContext<'a, CipherSuite, RNG>
 where
     CipherSuite: TlsCipherSuite,
     RNG: CryptoRng + RngCore + 'static,
-    Clock: TlsClock + 'static,
 {
-    /// Create a new context with a given random number generator, record buffer and config.
-    ///
-    /// NOTE: The record buffer should be sized to fit an encrypted TLS record and the TLS handshake
-    /// record. The maximum value of a TLS record is 16 kB, which should be a safe value to use.
-    pub fn new_with_config(
-        rng: RNG,
-        record_buf: &'a mut [u8],
-        config: TlsConfig<'a, CipherSuite>,
-    ) -> Self {
-        if record_buf.len() < TLS_RECORD_MAX {
-            warn!("Record buffer length is smaller than TLS max record size");
-        }
-        Self {
-            config,
-            rng,
-            clock: core::marker::PhantomData,
-            record_buf,
-        }
-    }
-
-    /// Create a new context with a given random number generator and a record buffer.
-    ///
-    /// NOTE: The record buffer should be sized to fit an encrypted TLS record and the TLS handshake
-    /// record. The maximum value of a TLS record is 16 kB, which should be a safe value to use.
-    pub fn new(rng: RNG, record_buf: &'a mut [u8]) -> Self {
-        Self::new_with_config(rng, record_buf, TlsConfig::new())
-    }
-
-    /// Configure the Server Name Indication (SNI) extension to be used, passing the provided server name
-    /// in the handshake.
-    pub fn with_server_name(mut self, server_name: &'a str) -> Self {
-        self.config = self.config.with_server_name(server_name);
-        self
-    }
-
-    /// Enable/disable verification of server certificate.
-    pub fn verify_cert(mut self, verify_cert: bool) -> Self {
-        self.config = self.config.verify_cert(verify_cert);
-        self
-    }
-
-    /// Enable/disable verification of server hostname.
-    pub fn verify_hostname(mut self, verify_hostname: bool) -> Self {
-        self.config = self.config.verify_hostname(verify_hostname);
-        self
-    }
-
-    /// Trust the provided CA.
-    pub fn with_ca(mut self, ca: Certificate<'a>) -> Self {
-        self.config = self.config.with_ca(ca);
-        self
-    }
-
-    /// Use provided cert as client certificate.
-    pub fn with_cert(mut self, cert: Certificate<'a>) -> Self {
-        self.config = self.config.with_cert(cert);
-        self
+    /// Create a new context with a given config and random number generator reference.
+    pub fn new(config: &'a TlsConfig<'a, CipherSuite>, rng: &'a mut RNG) -> Self {
+        Self { config, rng }
     }
 }
 
