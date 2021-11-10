@@ -14,16 +14,26 @@ on:
 
 
 jobs:
-  ci:
+  build:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
 
-      - name: Build
+      - name: Check
         run: cargo check
 
       - name: Test
         run: cargo test
 
-      - name: Build examples
-        run: for i in embassy blocking tokio nrf52; do pushd examples/$i; cargo build; popd; done;
+      - name: Formatting
+        run: cargo fmt --check
+
+  examples:
+    needs: build
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        example: ["embassy", "blocking", "tokio", "nrf52"]
+    steps:
+      - name: Build
+        run: pushd examples/${{ matrix.example }}; cargo build; popd
