@@ -33,7 +33,7 @@ webpki = { version = "0.21.4", git = "https://github.com/lulf/webpki", rev = "d5
 
 # Logging alternatives
 log = { version = "0.4", optional = true }
-defmt = { version = "0.2", optional = true }
+defmt = { version = "0.3", optional = true }
 
 # Runtimes supported out of the box
 tokio = { version = "1.7", features = ["net"], optional = true }
@@ -57,8 +57,3 @@ pem-parser = "0.1.1"
 default = ["std", "async", "tokio", "log"]
 std = []
 async = []
-defmt-trace = [ ]
-defmt-debug = [ ]
-defmt-info = [ ]
-defmt-warn = [ ]
-defmt-error = [ ]
