@@ -132,7 +132,7 @@ pub struct Clock;
 
 impl<W: AsyncWriteExt + AsyncBufReadExt + Unpin> AsyncWrite for Transport<W> {
     #[rustfmt::skip]
-    type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
+    type WriteFuture<'m>  = impl Future<Output = core::result::Result<usize, TlsError>> + 'm where Self: 'm;
     fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
         async move {
             Ok(AsyncWriteExt::write(&mut self.transport, buf)
@@ -144,7 +144,7 @@ impl<W: AsyncWriteExt + AsyncBufReadExt + Unpin> AsyncWrite for Transport<W> {
 
 impl<R: AsyncBufReadExt + AsyncWriteExt + Unpin> AsyncRead for Transport<R> {
     #[rustfmt::skip]
-    type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
+    type ReadFuture<'m>  = impl Future<Output = core::result::Result<usize, TlsError>> + 'm where Self: 'm;
     fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
         async move {
             Ok(AsyncBufReadExt::read(&mut self.transport, buf)
