@@ -67,11 +67,11 @@ where
     }
 
     pub(crate) fn increment_read_counter(&mut self) {
-        self.read_counter += 1;
+        self.read_counter = self.read_counter.checked_add(1).unwrap()
     }
 
     pub(crate) fn increment_write_counter(&mut self) {
-        self.write_counter += 1;
+        self.write_counter = self.write_counter.checked_add(1).unwrap()
     }
 
     pub(crate) fn reset_write_counter(&mut self) {
