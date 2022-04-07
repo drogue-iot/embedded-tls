@@ -16,17 +16,16 @@ keywords = ["embedded", "async", "tls", "no_std", "network"]
 exclude = [".github"]
 
 [dependencies]
-p256 = { version = "0.8.0-pre", default-features = false, features = [ "ecdh", "arithmetic" ] }
-rand_core = { version = "0.6.2", default-features = false }
+p256 = { version = "0.10", default-features = false, features = [ "ecdh", "arithmetic" ] }
+rand_core = { version = "0.6.3", default-features = false }
 hkdf = "0.10.0"
 hmac = "0.10.1"
 sha2 = { version = "0.9.3", default-features = false }
 aes-gcm = { version = "0.8.0", default-features = false, features = ["aes"] }
 digest = { version = "0.9.0", default-features = false }
-typenum = "1.13.0"
+typenum = { version = "1.13.0", default-features = false }
 heapless = { version = "0.7", default-features = false, features = ["defmt-impl"] }
-generic-array = "0.14"
-nom = { version = "6.1.2", default-features = false }
+generic-array = { version = "0.14", default-features = false }
 #webpki = { version = "0.22.0", default-features = false }
 #webpki = { path = "../../webpki", default-features = false }
 webpki = { version = "0.21.4", git = "https://github.com/lulf/webpki", rev = "d5188bd8c0a2c9cb14ec7835e63253e793e720a1", default-features = false, optional = true }
@@ -43,7 +42,7 @@ futures = { version = "0.3", optional = true }
 # embassy = {git = "https://github.com/embassy-rs/embassy.git", branch = "master", default-features = false, optional = true }
 
 [dev-dependencies]
-env_logger = "0.8"
+env_logger = "0.9"
 tokio = { version = "1.7", features = ["full"] }
 mio = { version = "0.7", features = ["os-poll", "tcp"] }
 rustls = "0.19.1"

@@ -8,17 +8,13 @@ authors = [
 ]
 
 [dependencies]
-drogue-tls = { path = "../..", features = ["log", "async"], default-features = false }
+drogue-tls = { path = "../..", default-features = false }
+defmt = "0.3"
+defmt-rtt = "0.3"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
 rand_core = { version = "0.6.3", default-features = false }
 cortex-m = { version = "0.7", features = ["inline-asm"] }
-cortex-m-rt = { version = "0.6", features = ["device"] }
+cortex-m-rt = { version = "0.7", features = ["device"] }
 
-rtt-target = {version = "0.2.0", features = ["cortex-m"] }
-panic-halt = "0.2.0"
 nrf52833-hal = { version = "0.14", features = ["rt"] }
-log = "0.4.11"
-rtt-logger = "0.1.0"
-embedded-hal = { version = "0.2.3", features = ["unproven"] }
-
-#[patch.crates-io]
-#ring = { path = "../../../../ring"}
+embedded-hal = { version = "0.2", features = ["unproven"] }

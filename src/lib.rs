@@ -1,4 +1,3 @@
-#![macro_use]
 #![no_std]
 #![allow(incomplete_features)]
 #![allow(dead_code)]
@@ -169,7 +168,7 @@ mod runtime {
 
     impl AsyncWrite for TcpStream {
         #[rustfmt::skip]
-        type WriteFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
+        type WriteFuture<'m> = impl Future<Output = Result<usize, TlsError>> + 'm where Self: 'm;
         fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
             async move {
                 AsyncWriteExt::write(self, buf)
@@ -181,7 +180,7 @@ mod runtime {
 
     impl AsyncRead for TcpStream {
         #[rustfmt::skip]
-        type ReadFuture<'m> where Self: 'm = impl Future<Output = Result<usize, TlsError>> + 'm;
+        type ReadFuture<'m> = impl Future<Output = Result<usize, TlsError>> + 'm where Self: 'm;
         fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
             async move {
                 AsyncReadExt::read(self, buf)

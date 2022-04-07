@@ -1,33 +1,21 @@
-#![macro_use]
-#![allow(incomplete_features)]
-#![feature(generic_associated_types)]
 #![no_std]
 #![no_main]
 
+use defmt_rtt as _;
 use nrf52833_hal as hal;
-use panic_halt as _;
+use panic_probe as _;
 
 use drogue_tls::blocking::*;
 
 use cortex_m_rt::entry;
-use log::LevelFilter;
-use rtt_logger::RTTLogger;
-use rtt_target::rtt_init_print;
 
 use hal::rng::Rng;
 
-static LOGGER: RTTLogger = RTTLogger::new(LevelFilter::Info);
-
 #[entry]
 fn main() -> ! {
-    rtt_init_print!();
-
-    log::set_logger(&LOGGER).unwrap();
-    log::set_max_level(log::LevelFilter::Info);
-
     let p = hal::pac::Peripherals::take().unwrap();
     let mut rng = Rng::new(p.RNG);
-    log::info!("Connected");
+    defmt::info!("Connected");
     let mut record_buffer = [0; 16384];
     let config = TlsConfig::new().with_server_name("example.com");
     let mut tls: TlsConnection<Dummy, Aes128GcmSha256> =
@@ -40,7 +28,7 @@ fn main() -> ! {
 
     let mut rx_buf = [0; 4096];
     let sz = tls.read(&mut rx_buf).expect("error reading data");
-    log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
+    defmt::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
     loop {}
 }
 
