@@ -2,7 +2,7 @@
 #![allow(incomplete_features)]
 #![feature(generic_associated_types)]
 
-use drogue_tls::*;
+use embedded_tls::*;
 use rand::rngs::OsRng;
 use std::error::Error;
 use tokio::net::TcpStream;

@@ -5,7 +5,7 @@ use defmt_rtt as _;
 use nrf52833_hal as hal;
 use panic_probe as _;
 
-use drogue_tls::blocking::*;
+use embedded_tls::blocking::*;
 
 use cortex_m_rt::entry;
 
@@ -34,12 +34,12 @@ fn main() -> ! {
 
 pub struct Dummy;
 
-impl drogue_tls::traits::Read for Dummy {
+impl embedded_tls::traits::Read for Dummy {
     fn read<'m>(&'m mut self, _: &'m mut [u8]) -> Result<usize, TlsError> {
         todo!()
     }
 }
-impl drogue_tls::traits::Write for Dummy {
+impl embedded_tls::traits::Write for Dummy {
     fn write<'m>(&'m mut self, _: &'m [u8]) -> Result<usize, TlsError> {
         todo!()
     }

@@ -5,7 +5,7 @@
 #![allow(incomplete_features)]
 
 use clap::{ColorChoice, Parser};
-use drogue_tls::*;
+use embedded_tls::*;
 use embassy::executor::Spawner;
 use embassy::util::Forever;
 use embassy_net::*;
@@ -118,7 +118,7 @@ async fn main(spawner: Spawner) {
 
 // Keep this here until embassy crate is published
 use core::future::Future;
-use drogue_tls::{
+use embedded_tls::{
     traits::{AsyncRead, AsyncWrite},
     TlsError,
 };
