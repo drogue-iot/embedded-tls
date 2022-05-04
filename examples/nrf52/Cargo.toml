@@ -8,7 +8,7 @@ authors = [
 ]
 
 [dependencies]
-drogue-tls = { path = "../..", default-features = false }
+embedded-tls = { path = "../..", default-features = false }
 defmt = "0.3"
 defmt-rtt = "0.3"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
