@@ -1,6 +1,6 @@
 # Embassy runtime example
 
-This example show how you can use drogue-tls with the embassy async runtime. It will attempt to connect to an endpoint, send a "ping" message, and expect a "pong" response.
+This example show how you can use embedded-tls with the embassy async runtime. It will attempt to connect to an endpoint, send a "ping" message, and expect a "pong" response.
 
 First, create the tap0 interface. You only need to do this once.
 
