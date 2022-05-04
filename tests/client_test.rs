@@ -33,7 +33,7 @@ fn setup() -> SocketAddr {
 
 #[tokio::test]
 async fn test_ping() {
-    use drogue_tls::*;
+    use embedded_tls::*;
     use std::time::SystemTime;
     use tokio::net::TcpStream;
     let addr = setup();
@@ -81,7 +81,7 @@ async fn test_ping() {
 
 #[test]
 fn test_blocking_ping() {
-    use drogue_tls::blocking::*;
+    use embedded_tls::blocking::*;
     use std::net::TcpStream;
     use std::time::SystemTime;
 

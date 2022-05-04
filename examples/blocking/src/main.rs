@@ -1,4 +1,4 @@
-use drogue_tls::blocking::*;
+use embedded_tls::blocking::*;
 use rand::rngs::OsRng;
 use std::net::TcpStream;
 use std::time::SystemTime;
