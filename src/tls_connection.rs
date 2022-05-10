@@ -76,7 +76,7 @@ where
                 .process::<_, _, _, Clock, CERT_SIZE>(
                     &mut self.delegate,
                     &mut handshake,
-                    &mut self.record_buf,
+                    self.record_buf,
                     &mut self.key_schedule,
                     context.config,
                     context.rng,
@@ -110,7 +110,7 @@ where
                 let record: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::ApplicationData(&buf[wp..to_write]);
 
-                let (_, len) = encode_record(&mut self.record_buf, key_schedule, &record)?;
+                let (_, len) = encode_record(self.record_buf, key_schedule, &record)?;
 
                 delegate.write(&self.record_buf[..len]).await?;
                 key_schedule.increment_write_counter();
@@ -134,12 +134,9 @@ where
             while remaining == buf.len() {
                 let socket = &mut self.delegate;
                 let key_schedule = &mut self.key_schedule;
-                let record = decode_record::<Socket, CipherSuite>(
-                    socket,
-                    &mut self.record_buf,
-                    key_schedule,
-                )
-                .await?;
+                let record =
+                    decode_record::<Socket, CipherSuite>(socket, self.record_buf, key_schedule)
+                        .await?;
                 let mut records = Queue::new();
                 decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
                 while let Some(record) = records.dequeue() {
@@ -191,9 +188,9 @@ where
 
         let mut key_schedule = self.key_schedule;
         let mut delegate = self.delegate;
-        let mut record_buf = self.record_buf;
+        let record_buf = self.record_buf;
 
-        let (_, len) = encode_record::<CipherSuite>(&mut record_buf, &mut key_schedule, &record)?;
+        let (_, len) = encode_record::<CipherSuite>(record_buf, &mut key_schedule, &record)?;
 
         delegate.write(&record_buf[..len]).await?;
 

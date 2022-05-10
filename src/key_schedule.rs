@@ -88,28 +88,28 @@ where
 
     pub(crate) fn get_server_key(&self) -> Result<GenericArray<u8, KeyLen>, TlsError> {
         self.hkdf_expand_label(
-            &self.server_traffic_secret.as_ref().unwrap(),
+            self.server_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16())?,
         )
     }
 
     pub(crate) fn get_client_key(&self) -> Result<GenericArray<u8, KeyLen>, TlsError> {
         self.hkdf_expand_label(
-            &self.client_traffic_secret.as_ref().unwrap(),
+            self.client_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16())?,
         )
     }
 
     fn get_server_iv(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
         self.hkdf_expand_label(
-            &self.server_traffic_secret.as_ref().unwrap(),
+            self.server_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16())?,
         )
     }
 
     fn get_client_iv(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
         self.hkdf_expand_label(
-            &self.client_traffic_secret.as_ref().unwrap(),
+            self.client_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16())?,
         )
     }
