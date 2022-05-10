@@ -41,7 +41,7 @@ use crate::content_types::ContentType;
 // use crate::handshake::new_session_ticket::NewSessionTicket;
 // use crate::handshake::server_hello::ServerHello;
 use crate::parse_buffer::ParseBuffer;
-use aes_gcm::aead::{AeadInPlace, NewAead};
+use aes_gcm::aead::{AeadCore, AeadInPlace, NewAead};
 use digest::FixedOutput;
 use heapless::spsc::Queue;
 
@@ -148,7 +148,7 @@ where
     // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
     //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
     let crypto = CipherSuite::Cipher::new(&client_key);
-    let len = buf.len() + <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize();
+    let len = buf.len() + <CipherSuite::Cipher as AeadCore>::TagSize::to_usize();
 
     if len > buf.capacity() {
         return Err(TlsError::InsufficientSpace);
@@ -156,7 +156,7 @@ where
 
     trace!(
         "output size {}",
-        <CipherSuite::Cipher as AeadInPlace>::TagSize::to_usize()
+        <CipherSuite::Cipher as AeadCore>::TagSize::to_usize()
     );
     let len_bytes = (len as u16).to_be_bytes();
     let additional_data = [
