@@ -42,13 +42,13 @@ use crate::content_types::ContentType;
 // use crate::handshake::server_hello::ServerHello;
 use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadCore, AeadInPlace, NewAead};
-use digest::FixedOutput;
+use digest::OutputSizeUser;
 use heapless::spsc::Queue;
 
 pub(crate) fn decrypt_record<'m, CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    records: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, 4>,
-    record: ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>,
+    records: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, 4>,
+    record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
 ) -> Result<(), TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
@@ -199,7 +199,7 @@ pub async fn decode_record<'m, Transport, CipherSuite>(
     transport: &mut Transport,
     rx_buf: &'m mut [u8],
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-) -> Result<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError>
+) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
 where
     Transport: AsyncRead + 'm,
     CipherSuite: TlsCipherSuite + 'static,
@@ -235,7 +235,7 @@ pub fn decode_record_blocking<'m, Transport, CipherSuite>(
     transport: &mut Transport,
     rx_buf: &'m mut [u8],
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-) -> Result<ServerRecord<'m, <CipherSuite::Hash as FixedOutput>::OutputSize>, TlsError>
+) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
 where
     Transport: Read + 'm,
     CipherSuite: TlsCipherSuite + 'static,
@@ -531,7 +531,7 @@ impl<'a> State {
 fn process_server_hello<CipherSuite, const CERT_SIZE: usize>(
     handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    record: ServerRecord<'_, <CipherSuite::Hash as FixedOutput>::OutputSize>,
+    record: ServerRecord<'_, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
 ) -> Result<(), TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
@@ -562,7 +562,7 @@ fn process_server_verify<'a, CipherSuite, Clock, const CERT_SIZE: usize>(
     handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     config: &TlsConfig<'a, CipherSuite>,
-    record: ServerRecord<'_, <CipherSuite::Hash as FixedOutput>::OutputSize>,
+    record: ServerRecord<'_, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
