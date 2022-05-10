@@ -4,7 +4,8 @@ use crate::named_groups::NamedGroup;
 use crate::signature_schemes::SignatureScheme;
 use aes_gcm::{AeadInPlace, Aes128Gcm, NewAead};
 use core::marker::PhantomData;
-use digest::{BlockInput, FixedOutput, Reset, Update};
+use digest::core_api::BlockSizeUser;
+use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
 use generic_array::ArrayLength;
 use heapless::Vec;
 use rand_core::{CryptoRng, RngCore};
@@ -19,10 +20,7 @@ pub trait TlsCipherSuite {
     type KeyLen: ArrayLength<u8>;
     type IvLen: ArrayLength<u8>;
 
-    type Hash: Update + BlockInput + FixedOutput + Reset + Default + Clone;
-    //D::BlockSize: ArrayLength<u8>,
-    //D::OutputSize: ArrayLength<u8>,
-    //;
+    type Hash: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser + FixedOutput;
 }
 
 pub struct Aes128GcmSha256;

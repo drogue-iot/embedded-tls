@@ -9,7 +9,6 @@ use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
 use core::ops::Range;
-use digest::{BlockInput, FixedOutput, Reset, Update};
 use generic_array::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
@@ -58,7 +57,7 @@ where
     }
 
     pub(crate) fn encode<
-        N: Update + BlockInput + FixedOutput + Reset + Default + Clone,
+        N: Digest + Clone,
         F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>,
     >(
         &self,

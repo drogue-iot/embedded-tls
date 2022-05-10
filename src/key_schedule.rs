@@ -1,29 +1,29 @@
 use crate::handshake::finished::Finished;
 use crate::TlsError;
 use core::marker::PhantomData;
+use digest::core_api::BlockSizeUser;
 use digest::generic_array::ArrayLength;
-use digest::{BlockInput, FixedOutput, Reset, Update};
+use digest::Reset;
 use heapless::Vec;
 use hkdf::Hkdf;
-use hmac::crypto_mac::NewMac;
-use hmac::{Hmac, Mac};
+use hmac::digest::OutputSizeUser;
+use hmac::{Mac, SimpleHmac};
 use sha2::digest::generic_array::{typenum::Unsigned, GenericArray};
 use sha2::Digest;
 
 pub struct KeySchedule<D, KeyLen, IvLen>
 where
-    D: Update + BlockInput + FixedOutput + Reset + Default + Clone,
-    D::BlockSize: ArrayLength<u8>,
-    D::OutputSize: ArrayLength<u8>,
-    //D: Digest,
+    D: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser,
+    <D as BlockSizeUser>::BlockSize: ArrayLength<u8>,
+    <D as OutputSizeUser>::OutputSize: ArrayLength<u8>,
     KeyLen: ArrayLength<u8>,
     IvLen: ArrayLength<u8>,
 {
-    secret: GenericArray<u8, D::OutputSize>,
+    secret: GenericArray<u8, <D as OutputSizeUser>::OutputSize>,
     transcript_hash: Option<D>,
-    hkdf: Option<Hkdf<D>>,
-    client_traffic_secret: Option<Hkdf<D>>,
-    server_traffic_secret: Option<Hkdf<D>>,
+    hkdf: Option<Hkdf<D, SimpleHmac<D>>>,
+    client_traffic_secret: Option<Hkdf<D, SimpleHmac<D>>>,
+    server_traffic_secret: Option<Hkdf<D, SimpleHmac<D>>>,
     read_counter: u64,
     write_counter: u64,
     _key_len: PhantomData<KeyLen>,
@@ -38,9 +38,9 @@ enum ContextType {
 
 impl<D, KeyLen, IvLen> KeySchedule<D, KeyLen, IvLen>
 where
-    D: Update + BlockInput + FixedOutput + Reset + Default + Clone,
-    D::BlockSize: ArrayLength<u8>,
-    D::OutputSize: ArrayLength<u8>,
+    D: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser,
+    <D as BlockSizeUser>::BlockSize: ArrayLength<u8>,
+    <D as OutputSizeUser>::OutputSize: ArrayLength<u8>,
     KeyLen: ArrayLength<u8>,
     IvLen: ArrayLength<u8>,
 {
@@ -114,14 +114,19 @@ where
         )
     }
 
-    pub fn create_client_finished(&self) -> Result<Finished<D::OutputSize>, TlsError> {
+    pub fn create_client_finished(
+        &self,
+    ) -> Result<Finished<<D as OutputSizeUser>::OutputSize>, TlsError> {
         let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
             self.client_traffic_secret.as_ref().unwrap(),
             &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16())?,
         )?;
 
-        let mut hmac = Hmac::<D>::new_varkey(&key).map_err(|_| TlsError::CryptoError)?;
-        hmac.update(&self.transcript_hash.as_ref().unwrap().clone().finalize());
+        let mut hmac = SimpleHmac::<D>::new_from_slice(&key).map_err(|_| TlsError::CryptoError)?;
+        Mac::update(
+            &mut hmac,
+            &self.transcript_hash.as_ref().unwrap().clone().finalize(),
+        );
         let verify = hmac.finalize().into_bytes();
 
         Ok(Finished { verify, hash: None })
@@ -129,7 +134,7 @@ where
 
     pub fn verify_server_finished(
         &self,
-        finished: &Finished<D::OutputSize>,
+        finished: &Finished<<D as OutputSizeUser>::OutputSize>,
     ) -> Result<bool, TlsError> {
         //info!("verify server finished: {:x?}", finished.verify);
         //self.client_traffic_secret.as_ref().unwrap().expand()
@@ -139,8 +144,8 @@ where
             &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16())?,
         )?;
         // info!("hmac sign key {:x?}", key);
-        let mut hmac = Hmac::<D>::new_varkey(&key).unwrap();
-        hmac.update(finished.hash.as_ref().unwrap());
+        let mut hmac = SimpleHmac::<D>::new_from_slice(&key).unwrap();
+        Mac::update(&mut hmac, finished.hash.as_ref().unwrap());
         //let code = hmac.clone().finalize().into_bytes();
         Ok(hmac.verify(&finished.verify).is_ok())
         //info!("verified {:?}", verified);
@@ -184,7 +189,7 @@ where
         padded
     }
 
-    fn zero() -> GenericArray<u8, D::OutputSize> {
+    fn zero() -> GenericArray<u8, <D as OutputSizeUser>::OutputSize> {
         GenericArray::default()
     }
 
@@ -195,7 +200,7 @@ where
 
     pub fn initialize_early_secret(&mut self) -> Result<(), TlsError> {
         let (secret, hkdf) =
-            Hkdf::<D>::extract(Some(self.secret.as_ref()), Self::zero().as_slice());
+            Hkdf::<D, SimpleHmac<D>>::extract(Some(self.secret.as_ref()), Self::zero().as_slice());
         self.hkdf.replace(hkdf);
         self.secret = secret;
         // no right-hand jaunts (yet)
@@ -203,7 +208,7 @@ where
     }
 
     pub fn initialize_handshake_secret(&mut self, ikm: &[u8]) -> Result<(), TlsError> {
-        let (secret, hkdf) = Hkdf::<D>::extract(Some(self.secret.as_ref()), ikm);
+        let (secret, hkdf) = Hkdf::<D, SimpleHmac<D>>::extract(Some(self.secret.as_ref()), ikm);
         self.secret = secret;
         self.hkdf.replace(hkdf);
         self.calculate_traffic_secrets(b"c hs traffic", b"s hs traffic")?;
@@ -212,7 +217,7 @@ where
 
     pub fn initialize_master_secret(&mut self) -> Result<(), TlsError> {
         let (secret, hkdf) =
-            Hkdf::<D>::extract(Some(self.secret.as_ref()), Self::zero().as_slice());
+            Hkdf::<D, SimpleHmac<D>>::extract(Some(self.secret.as_ref()), Self::zero().as_slice());
         self.secret = secret;
         self.hkdf.replace(hkdf);
 
@@ -253,14 +258,14 @@ where
         &mut self,
         label: &[u8],
         context_type: ContextType,
-    ) -> Result<GenericArray<u8, D::OutputSize>, TlsError> {
+    ) -> Result<GenericArray<u8, <D as OutputSizeUser>::OutputSize>, TlsError> {
         let label = self.make_hkdf_label(label, context_type, D::OutputSize::to_u16())?;
         self.hkdf_expand_label(self.hkdf.as_ref().unwrap(), &label)
     }
 
     pub fn hkdf_expand_label<N: ArrayLength<u8>>(
         &self,
-        hkdf: &Hkdf<D>,
+        hkdf: &Hkdf<D, SimpleHmac<D>>,
         label: &[u8],
     ) -> Result<GenericArray<u8, N>, TlsError> {
         let mut okm: GenericArray<u8, N> = Default::default();
@@ -308,7 +313,7 @@ where
                     .map_err(|_| TlsError::InternalError)?;
             }
             ContextType::EmptyHash => {
-                let context = D::new().chain(&[]).finalize();
+                let context = D::new().chain_update(&[]).finalize();
                 hkdf_label
                     .extend_from_slice(&(context.len() as u8).to_be_bytes())
                     .map_err(|_| TlsError::InternalError)?;
@@ -323,9 +328,9 @@ where
 
 impl<D, KeyLen, IvLen> Default for KeySchedule<D, KeyLen, IvLen>
 where
-    D: Update + BlockInput + FixedOutput + Reset + Default + Clone,
-    D::BlockSize: ArrayLength<u8>,
-    D::OutputSize: ArrayLength<u8>,
+    D: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser,
+    <D as BlockSizeUser>::BlockSize: ArrayLength<u8>,
+    <D as OutputSizeUser>::OutputSize: ArrayLength<u8>,
     KeyLen: ArrayLength<u8>,
     IvLen: ArrayLength<u8>,
 {

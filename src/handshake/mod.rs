@@ -15,6 +15,7 @@ use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use core::fmt::{Debug, Formatter};
 use core::ops::Range;
+use digest::OutputSizeUser;
 use sha2::Digest;
 
 pub mod certificate;
@@ -76,7 +77,7 @@ where
 {
     ClientCert(CertificateRef<'a>),
     ClientHello(ClientHello<'config, CipherSuite>),
-    Finished(Finished<<CipherSuite::Hash as Digest>::OutputSize>),
+    Finished(Finished<<CipherSuite::Hash as OutputSizeUser>::OutputSize>),
 }
 
 impl<'config, 'a, CipherSuite> ClientHandshake<'config, 'a, CipherSuite>
