@@ -545,7 +545,7 @@ where
                     let shared = server_hello
                         .calculate_shared_secret(&secret)
                         .ok_or(TlsError::InvalidKeyShare)?;
-                    key_schedule.initialize_handshake_secret(shared.as_bytes())?;
+                    key_schedule.initialize_handshake_secret(shared.raw_secret_bytes())?;
                     Ok(())
                 }
                 _ => Err(TlsError::InvalidHandshake),

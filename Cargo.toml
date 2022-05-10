@@ -16,7 +16,7 @@ keywords = ["embedded", "async", "tls", "no_std", "network"]
 exclude = [".github"]
 
 [dependencies]
-p256 = { version = "0.10", default-features = false, features = [ "ecdh", "arithmetic" ] }
+p256 = { version = "0.11", default-features = false, features = [ "ecdh", "arithmetic" ] }
 rand_core = { version = "0.6.3", default-features = false }
 hkdf = "0.10.0"
 hmac = "0.10.1"
