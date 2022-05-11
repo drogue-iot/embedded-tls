@@ -163,7 +163,7 @@ impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
         rx_buf: &'a mut [u8],
         digest: &mut D,
     ) -> Result<ServerHandshake<'a, N>, TlsError> {
-        let header = &rx_buf[0..4];
+        let header = &rx_buf.get(0..4).ok_or(TlsError::InvalidHandshake)?;
         match HandshakeType::of(header[0]) {
             None => Err(TlsError::InvalidHandshake),
             Some(handshake_type) => {
@@ -173,7 +173,9 @@ impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
                         // info!("hash [{:x?}]", &header);
                         digest.update(&header);
                         Ok(ServerHandshake::ServerHello(ServerHello::read(
-                            &rx_buf[4..length + 4],
+                            &rx_buf
+                                .get(4..length + 4)
+                                .ok_or(TlsError::InvalidHandshake)?,
                             digest,
                         )?))
                     }
