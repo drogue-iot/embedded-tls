@@ -25,6 +25,7 @@ aes-gcm = { version = "0.9.4", default-features = false, features = ["aes"] }
 digest = { version = "0.10.3", default-features = false, features = ["core-api"] }
 typenum = { version = "1.15.0", default-features = false }
 heapless = { version = "0.7", default-features = false, features = ["defmt-impl"] }
+embedded-io = "0.3.0"
 generic-array = { version = "0.14", default-features = false }
 #webpki = { version = "0.22.0", default-features = false }
 #webpki = { path = "../../webpki", default-features = false }
@@ -33,13 +34,6 @@ webpki = { version = "0.21.4", git = "https://github.com/lulf/webpki", rev = "d5
 # Logging alternatives
 log = { version = "0.4", optional = true }
 defmt = { version = "0.3", optional = true }
-
-# Runtimes supported out of the box
-tokio = { version = "1.7", features = ["net"], optional = true }
-futures = { version = "0.3", optional = true }
-
-# NOTE: Disabled until embassy crate is published
-# embassy = {git = "https://github.com/embassy-rs/embassy.git", branch = "master", default-features = false, optional = true }
 
 [dev-dependencies]
 env_logger = "0.9"
@@ -53,6 +47,7 @@ log = "0.4"
 pem-parser = "0.1.1"
 
 [features]
-default = ["std", "async", "tokio", "log"]
-std = []
-async = []
+default = ["std", "async", "log", "tokio"]
+std = ["embedded-io/std"]
+tokio = ["embedded-io/tokio"]
+async = ["embedded-io/async"]

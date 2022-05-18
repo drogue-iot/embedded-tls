@@ -1,3 +1,4 @@
+use embedded_io::adapters::FromStd;
 use embedded_tls::blocking::*;
 use rand::rngs::OsRng;
 use std::net::TcpStream;
@@ -12,8 +13,8 @@ fn main() {
     let config = TlsConfig::new()
         .with_server_name("localhost")
         .verify_cert(false);
-    let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
-        TlsConnection::new(stream, &mut record_buffer);
+    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> =
+        TlsConnection::new(FromStd::new(stream), &mut record_buffer);
     let mut rng = OsRng;
 
     tls.open::<OsRng, SystemTime, 4096>(TlsContext::new(&config, &mut rng))

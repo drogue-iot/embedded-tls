@@ -31,6 +31,7 @@
 //!
 //! ```
 //! use embedded_tls::*;
+//! use embedded_io::adapters::FromTokio;
 //! use rand::rngs::OsRng;
 //! use tokio::net::TcpStream;
 //!
@@ -43,8 +44,8 @@
 //!     let config = TlsConfig::new()
 //!         .verify_cert(false)
 //!         .with_server_name("http.sandbox.drogue.cloud");
-//!     let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
-//!         TlsConnection::new(stream, &mut record_buffer);
+//!     let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
+//!         TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
 //!
 //!     tls.open::<OsRng, NoClock, 4096>(TlsContext::new(&config, &mut OsRng)).await.expect("error establishing TLS connection");
 //!
@@ -75,7 +76,6 @@ mod parse_buffer;
 mod record;
 mod signature_schemes;
 mod supported_versions;
-pub mod traits;
 
 #[cfg(feature = "webpki")]
 mod verify;
@@ -154,109 +154,13 @@ pub enum TlsError {
     CryptoError,
     EncodeError,
     DecodeError,
+    Io(embedded_io::ErrorKind),
 }
-
-#[cfg(all(feature = "tokio", feature = "async"))]
-mod runtime {
-    use crate::{
-        traits::{AsyncRead, AsyncWrite},
-        TlsError,
-    };
-    use core::future::Future;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpStream;
-
-    impl AsyncWrite for TcpStream {
-        #[rustfmt::skip]
-        type WriteFuture<'m> = impl Future<Output = Result<usize, TlsError>> + 'm where Self: 'm;
-        fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-            async move {
-                AsyncWriteExt::write(self, buf)
-                    .await
-                    .map_err(|_| TlsError::IoError)
-            }
-        }
-    }
-
-    impl AsyncRead for TcpStream {
-        #[rustfmt::skip]
-        type ReadFuture<'m> = impl Future<Output = Result<usize, TlsError>> + 'm where Self: 'm;
-        fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-            async move {
-                AsyncReadExt::read(self, buf)
-                    .await
-                    .map_err(|_| TlsError::IoError)
-            }
-        }
-    }
-}
-
-#[cfg(all(feature = "futures", feature = "async"))]
-mod runtime {
-    use crate::{
-        traits::{AsyncRead, AsyncWrite},
-        TlsError,
-    };
-    use core::future::Future;
-    use futures::io::{AsyncReadExt, AsyncWriteExt};
-
-    impl<W: AsyncWriteExt + Unpin> AsyncWrite for W {
-        #[rustfmt::skip]
-        type WriteFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
-        fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-            async move {
-                Ok(AsyncWriteExt::write(self, buf)
-                    .await
-                    .map_err(|_| TlsError::IoError)?)
-            }
-        }
-    }
-
-    impl<R: AsyncReadExt + Unpin> AsyncRead for R {
-        #[rustfmt::skip]
-        type ReadFuture<'m> where Self: 'm = impl Future<Output = core::result::Result<usize, TlsError>> + 'm;
-        fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-            async move {
-                Ok(AsyncReadExt::read(self, buf)
-                    .await
-                    .map_err(|_| TlsError::IoError)?)
-            }
-        }
-    }
-}
-
-#[cfg(all(feature = "async", any(feature = "tokio", feature = "futures")))]
-pub use runtime::*;
 
 #[cfg(feature = "std")]
 mod stdlib {
     extern crate std;
-    use crate::{
-        config::TlsClock,
-        traits::{Read as TlsRead, Write as TlsWrite},
-        TlsError,
-    };
-    use std::io::{Read, Write};
-
-    impl<R> TlsRead for R
-    where
-        R: Read,
-    {
-        fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Result<usize, TlsError> {
-            let len = Read::read(self, buf).map_err(|_| TlsError::IoError)?;
-            Ok(len)
-        }
-    }
-
-    impl<W> TlsWrite for W
-    where
-        W: Write,
-    {
-        fn write<'m>(&'m mut self, buf: &'m [u8]) -> Result<usize, TlsError> {
-            let len = Write::write(self, buf).map_err(|_| TlsError::IoError)?;
-            Ok(len)
-        }
-    }
+    use crate::config::TlsClock;
 
     use std::time::SystemTime;
     impl TlsClock for SystemTime {

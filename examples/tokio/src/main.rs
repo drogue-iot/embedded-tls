@@ -2,6 +2,7 @@
 #![allow(incomplete_features)]
 #![feature(generic_associated_types)]
 
+use embedded_io::adapters::FromTokio;
 use embedded_tls::*;
 use rand::rngs::OsRng;
 use std::error::Error;
@@ -19,8 +20,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_server_name("localhost")
         .verify_cert(false);
     let mut rng = OsRng;
-    let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
-        TlsConnection::new(stream, &mut record_buffer);
+    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
+        TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
 
     tls.open::<OsRng, std::time::SystemTime, 4096>(TlsContext::new(&config, &mut rng))
         .await

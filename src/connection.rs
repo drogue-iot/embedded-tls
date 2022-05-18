@@ -3,6 +3,7 @@ use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, RecordHeader, ServerRecord};
 use crate::verify::{verify_certificate, verify_signature};
+use crate::TlsError;
 use crate::{
     alert::*,
     handshake::{
@@ -10,16 +11,15 @@ use crate::{
         certificate_request::CertificateRequest,
     },
 };
-use crate::{
-    traits::{Read, Write},
-    TlsError,
-};
 use core::{convert::TryInto, fmt::Debug};
+use embedded_io::Error as _;
 use heapless::Vec;
 use rand_core::{CryptoRng, RngCore};
 
+use embedded_io::blocking::{Read as BlockingRead, Write as BlockingWrite};
+
 #[cfg(feature = "async")]
-use crate::traits::{AsyncRead, AsyncWrite};
+use embedded_io::asynch::{Read as AsyncRead, Write as AsyncWrite};
 
 use crate::application_data::ApplicationData;
 // use crate::handshake::certificate_request::CertificateRequest;
@@ -207,7 +207,10 @@ where
     let mut pos: usize = 0;
     let mut header: [u8; 5] = [0; 5];
     loop {
-        pos += transport.read(&mut header[pos..5]).await?;
+        pos += transport
+            .read(&mut header[pos..5])
+            .await
+            .map_err(|e| TlsError::Io(e.kind()))?;
         if pos == 5 {
             break;
         }
@@ -237,13 +240,15 @@ pub fn decode_record_blocking<'m, Transport, CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
 ) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
 where
-    Transport: Read + 'm,
+    Transport: BlockingRead + 'm,
     CipherSuite: TlsCipherSuite + 'static,
 {
     let mut pos: usize = 0;
     let mut header: [u8; 5] = [0; 5];
     loop {
-        pos += transport.read(&mut header[pos..5])?;
+        pos += transport
+            .read(&mut header[pos..5])
+            .map_err(|e| TlsError::Io(e.kind()))?;
         if pos == 5 {
             break;
         }
@@ -326,7 +331,10 @@ impl<'a> State {
                 let client_hello = ClientRecord::client_hello(config, rng);
                 let (_, len) = encode_record(record_buf, key_schedule, &client_hello)?;
 
-                transport.write(&record_buf[..len]).await?;
+                transport
+                    .write(&record_buf[..len])
+                    .await
+                    .map_err(|e| TlsError::Io(e.kind()))?;
 
                 key_schedule.increment_write_counter();
                 if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) =
@@ -385,7 +393,10 @@ impl<'a> State {
                     ClientRecord::Handshake(client_handshake, true);
 
                 let (next_hash, len) = encode_record(record_buf, key_schedule, &client_cert)?;
-                transport.write(&record_buf[..len]).await?;
+                transport
+                    .write(&record_buf[..len])
+                    .await
+                    .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
                 key_schedule.replace_transcript_hash(next_hash);
                 Ok(State::ClientFinished)
@@ -399,7 +410,10 @@ impl<'a> State {
                 let client_finished = ClientRecord::Handshake(client_finished, true);
 
                 let (_, len) = encode_record(record_buf, key_schedule, &client_finished)?;
-                transport.write(&record_buf[..len]).await?;
+                transport
+                    .write(&record_buf[..len])
+                    .await
+                    .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
 
                 key_schedule.replace_transcript_hash(
@@ -426,7 +440,7 @@ impl<'a> State {
         rng: &mut RNG,
     ) -> Result<State, TlsError>
     where
-        Transport: Read + Write + 'a,
+        Transport: BlockingRead + BlockingWrite + 'a,
         RNG: CryptoRng + RngCore + 'static,
         CipherSuite: TlsCipherSuite + 'static,
         Clock: TlsClock + 'static,
@@ -437,7 +451,9 @@ impl<'a> State {
                 let client_hello = ClientRecord::client_hello(config, rng);
                 let (_, len) = encode_record(record_buf, key_schedule, &client_hello)?;
 
-                transport.write(&record_buf[..len])?;
+                transport
+                    .write(&record_buf[..len])
+                    .map_err(|e| TlsError::Io(e.kind()))?;
 
                 key_schedule.increment_write_counter();
                 if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) =
@@ -496,7 +512,9 @@ impl<'a> State {
                     ClientRecord::Handshake(client_handshake, true);
 
                 let (next_hash, len) = encode_record(record_buf, key_schedule, &client_cert)?;
-                transport.write(&record_buf[..len])?;
+                transport
+                    .write(&record_buf[..len])
+                    .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
                 key_schedule.replace_transcript_hash(next_hash);
                 Ok(State::ClientFinished)
@@ -510,7 +528,9 @@ impl<'a> State {
                 let client_finished = ClientRecord::Handshake(client_finished, true);
 
                 let (_, len) = encode_record(record_buf, key_schedule, &client_finished)?;
-                transport.write(&record_buf[..len])?;
+                transport
+                    .write(&record_buf[..len])
+                    .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
 
                 key_schedule.replace_transcript_hash(
