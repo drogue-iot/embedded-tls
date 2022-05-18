@@ -7,6 +7,7 @@
 use clap::{ColorChoice, Parser};
 use embassy::executor::Spawner;
 use embassy::util::Forever;
+use embassy_net::tcp::TcpSocket;
 use embassy_net::*;
 use embedded_tls::*;
 use heapless::Vec;
@@ -84,8 +85,8 @@ async fn main_task(spawner: Spawner) {
     let mut record_buffer = [0; 16384];
     let mut rng = OsRng;
     let config = TlsConfig::new().with_server_name("example.com");
-    let mut tls: TlsConnection<Transport<TcpSocket>, Aes128GcmSha256> =
-        TlsConnection::new(Transport { transport: socket }, &mut record_buffer);
+    let mut tls: TlsConnection<TcpSocket, Aes128GcmSha256> =
+        TlsConnection::new(socket, &mut record_buffer);
 
     tls.open::<OsRng, NoClock, 4096>(TlsContext::new(&config, &mut rng))
         .await
@@ -114,40 +115,4 @@ async fn main(spawner: Spawner) {
         .init();
 
     spawner.spawn(main_task(spawner)).unwrap();
-}
-
-// Keep this here until embassy crate is published
-use core::future::Future;
-use embassy::io::{AsyncBufReadExt, AsyncWriteExt};
-use embedded_tls::{
-    traits::{AsyncRead, AsyncWrite},
-    TlsError,
-};
-
-pub struct Transport<W: AsyncWriteExt + AsyncBufReadExt + Unpin> {
-    transport: W,
-}
-
-pub struct Clock;
-
-impl<W: AsyncWriteExt + AsyncBufReadExt + Unpin> AsyncWrite for Transport<W> {
-    type WriteFuture<'m> = impl Future<Output = core::result::Result<usize, TlsError>> + 'm where Self: 'm;
-    fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-        async move {
-            Ok(AsyncWriteExt::write(&mut self.transport, buf)
-                .await
-                .map_err(|_| TlsError::IoError)?)
-        }
-    }
-}
-
-impl<R: AsyncBufReadExt + AsyncWriteExt + Unpin> AsyncRead for Transport<R> {
-    type ReadFuture<'m> = impl Future<Output = core::result::Result<usize, TlsError>> + 'm where Self: 'm;
-    fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-        async move {
-            Ok(AsyncBufReadExt::read(&mut self.transport, buf)
-                .await
-                .map_err(|_| TlsError::IoError)?)
-        }
-    }
 }

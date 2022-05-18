@@ -2,6 +2,7 @@
 #![allow(incomplete_features)]
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
+use embedded_io::adapters::{FromStd, FromTokio};
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
 use std::sync::Once;
@@ -50,10 +51,10 @@ async fn test_ping() {
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
-        TlsConnection::new(stream, &mut record_buffer);
+    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
+        TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
 
-    let sz = core::mem::size_of::<TlsConnection<TcpStream, Aes128GcmSha256>>();
+    let sz = core::mem::size_of::<TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256>>();
     log::info!("SIZE of connection is {}", sz);
 
     let mut rng = OsRng;
@@ -96,8 +97,8 @@ fn test_blocking_ping() {
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<TcpStream, Aes128GcmSha256> =
-        TlsConnection::new(stream, &mut record_buffer);
+    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> =
+        TlsConnection::new(FromStd::new(stream), &mut record_buffer);
 
     tls.open::<OsRng, SystemTime, 4096>(TlsContext::new(&config, &mut OsRng))
         .expect("error establishing TLS connection");

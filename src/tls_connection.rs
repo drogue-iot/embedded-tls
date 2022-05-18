@@ -3,10 +3,9 @@ use crate::connection::*;
 use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
-use crate::{
-    traits::{AsyncRead, AsyncWrite},
-    TlsError,
-};
+use crate::TlsError;
+use embedded_io::asynch::{Read as AsyncRead, Write as AsyncWrite};
+use embedded_io::Error as _;
 use rand_core::{CryptoRng, RngCore};
 
 use crate::application_data::ApplicationData;
@@ -112,7 +111,10 @@ where
 
                 let (_, len) = encode_record(self.record_buf, key_schedule, &record)?;
 
-                delegate.write(&self.record_buf[..len]).await?;
+                delegate
+                    .write(&self.record_buf[..len])
+                    .await
+                    .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
                 wp += to_write;
                 remaining -= to_write;
@@ -192,7 +194,10 @@ where
 
         let (_, len) = encode_record::<CipherSuite>(record_buf, &mut key_schedule, &record)?;
 
-        delegate.write(&record_buf[..len]).await?;
+        delegate
+            .write(&record_buf[..len])
+            .await
+            .map_err(|e| TlsError::Io(e.kind()))?;
 
         key_schedule.increment_write_counter();
 

@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+use core::convert::Infallible;
+
 use defmt_rtt as _;
 use nrf52833_hal as hal;
 use panic_probe as _;
@@ -34,13 +36,20 @@ fn main() -> ! {
 
 pub struct Dummy;
 
-impl embedded_tls::traits::Read for Dummy {
-    fn read<'m>(&'m mut self, _: &'m mut [u8]) -> Result<usize, TlsError> {
+impl embedded_io::Io for Dummy {
+    type Error = Infallible;
+}
+
+impl embedded_io::blocking::Read for Dummy {
+    fn read<'m>(&'m mut self, _: &'m mut [u8]) -> Result<usize, Self::Error> {
         todo!()
     }
 }
-impl embedded_tls::traits::Write for Dummy {
-    fn write<'m>(&'m mut self, _: &'m [u8]) -> Result<usize, TlsError> {
+impl embedded_io::blocking::Write for Dummy {
+    fn write<'m>(&'m mut self, _: &'m [u8]) -> Result<usize, Self::Error> {
+        todo!()
+    }
+    fn flush<'m>(&'m mut self) -> Result<(), Self::Error> {
         todo!()
     }
 }

@@ -9,6 +9,7 @@ authors = [
 
 [dependencies]
 embedded-tls = { path = "../..", features = ["log", "std"], default-features = false }
+embedded-io = { version = "0.3.0", features = ["std"] }
 pem-parser = "0.1"
 env_logger = "0.8"
 rand = "0.8"
