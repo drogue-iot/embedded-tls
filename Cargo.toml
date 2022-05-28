@@ -38,9 +38,9 @@ defmt = { version = "0.3", optional = true }
 [dev-dependencies]
 env_logger = "0.9"
 tokio = { version = "1.7", features = ["full"] }
-mio = { version = "0.7", features = ["os-poll", "tcp"] }
-rustls = "0.19.1"
-rustls-pemfile = "0.2.1"
+mio = { version = "0.8.3", features = ["os-poll", "net"] }
+rustls = "0.20.6"
+rustls-pemfile = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.8"
 log = "0.4"
