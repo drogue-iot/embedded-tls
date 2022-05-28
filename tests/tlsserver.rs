@@ -8,8 +8,6 @@ use std::io;
 use std::io::{BufReader, Read, Write};
 use std::net;
 
-use rustls::{NoClientAuth, Session};
-
 // Token for our listening socket.
 const LISTENER: mio::Token = mio::Token(0);
 
@@ -47,7 +45,8 @@ impl TlsServer {
                 Ok((socket, addr)) => {
                     log::debug!("Accepting new connection from {:?}", addr);
 
-                    let tls_session = rustls::ServerSession::new(&self.tls_config);
+                    let tls_session =
+                        rustls::ServerConnection::new(self.tls_config.clone()).unwrap();
                     let mode = self.mode.clone();
 
                     let token = mio::Token(self.next_id);
@@ -96,7 +95,7 @@ struct Connection {
     closing: bool,
     closed: bool,
     mode: ServerMode,
-    tls_session: rustls::ServerSession,
+    tls_session: rustls::ServerConnection,
     back: Option<TcpStream>,
 }
 
@@ -112,13 +111,8 @@ fn open_back(mode: &ServerMode) -> Option<TcpStream> {
 fn try_read(r: io::Result<usize>) -> io::Result<Option<usize>> {
     match r {
         Ok(len) => Ok(Some(len)),
-        Err(e) => {
-            if e.kind() == io::ErrorKind::WouldBlock {
-                Ok(None)
-            } else {
-                Err(e)
-            }
-        }
+        Err(e) if e.kind() == io::ErrorKind::WouldBlock => Ok(None),
+        Err(e) => Err(e),
     }
 }
 
@@ -127,7 +121,7 @@ impl Connection {
         socket: TcpStream,
         token: mio::Token,
         mode: ServerMode,
-        tls_session: rustls::ServerSession,
+        tls_session: rustls::ServerConnection,
     ) -> Connection {
         let back = open_back(&mode);
         Connection {
@@ -213,11 +207,13 @@ impl Connection {
         // Read and process all available plaintext.
         let mut buf = Vec::new();
 
-        let rc = self.tls_session.read_to_end(&mut buf);
-        if rc.is_err() {
-            log::warn!("plaintext read failed: {:?}", rc);
-            self.closing = true;
-            return;
+        let rc = self.tls_session.reader().read_to_end(&mut buf);
+        if let Err(ref e) = rc {
+            if e.kind() != io::ErrorKind::WouldBlock {
+                log::warn!("plaintext read failed: {:?}", rc);
+                self.closing = true;
+                return;
+            }
         }
 
         if !buf.is_empty() {
@@ -252,7 +248,7 @@ impl Connection {
                 self.closing = true;
             }
             Some(len) => {
-                self.tls_session.write_all(&buf[..len]).unwrap();
+                self.tls_session.writer().write_all(&buf[..len]).unwrap();
             }
             None => {}
         };
@@ -262,7 +258,7 @@ impl Connection {
     fn incoming_plaintext(&mut self, buf: &[u8]) {
         match self.mode {
             ServerMode::Echo => {
-                self.tls_session.write_all(buf).unwrap();
+                self.tls_session.writer().write_all(buf).unwrap();
             }
         }
     }
@@ -362,20 +358,21 @@ fn load_private_key(filename: &PathBuf) -> rustls::PrivateKey {
 }
 
 pub fn run(mut listener: TcpListener) {
-    let client_auth = NoClientAuth::new();
-    let suites = rustls::ALL_CIPHERSUITES.to_vec();
-    let versions = vec![rustls::ProtocolVersion::TLSv1_3];
+    let versions = &[&rustls::version::TLS13];
 
     let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
 
     let certs = load_certs(&test_dir.join("data").join("server-cert.pem"));
     let privkey = load_private_key(&test_dir.join("data").join("server-key.pem"));
 
-    let mut config = rustls::ServerConfig::new(client_auth);
-
-    config.ciphersuites = suites;
-    config.versions = versions;
-    config.set_single_cert(certs, privkey).unwrap();
+    let config = rustls::ServerConfig::builder()
+        .with_cipher_suites(rustls::ALL_CIPHER_SUITES)
+        .with_kx_groups(&rustls::ALL_KX_GROUPS)
+        .with_protocol_versions(versions)
+        .unwrap()
+        .with_no_client_auth()
+        .with_single_cert(certs, privkey)
+        .unwrap();
 
     let mut poll = mio::Poll::new().unwrap();
     poll.registry()
