@@ -1,6 +1,5 @@
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
-use core::convert::TryFrom;
 use heapless::Vec;
 
 #[derive(Debug)]

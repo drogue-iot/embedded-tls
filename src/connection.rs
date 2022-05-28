@@ -11,7 +11,7 @@ use crate::{
         certificate_request::CertificateRequest,
     },
 };
-use core::{convert::TryInto, fmt::Debug};
+use core::fmt::Debug;
 use embedded_io::Error as _;
 use heapless::Vec;
 use rand_core::{CryptoRng, RngCore};

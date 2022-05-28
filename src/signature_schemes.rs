@@ -1,6 +1,5 @@
 #![allow(unused_imports)]
 use crate::TlsError;
-use core::convert::TryInto;
 
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

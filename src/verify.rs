@@ -4,8 +4,6 @@ use crate::handshake::{
     certificate_verify::CertificateVerify,
 };
 use crate::TlsError;
-use core::convert::TryFrom;
-use core::convert::TryInto;
 use webpki::DnsNameRef;
 
 static ALL_SIGALGS: &[&webpki::SignatureAlgorithm] = &[
