@@ -24,7 +24,7 @@ sha2 = { version = "0.10.2", default-features = false }
 aes-gcm = { version = "0.9.4", default-features = false, features = ["aes"] }
 digest = { version = "0.10.3", default-features = false, features = ["core-api"] }
 typenum = { version = "1.15.0", default-features = false }
-heapless = { version = "0.7", default-features = false, features = ["defmt-impl"] }
+heapless = { version = "0.7", default-features = false }
 embedded-io = "0.3.0"
 generic-array = { version = "0.14", default-features = false }
 #webpki = { version = "0.22.0", default-features = false }
@@ -48,6 +48,7 @@ pem-parser = "0.1.1"
 
 [features]
 default = ["std", "async", "log", "tokio"]
+defmt = ["dep:defmt", "embedded-io/defmt", "heapless/defmt-impl"]
 std = ["embedded-io/std"]
 tokio = ["embedded-io/tokio"]
 async = ["embedded-io/async"]
