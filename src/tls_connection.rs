@@ -61,7 +61,7 @@ where
     /// must be recreated.
     pub async fn open<
         'm,
-        RNG: CryptoRng + RngCore + 'static,
+        RNG: CryptoRng + RngCore + 'm,
         Clock: TlsClock + 'static,
         const CERT_SIZE: usize,
     >(

@@ -68,7 +68,7 @@ impl TlsClock for NoClock {
 pub struct TlsContext<'a, CipherSuite, RNG>
 where
     CipherSuite: TlsCipherSuite,
-    RNG: CryptoRng + RngCore + 'static,
+    RNG: CryptoRng + RngCore + 'a,
 {
     pub(crate) config: &'a TlsConfig<'a, CipherSuite>,
     pub(crate) rng: &'a mut RNG,
@@ -77,7 +77,7 @@ where
 impl<'a, CipherSuite, RNG> TlsContext<'a, CipherSuite, RNG>
 where
     CipherSuite: TlsCipherSuite,
-    RNG: CryptoRng + RngCore + 'static,
+    RNG: CryptoRng + RngCore + 'a,
 {
     /// Create a new context with a given config and random number generator reference.
     pub fn new(config: &'a TlsConfig<'a, CipherSuite>, rng: &'a mut RNG) -> Self {

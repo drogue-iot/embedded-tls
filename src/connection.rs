@@ -321,7 +321,7 @@ impl<'a> State {
     ) -> Result<State, TlsError>
     where
         Transport: AsyncRead + AsyncWrite + 'a,
-        RNG: CryptoRng + RngCore + 'static,
+        RNG: CryptoRng + RngCore + 'a,
         CipherSuite: TlsCipherSuite + 'static,
         Clock: TlsClock + 'static,
     {
@@ -441,7 +441,7 @@ impl<'a> State {
     ) -> Result<State, TlsError>
     where
         Transport: BlockingRead + BlockingWrite + 'a,
-        RNG: CryptoRng + RngCore + 'static,
+        RNG: CryptoRng + RngCore,
         CipherSuite: TlsCipherSuite + 'static,
         Clock: TlsClock + 'static,
     {
