@@ -116,10 +116,10 @@ mod verify {
 }
 
 #[cfg(feature = "async")]
-mod tls_connection;
+mod asynch;
 
 #[cfg(feature = "async")]
-pub use tls_connection::*;
+pub use asynch::*;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
