@@ -3,8 +3,11 @@ use crate::connection::*;
 use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
-use embedded_io::blocking::{Read, Write};
 use embedded_io::Error as _;
+use embedded_io::{
+    blocking::{Read, Write},
+    Io,
+};
 use rand_core::{CryptoRng, RngCore};
 
 use crate::application_data::ApplicationData;
@@ -200,5 +203,37 @@ where
         key_schedule.increment_write_counter();
 
         Ok(delegate)
+    }
+}
+
+impl<'a, Socket, CipherSuite> Io for TlsConnection<'a, Socket, CipherSuite>
+where
+    Socket: Read + Write + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    type Error = TlsError;
+}
+
+impl<'a, Socket, CipherSuite> Read for TlsConnection<'a, Socket, CipherSuite>
+where
+    Socket: Read + Write + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        TlsConnection::read(self, buf)
+    }
+}
+
+impl<'a, Socket, CipherSuite> Write for TlsConnection<'a, Socket, CipherSuite>
+where
+    Socket: Read + Write + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        TlsConnection::write(self, buf)
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
