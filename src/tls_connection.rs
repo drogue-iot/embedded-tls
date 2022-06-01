@@ -4,8 +4,12 @@ use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
 use crate::TlsError;
-use embedded_io::asynch::{Read as AsyncRead, Write as AsyncWrite};
+use core::future::Future;
 use embedded_io::Error as _;
+use embedded_io::{
+    asynch::{Read as AsyncRead, Write as AsyncWrite},
+    Io,
+};
 use rand_core::{CryptoRng, RngCore};
 
 use crate::application_data::ApplicationData;
@@ -182,15 +186,15 @@ where
     }
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
-    pub async fn close(self) -> Result<Socket, TlsError> {
+    async fn close_internal(&mut self) -> Result<(), TlsError> {
         let record = ClientRecord::Alert(
             Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
             self.opened,
         );
 
-        let mut key_schedule = self.key_schedule;
-        let mut delegate = self.delegate;
-        let record_buf = self.record_buf;
+        let mut key_schedule = &mut self.key_schedule;
+        let delegate = &mut self.delegate;
+        let record_buf = &mut self.record_buf;
 
         let (_, len) = encode_record::<CipherSuite>(record_buf, &mut key_schedule, &record)?;
 
@@ -201,6 +205,54 @@ where
 
         key_schedule.increment_write_counter();
 
-        Ok(delegate)
+        Ok(())
+    }
+
+    /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
+    pub async fn close(mut self) -> Result<Socket, TlsError> {
+        self.close_internal().await?;
+        Ok(self.delegate)
+    }
+}
+
+impl<'a, Socket, CipherSuite> Io for TlsConnection<'a, Socket, CipherSuite>
+where
+    Socket: AsyncRead + AsyncWrite + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    type Error = TlsError;
+}
+
+impl<'a, Socket, CipherSuite> AsyncRead for TlsConnection<'a, Socket, CipherSuite>
+where
+    Socket: AsyncRead + AsyncWrite + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    type ReadFuture<'m> = impl Future<Output = Result<usize, Self::Error>> where
+        Self: 'm;
+
+    fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
+        TlsConnection::read(self, buf)
+    }
+}
+
+impl<'a, Socket, CipherSuite> AsyncWrite for TlsConnection<'a, Socket, CipherSuite>
+where
+    Socket: AsyncRead + AsyncWrite + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    type WriteFuture<'m> = impl Future<Output = Result<usize, Self::Error>>
+    where
+        Self: 'm;
+    fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
+        TlsConnection::write(self, buf)
+    }
+
+    type FlushFuture<'m> = impl Future<Output = Result<(), Self::Error>>
+    where
+        Self: 'm;
+
+    fn flush<'m>(&'m mut self) -> Self::FlushFuture<'m> {
+        async move { Ok(()) }
     }
 }

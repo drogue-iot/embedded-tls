@@ -157,6 +157,15 @@ pub enum TlsError {
     Io(embedded_io::ErrorKind),
 }
 
+impl embedded_io::Error for TlsError {
+    fn kind(&self) -> embedded_io::ErrorKind {
+        match self {
+            Self::Io(k) => k.clone(),
+            _ => embedded_io::ErrorKind::Other,
+        }
+    }
+}
+
 #[cfg(feature = "std")]
 mod stdlib {
     extern crate std;
