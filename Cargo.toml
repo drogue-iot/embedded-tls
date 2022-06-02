@@ -1,6 +1,6 @@
 [package]
 name = "embedded-tls"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 authors = [
     "Bob McWhirter <bmcwhirt@redhat.com>",
