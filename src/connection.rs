@@ -41,7 +41,7 @@ use crate::content_types::ContentType;
 // use crate::handshake::new_session_ticket::NewSessionTicket;
 // use crate::handshake::server_hello::ServerHello;
 use crate::parse_buffer::ParseBuffer;
-use aes_gcm::aead::{AeadCore, AeadInPlace, NewAead};
+use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 use digest::OutputSizeUser;
 use heapless::spsc::Queue;
 
