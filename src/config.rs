@@ -2,7 +2,7 @@ use crate::cipher_suites::CipherSuite;
 use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
 use crate::signature_schemes::SignatureScheme;
-use aes_gcm::{AeadInPlace, Aes128Gcm, NewAead};
+use aes_gcm::{AeadInPlace, Aes128Gcm, KeyInit};
 use core::marker::PhantomData;
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
@@ -16,7 +16,7 @@ const TLS_RECORD_MAX: usize = 16384;
 
 pub trait TlsCipherSuite {
     const CODE_POINT: u16;
-    type Cipher: NewAead<KeySize = Self::KeyLen> + AeadInPlace<NonceSize = Self::IvLen>;
+    type Cipher: KeyInit<KeySize = Self::KeyLen> + AeadInPlace<NonceSize = Self::IvLen>;
     type KeyLen: ArrayLength<u8>;
     type IvLen: ArrayLength<u8>;
 
