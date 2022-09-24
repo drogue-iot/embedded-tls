@@ -1,8 +1,6 @@
 #![no_std]
-#![allow(incomplete_features)]
 #![allow(dead_code)]
 #![allow(non_snake_case)]
-#![cfg_attr(feature = "async", feature(generic_associated_types))]
 #![cfg_attr(feature = "async", feature(type_alias_impl_trait))]
 
 //! Embedded-TLS is a Rust-native TLS 1.3 implementation that works in a no-std environment. The
