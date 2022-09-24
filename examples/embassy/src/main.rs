@@ -1,8 +1,5 @@
 #![macro_use]
-#![allow(incomplete_features)]
-#![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
-#![allow(incomplete_features)]
 
 use clap::{ColorChoice, Parser};
 use embassy::executor::Spawner;

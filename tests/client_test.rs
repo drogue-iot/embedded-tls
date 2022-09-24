@@ -1,6 +1,4 @@
 #![macro_use]
-#![allow(incomplete_features)]
-#![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 use embedded_io::adapters::{FromStd, FromTokio};
 use rand::rngs::OsRng;

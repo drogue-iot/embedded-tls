@@ -1,6 +1,4 @@
 #![macro_use]
-#![allow(incomplete_features)]
-#![feature(generic_associated_types)]
 
 use embedded_io::adapters::FromTokio;
 use embedded_tls::*;
