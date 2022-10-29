@@ -25,32 +25,33 @@
 //!
 //! NOTE: This is very fresh and is probably not meeting all parts of the TLS 1.3 spec. If you find anything you'd like to get implemented, feel free to raise an issue.
 
-//! # Example
-//!
-//! ```
-//! use embedded_tls::*;
-//! use embedded_io::adapters::FromTokio;
-//! use rand::rngs::OsRng;
-//! use tokio::net::TcpStream;
-//!
-//! #[tokio::main]
-//! async fn main() {
-//!     let stream = TcpStream::connect("http.sandbox.drogue.cloud:443").await.expect("error creating TCP connection");
-//!
-//!     println!("TCP connection opened");
-//!     let mut record_buffer = [0; 16384];
-//!     let config = TlsConfig::new()
-//!         .verify_cert(false)
-//!         .with_server_name("http.sandbox.drogue.cloud");
-//!     let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
-//!         TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
-//!
-//!     tls.open::<OsRng, NoClock, 4096>(TlsContext::new(&config, &mut OsRng)).await.expect("error establishing TLS connection");
-//!
-//!     println!("TLS session opened");
-//! }
-//! ```
+/*!
+# Example
 
+```
+use embedded_tls::*;
+use embedded_io::adapters::FromTokio;
+use rand::rngs::OsRng;
+use tokio::net::TcpStream;
+
+#[tokio::main]
+async fn main() {
+    let stream = TcpStream::connect("http.sandbox.drogue.cloud:443").await.expect("error creating TCP connection");
+
+    println!("TCP connection opened");
+    let mut record_buffer = [0; 16384];
+    let config = TlsConfig::new()
+        .verify_cert(false)
+        .with_server_name("http.sandbox.drogue.cloud");
+    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
+        TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
+
+    tls.open::<OsRng, NoClock, 4096>(TlsContext::new(&config, &mut OsRng)).await.expect("error establishing TLS connection");
+
+    println!("TLS session opened");
+}
+```
+*/
 pub(crate) mod fmt;
 
 use parse_buffer::ParseError;

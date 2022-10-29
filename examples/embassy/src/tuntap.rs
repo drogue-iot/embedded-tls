@@ -1,22 +1,19 @@
-use async_io::Async;
-use libc;
-use log::*;
-use smoltcp::wire::EthernetFrame;
 use std::io;
 use std::io::{Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 
+use async_io::Async;
+use log::*;
+
 pub const SIOCGIFMTU: libc::c_ulong = 0x8921;
-#[allow(dead_code)]
-pub const SIOCGIFINDEX: libc::c_ulong = 0x8933;
-#[allow(dead_code)]
-pub const ETH_P_ALL: libc::c_short = 0x0003;
-#[allow(dead_code)]
+pub const _SIOCGIFINDEX: libc::c_ulong = 0x8933;
+pub const _ETH_P_ALL: libc::c_short = 0x0003;
 pub const TUNSETIFF: libc::c_ulong = 0x400454CA;
-#[allow(dead_code)]
-pub const IFF_TUN: libc::c_int = 0x0001;
+pub const _IFF_TUN: libc::c_int = 0x0001;
 pub const IFF_TAP: libc::c_int = 0x0002;
 pub const IFF_NO_PI: libc::c_int = 0x1000;
+
+const ETHERNET_HEADER_LEN: usize = 14;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -36,11 +33,7 @@ fn ifreq_for(name: &str) -> ifreq {
     ifreq
 }
 
-fn ifreq_ioctl(
-    lower: libc::c_int,
-    ifreq: &mut ifreq,
-    cmd: libc::c_ulong,
-) -> io::Result<libc::c_int> {
+fn ifreq_ioctl(lower: libc::c_int, ifreq: &mut ifreq, cmd: libc::c_ulong) -> io::Result<libc::c_int> {
     unsafe {
         let res = libc::ioctl(lower, cmd as _, ifreq as *mut ifreq);
         if res == -1 {
@@ -54,7 +47,6 @@ fn ifreq_ioctl(
 #[derive(Debug)]
 pub struct TunTap {
     fd: libc::c_int,
-    ifreq: ifreq,
     mtu: usize,
 }
 
@@ -90,9 +82,9 @@ impl TunTap {
 
             // SIOCGIFMTU returns the IP MTU (typically 1500 bytes.)
             // smoltcp counts the entire Ethernet packet in the MTU, so add the Ethernet header size to it.
-            let mtu = ip_mtu + EthernetFrame::<&[u8]>::header_len();
+            let mtu = ip_mtu + ETHERNET_HEADER_LEN;
 
-            Ok(TunTap { fd, mtu, ifreq })
+            Ok(TunTap { fd, mtu })
         }
     }
 }
@@ -146,10 +138,11 @@ impl TunTapDevice {
 }
 
 use core::task::Waker;
-use embassy_net::{DeviceCapabilities, LinkState, Packet, PacketBox, PacketBoxExt, PacketBuf};
 use std::task::Context;
 
-impl crate::Device for TunTapDevice {
+use embassy_net::{Device, DeviceCapabilities, LinkState, Packet, PacketBox, PacketBoxExt, PacketBuf};
+
+impl Device for TunTapDevice {
     fn is_transmit_ready(&mut self) -> bool {
         true
     }
@@ -175,8 +168,7 @@ impl crate::Device for TunTapDevice {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     let ready = if let Some(w) = self.waker.as_ref() {
                         let mut cx = Context::from_waker(w);
-                        let ready = self.device.poll_readable(&mut cx).is_ready();
-                        ready
+                        self.device.poll_readable(&mut cx).is_ready()
                     } else {
                         false
                     };
@@ -213,7 +205,7 @@ impl crate::Device for TunTapDevice {
         }
     }
 
-    fn capabilities(&mut self) -> DeviceCapabilities {
+    fn capabilities(&self) -> DeviceCapabilities {
         let mut caps = DeviceCapabilities::default();
         caps.max_transmission_unit = self.device.get_ref().mtu;
         caps

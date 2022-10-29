@@ -2,32 +2,27 @@
 name = "ping-embassy-net"
 version = "0.5.0"
 edition = "2021"
-authors = [
-    "Bob McWhirter <bmcwhirt@redhat.com>",
-    "Ulf Lilleengen <lulf@redhat.com>"
-]
+resolver = "2"
 
 [dependencies]
-embedded-tls = { path = "../..", features = ["async", "log"], default-features = false }
-env_logger = "0.8"
-rand_core = { version = "0.6.2", default-features = false }
+embedded-tls = { path = "../..", features = ["async", "std", "log"], default-features = false }
+env_logger = "0.9"
 rand = "0.8"
 log = "0.4"
-embassy-net = {git = "https://github.com/embassy-rs/embassy.git", rev = "36a1f203648dcb402727ea3eb5d30cf1f6993795", features = ["std", "tcp", "dhcpv4", "medium-ethernet", "log", "pool-16"] }
-embassy = {git = "https://github.com/embassy-rs/embassy.git", rev = "36a1f203648dcb402727ea3eb5d30cf1f6993795", default-features = false, features = ["std", "time", "nightly"] }
-smoltcp = { version = "0.8.0" }
-async-io = "1.3.1"
-futures = { version = "0.3.8", default-features = false, features = ["async-await"] }
-libc = "0.2.81"
-clap = { version = "3.0.0-beta.5", features = ["derive", "color"] }
-heapless = { version = "0.7.1", default-features = false }
-embedded-io = { version = "0.3.0", features = ["async"] }
+static_cell = "1"
+embassy-net = { version = "0.1.0", features = ["std", "tcp", "dhcpv4", "medium-ethernet", "log", "pool-16", "nightly"] }
+embassy-executor = { version = "0.1.0", default-features = false, features = ["std", "log", "integrated-timers", "nightly"] }
+embassy-time = { version = "0.1.0", default-features = false, features = ["std"] }
+smoltcp = { version = "0.8.0", git = "https://github.com/smoltcp-rs/smoltcp", rev = "ed0cf16750a42f30e31fcaf5347915592924b1e3" }
+async-io = "1.6.0"
+futures = { version = "0.3.17" }
+libc = "0.2.101"
+clap = { version = "3.0", features = ["derive", "color"] }
+heapless = { version = "0.7.5", default-features = false }
+embedded-io = { version = "0.3.1", features = ["async", "std", "futures"] }
+critical-section = { version = "1.1", features = ["std"] }
 
-[profile.release]
-codegen-units = 1
-debug = 2
-debug-assertions = false
-incremental = false
-lto = "fat"
-opt-level = 's'
-overflow-checks = false
+[patch.crates-io]
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "61560e740dea1b4c7ca036dafd66c834a1ff92e2" } 
+embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "61560e740dea1b4c7ca036dafd66c834a1ff92e2" } 
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "61560e740dea1b4c7ca036dafd66c834a1ff92e2" } 

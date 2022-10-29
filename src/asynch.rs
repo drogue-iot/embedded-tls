@@ -228,7 +228,7 @@ where
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    type ReadFuture<'m> = impl Future<Output = Result<usize, Self::Error>> where
+    type ReadFuture<'m> = impl Future<Output = Result<usize, Self::Error>> + 'm where
         Self: 'm;
 
     fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
@@ -241,14 +241,14 @@ where
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    type WriteFuture<'m> = impl Future<Output = Result<usize, Self::Error>>
+    type WriteFuture<'m> = impl Future<Output = Result<usize, Self::Error>> + 'm
     where
         Self: 'm;
     fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
         TlsConnection::write(self, buf)
     }
 
-    type FlushFuture<'m> = impl Future<Output = Result<(), Self::Error>>
+    type FlushFuture<'m> = impl Future<Output = Result<(), Self::Error>> + 'm
     where
         Self: 'm;
 
