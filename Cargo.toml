@@ -25,7 +25,7 @@ aes-gcm = { version = "0.10.1", default-features = false, features = ["aes"] }
 digest = { version = "0.10.3", default-features = false, features = ["core-api"] }
 typenum = { version = "1.15.0", default-features = false }
 heapless = { version = "0.7", default-features = false }
-embedded-io = "0.3.0"
+embedded-io = "0.3"
 generic-array = { version = "0.14", default-features = false }
 #webpki = { version = "0.22.0", default-features = false }
 #webpki = { path = "../../webpki", default-features = false }
