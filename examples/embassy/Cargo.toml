@@ -23,6 +23,6 @@ embedded-io = { version = "0.3.1", features = ["async", "std", "futures"] }
 critical-section = { version = "1.1", features = ["std"] }
 
 [patch.crates-io]
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "61560e740dea1b4c7ca036dafd66c834a1ff92e2" } 
-embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "61560e740dea1b4c7ca036dafd66c834a1ff92e2" } 
-embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "61560e740dea1b4c7ca036dafd66c834a1ff92e2" } 
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cea29d7de3169cf2212128e0386e5d57053cc12d" }
+embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "cea29d7de3169cf2212128e0386e5d57053cc12d" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "cea29d7de3169cf2212128e0386e5d57053cc12d" }

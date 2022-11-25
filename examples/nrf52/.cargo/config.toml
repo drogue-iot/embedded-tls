@@ -2,4 +2,4 @@
 runner = "probe-run --chip nrf52833_xxAA"
 
 [build]
-target = "thumbv7em-none-eabihf"
+target = "thumbv7em-none-eabi"

@@ -1,4 +1,7 @@
+#![allow(incomplete_features)]
 #![feature(type_alias_impl_trait)]
+#![feature(async_fn_in_trait)]
+#![feature(impl_trait_projections)]
 
 use clap::Parser;
 use embassy_executor::{Executor, Spawner};
@@ -7,7 +10,7 @@ use embassy_net::{ConfigStrategy, Ipv4Address, Ipv4Cidr, Stack, StackResources};
 use embedded_tls::{Aes128GcmSha256, NoClock, TlsConfig, TlsConnection, TlsContext};
 use heapless::Vec;
 use log::*;
-use rand::{RngCore, rngs::OsRng};
+use rand::{rngs::OsRng, RngCore};
 use static_cell::StaticCell;
 
 mod tuntap;
