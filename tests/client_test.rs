@@ -1,5 +1,7 @@
 #![macro_use]
-#![feature(type_alias_impl_trait)]
+#![allow(incomplete_features)]
+#![feature(async_fn_in_trait)]
+#![feature(impl_trait_projections)]
 use embedded_io::adapters::{FromStd, FromTokio};
 use rand::rngs::OsRng;
 use std::net::SocketAddr;

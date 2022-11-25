@@ -4,7 +4,6 @@ use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
 use crate::TlsError;
-use core::future::Future;
 use embedded_io::Error as _;
 use embedded_io::{
     asynch::{Read as AsyncRead, Write as AsyncWrite},
@@ -228,11 +227,8 @@ where
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    type ReadFuture<'m> = impl Future<Output = Result<usize, Self::Error>> + 'm where
-        Self: 'm;
-
-    fn read<'m>(&'m mut self, buf: &'m mut [u8]) -> Self::ReadFuture<'m> {
-        TlsConnection::read(self, buf)
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        TlsConnection::read(self, buf).await
     }
 }
 
@@ -241,18 +237,11 @@ where
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    type WriteFuture<'m> = impl Future<Output = Result<usize, Self::Error>> + 'm
-    where
-        Self: 'm;
-    fn write<'m>(&'m mut self, buf: &'m [u8]) -> Self::WriteFuture<'m> {
-        TlsConnection::write(self, buf)
+    async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        TlsConnection::write(self, buf).await
     }
 
-    type FlushFuture<'m> = impl Future<Output = Result<(), Self::Error>> + 'm
-    where
-        Self: 'm;
-
-    fn flush<'m>(&'m mut self) -> Self::FlushFuture<'m> {
-        async move { Ok(()) }
+    async fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
