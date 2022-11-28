@@ -84,6 +84,20 @@ where
                 .push(*scheme)
                 .map_err(|_| TlsError::EncodeError)?;
         }
+
+        let allow_alloc_schemes = if cfg!(feature = "alloc") {
+            true
+        } else {
+            !self.config.verify_cert
+        };
+        if allow_alloc_schemes {
+            for scheme in self.config.signature_schemes_alloc.iter() {
+                supported_signature_algorithms
+                    .push(*scheme)
+                    .map_err(|_| TlsError::EncodeError)?;
+            }
+        }
+
         extensions
             .push(ClientExtension::SignatureAlgorithms {
                 supported_signature_algorithms,

@@ -43,6 +43,7 @@ where
     pub(crate) server_name: Option<&'a str>,
     pub(crate) cipher_suite: PhantomData<CipherSuite>,
     pub(crate) signature_schemes: Vec<SignatureScheme, 16>,
+    pub(crate) signature_schemes_alloc: Vec<SignatureScheme, 16>,
     pub(crate) named_groups: Vec<NamedGroup, 16>,
     pub(crate) max_fragment_length: MaxFragmentLength,
     pub(crate) ca: Option<Certificate<'a>>,
@@ -93,6 +94,7 @@ where
         let mut config = Self {
             cipher_suite: PhantomData,
             signature_schemes: Vec::new(),
+            signature_schemes_alloc: Vec::new(),
             named_groups: Vec::new(),
             max_fragment_length: MaxFragmentLength::Bits10,
             server_name: None,
@@ -110,33 +112,30 @@ where
 
         //config.cipher_suites.push(CipherSuite::TlsAes128GcmSha256);
 
-        #[cfg(feature = "alloc")]
-        {
-            config
-                .signature_schemes
-                .push(SignatureScheme::RsaPkcs1Sha256)
-                .unwrap();
-            config
-                .signature_schemes
-                .push(SignatureScheme::RsaPkcs1Sha384)
-                .unwrap();
-            config
-                .signature_schemes
-                .push(SignatureScheme::RsaPkcs1Sha512)
-                .unwrap();
-            config
-                .signature_schemes
-                .push(SignatureScheme::RsaPssRsaeSha256)
-                .unwrap();
-            config
-                .signature_schemes
-                .push(SignatureScheme::RsaPssRsaeSha384)
-                .unwrap();
-            config
-                .signature_schemes
-                .push(SignatureScheme::RsaPssRsaeSha512)
-                .unwrap();
-        }
+        config
+            .signature_schemes_alloc
+            .push(SignatureScheme::RsaPkcs1Sha256)
+            .unwrap();
+        config
+            .signature_schemes_alloc
+            .push(SignatureScheme::RsaPkcs1Sha384)
+            .unwrap();
+        config
+            .signature_schemes_alloc
+            .push(SignatureScheme::RsaPkcs1Sha512)
+            .unwrap();
+        config
+            .signature_schemes_alloc
+            .push(SignatureScheme::RsaPssRsaeSha256)
+            .unwrap();
+        config
+            .signature_schemes_alloc
+            .push(SignatureScheme::RsaPssRsaeSha384)
+            .unwrap();
+        config
+            .signature_schemes_alloc
+            .push(SignatureScheme::RsaPssRsaeSha512)
+            .unwrap();
 
         config
             .signature_schemes
