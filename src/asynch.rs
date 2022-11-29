@@ -208,10 +208,12 @@ where
         Ok(())
     }
 
-    /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
-    pub async fn close(mut self) -> Result<Socket, TlsError> {
-        self.close_internal().await?;
-        Ok(self.delegate)
+    /// Close a connection instance, returning the ownership of the async I/O provider.
+    pub async fn close(mut self) -> Result<Socket, (Socket, TlsError)> {
+        match self.close_internal().await {
+            Ok(()) => Ok(self.delegate),
+            Err(e) => Err((self.delegate, e))
+        }
     }
 }
 
