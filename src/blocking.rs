@@ -183,26 +183,29 @@ where
         }
     }
 
-    /// Close a connection instance, returning the ownership of the config, random generator and the I/O provider.
-    pub fn close(self) -> Result<Socket, TlsError> {
+    fn close_internal(&mut self) -> Result<(), TlsError> {
         let record = ClientRecord::Alert(
             Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
             self.opened,
         );
 
-        let mut key_schedule = self.key_schedule;
-        let mut delegate = self.delegate;
-        let record_buf = self.record_buf;
+        let (_, len) = encode_record::<CipherSuite>(self.record_buf, &mut self.key_schedule, &record)?;
 
-        let (_, len) = encode_record::<CipherSuite>(record_buf, &mut key_schedule, &record)?;
-
-        delegate
-            .write(&record_buf[..len])
+        self.delegate
+            .write(&self.record_buf[..len])
             .map_err(|e| TlsError::Io(e.kind()))?;
 
-        key_schedule.increment_write_counter();
+        self.key_schedule.increment_write_counter();
 
-        Ok(delegate)
+        Ok(())
+    }
+
+    /// Close a connection instance, returning the ownership of the I/O provider.
+    pub fn close(mut self) -> Result<Socket, (Socket, TlsError)> {
+        match self.close_internal() {
+            Ok(()) => Ok(self.delegate),
+            Err(e) => Err((self.delegate, e))
+        }
     }
 }
 

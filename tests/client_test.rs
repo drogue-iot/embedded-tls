@@ -76,7 +76,7 @@ async fn test_ping() {
     assert_eq!(b"ping", &rx_buf[..sz]);
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
 
-    tls.close().await.expect("error closing session");
+    tls.close().await.map_err(|(_, e)| e).expect("error closing session");
 }
 
 #[test]
@@ -111,5 +111,5 @@ fn test_blocking_ping() {
     assert_eq!(b"ping", &rx_buf[..sz]);
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
 
-    tls.close().expect("error closing session");
+    tls.close().map_err(|(_, e)| e).expect("error closing session");
 }
