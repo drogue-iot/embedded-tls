@@ -1,6 +1,6 @@
 [package]
 name = "embedded-tls"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2021"
 authors = [
     "Bob McWhirter <bmcwhirt@redhat.com>",
@@ -47,7 +47,7 @@ log = "0.4"
 pem-parser = "0.1.1"
 
 [features]
-default = ["std", "async", "log", "tokio"]
+default = ["std", "async", "log", "tokio", "webpki"]
 defmt = ["dep:defmt", "embedded-io/defmt", "heapless/defmt-impl"]
 std = ["embedded-io/std"]
 tokio = ["embedded-io/tokio"]

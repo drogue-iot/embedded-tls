@@ -58,23 +58,19 @@ where
     ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection instance
     /// must be recreated.
-    pub fn open<
-        'm,
-        RNG: CryptoRng + RngCore + 'm,
-        Clock: TlsClock + 'static,
-        const CERT_SIZE: usize,
-    >(
+    pub fn open<'m, RNG: CryptoRng + RngCore + 'm, Verifier: TlsVerifier<CipherSuite> + 'static>(
         &mut self,
         context: TlsContext<'m, CipherSuite, RNG>,
     ) -> Result<(), TlsError>
     where
         'a: 'm,
     {
-        let mut handshake: Handshake<CipherSuite, CERT_SIZE> = Handshake::new();
+        let mut handshake: Handshake<CipherSuite, Verifier> =
+            Handshake::new(Verifier::new(context.config.server_name));
         let mut state = State::ClientHello;
 
         loop {
-            let next_state = state.process_blocking::<_, _, _, Clock, CERT_SIZE>(
+            let next_state = state.process_blocking::<_, _, _, Verifier>(
                 &mut self.delegate,
                 &mut handshake,
                 self.record_buf,
@@ -189,7 +185,8 @@ where
             self.opened,
         );
 
-        let (_, len) = encode_record::<CipherSuite>(self.record_buf, &mut self.key_schedule, &record)?;
+        let (_, len) =
+            encode_record::<CipherSuite>(self.record_buf, &mut self.key_schedule, &record)?;
 
         self.delegate
             .write(&self.record_buf[..len])
@@ -204,7 +201,7 @@ where
     pub fn close(mut self) -> Result<Socket, (Socket, TlsError)> {
         match self.close_internal() {
             Ok(()) => Ok(self.delegate),
-            Err(e) => Err((self.delegate, e))
+            Err(e) => Err((self.delegate, e)),
         }
     }
 }

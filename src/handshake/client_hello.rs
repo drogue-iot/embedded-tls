@@ -1,3 +1,4 @@
+use digest::OutputSizeUser;
 use heapless::Vec;
 use p256::ecdh::EphemeralSecret;
 use p256::elliptic_curve::rand_core::{CryptoRng, RngCore};
@@ -5,7 +6,7 @@ use p256::EncodedPoint;
 
 use crate::buffer::*;
 use crate::config::{TlsCipherSuite, TlsConfig};
-use crate::extensions::ClientExtension;
+use crate::extensions::{ClientExtension, PskKeyExchangeMode};
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::named_groups::NamedGroup;
 use crate::signature_schemes::SignatureScheme;
@@ -16,7 +17,7 @@ pub struct ClientHello<'config, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
-    config: &'config TlsConfig<'config, CipherSuite>,
+    pub(crate) config: &'config TlsConfig<'config, CipherSuite>,
     random: Random,
     pub(crate) secret: EphemeralSecret,
 }
@@ -66,7 +67,6 @@ where
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
         // extensions (1+)
-        let mut extensions = Vec::<ClientExtension, 16>::new();
         let extension_length_marker = buf.len();
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
@@ -74,9 +74,7 @@ where
         let mut versions = Vec::<ProtocolVersion, 16>::new();
         versions.push(TLS13).map_err(|_| TlsError::EncodeError)?;
 
-        extensions
-            .push(ClientExtension::SupportedVersions { versions })
-            .map_err(|_| TlsError::EncodeError)?;
+        (ClientExtension::SupportedVersions { versions }).encode(buf)?;
 
         let mut supported_signature_algorithms = Vec::<SignatureScheme, 16>::new();
         for scheme in self.config.signature_schemes.iter() {
@@ -85,24 +83,10 @@ where
                 .map_err(|_| TlsError::EncodeError)?;
         }
 
-        let allow_alloc_schemes = if cfg!(feature = "alloc") {
-            true
-        } else {
-            !self.config.verify_cert
-        };
-        if allow_alloc_schemes {
-            for scheme in self.config.signature_schemes_alloc.iter() {
-                supported_signature_algorithms
-                    .push(*scheme)
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-        }
-
-        extensions
-            .push(ClientExtension::SignatureAlgorithms {
-                supported_signature_algorithms,
-            })
-            .map_err(|_| TlsError::EncodeError)?;
+        (ClientExtension::SignatureAlgorithms {
+            supported_signature_algorithms,
+        })
+        .encode(buf)?;
 
         let mut supported_groups = Vec::<NamedGroup, 16>::new();
         for named_group in self.config.named_groups.iter() {
@@ -110,22 +94,34 @@ where
                 .push(*named_group)
                 .map_err(|_| TlsError::EncodeError)?;
         }
-        extensions
-            .push(ClientExtension::SupportedGroups { supported_groups })
-            .map_err(|_| TlsError::EncodeError)?;
 
-        extensions
-            .push(ClientExtension::KeyShare {
-                group: NamedGroup::Secp256r1,
-                opaque: public_key,
-            })
-            .map_err(|_| TlsError::EncodeError)?;
+        (ClientExtension::SupportedGroups { supported_groups }).encode(buf)?;
+
+        (ClientExtension::PskKeyExchangeModes {
+            modes: Vec::from_slice(&[PskKeyExchangeMode::PskDheKe]).unwrap(),
+        })
+        .encode(buf)?;
+
+        (ClientExtension::KeyShare {
+            group: NamedGroup::Secp256r1,
+            opaque: public_key,
+        })
+        .encode(buf)?;
 
         if let Some(server_name) = self.config.server_name.as_ref() {
             // TODO Add SNI extension
-            extensions
-                .push(ClientExtension::ServerName { server_name })
-                .map_err(|_| TlsError::EncodeError)?;
+            (ClientExtension::ServerName { server_name }).encode(buf)?;
+        }
+
+        // IMPORTANT: The pre shared keys must be encoded last, since we encode the binders
+        // at a later stage
+        if let Some((_, identities)) = &self.config.psk {
+            (ClientExtension::PreSharedKey {
+                identities: identities.clone(),
+                hash_size: <CipherSuite::Hash as OutputSizeUser>::output_size(),
+            })
+            .encode(buf)
+            .map_err(|_| TlsError::EncodeError)?;
         }
 
         //extensions.push(ClientExtension::MaxFragmentLength(
@@ -134,11 +130,6 @@ where
 
         // ----------------------------------------
         // ----------------------------------------
-
-        for e in extensions {
-            //info!("encode extension");
-            e.encode(buf)?;
-        }
 
         let extensions_length = (buf.len() as u16 - extension_length_marker as u16) - 2;
         //info!("extensions length: {:x?}", extensions_length.to_be_bytes());

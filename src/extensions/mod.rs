@@ -85,28 +85,42 @@ pub enum ClientExtension<'a> {
         group: NamedGroup,
         opaque: &'a [u8],
     },
+    PreSharedKey {
+        identities: Vec<&'a [u8], 4>,
+        hash_size: usize,
+    },
+    PskKeyExchangeModes {
+        modes: Vec<PskKeyExchangeMode, 4>,
+    },
     SignatureAlgorithmsCert {
         supported_signature_algorithms: Vec<SignatureScheme, 16>,
     },
     MaxFragmentLength(MaxFragmentLength),
 }
 
+#[derive(Clone, Copy)]
+#[repr(u8)]
+pub enum PskKeyExchangeMode {
+    PskKe = 0,
+    PskDheKe = 1,
+}
+
 impl ClientExtension<'_> {
     pub fn extension_type(&self) -> [u8; 2] {
-        match self {
-            ClientExtension::ServerName { .. } => ExtensionType::ServerName as u16,
-            ClientExtension::SupportedVersions { .. } => ExtensionType::SupportedVersions as u16,
-            ClientExtension::SignatureAlgorithms { .. } => {
-                ExtensionType::SignatureAlgorithms as u16
-            }
-            ClientExtension::KeyShare { .. } => ExtensionType::KeyShare as u16,
-            ClientExtension::SupportedGroups { .. } => ExtensionType::SupportedGroups as u16,
+        (match self {
+            ClientExtension::ServerName { .. } => ExtensionType::ServerName,
+            ClientExtension::SupportedVersions { .. } => ExtensionType::SupportedVersions,
+            ClientExtension::SignatureAlgorithms { .. } => ExtensionType::SignatureAlgorithms,
+            ClientExtension::KeyShare { .. } => ExtensionType::KeyShare,
+            ClientExtension::SupportedGroups { .. } => ExtensionType::SupportedGroups,
             ClientExtension::SignatureAlgorithmsCert { .. } => {
-                ExtensionType::SignatureAlgorithmsCert as u16
+                ExtensionType::SignatureAlgorithmsCert
             }
-            ClientExtension::MaxFragmentLength(_) => ExtensionType::MaxFragmentLength as u16,
-        }
-        .to_be_bytes()
+            ClientExtension::PskKeyExchangeModes { .. } => ExtensionType::PskKeyExchangeModes,
+            ClientExtension::PreSharedKey { .. } => ExtensionType::PreSharedKey,
+            ClientExtension::MaxFragmentLength(_) => ExtensionType::MaxFragmentLength,
+        } as u16)
+            .to_be_bytes()
     }
 
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
@@ -131,6 +145,13 @@ impl ClientExtension<'_> {
                     .map_err(|_| TlsError::EncodeError)?;
                 buf.extend_from_slice(server_name.as_bytes())
                     .map_err(|_| TlsError::EncodeError)?;
+            }
+            ClientExtension::PskKeyExchangeModes { modes } => {
+                buf.push(modes.len() as u8)
+                    .map_err(|_| TlsError::EncodeError)?;
+                for mode in modes {
+                    buf.push(*mode as u8).map_err(|_| TlsError::EncodeError)?;
+                }
             }
             ClientExtension::SupportedVersions { versions } => {
                 //info!("supported versions ext");
@@ -190,6 +211,35 @@ impl ClientExtension<'_> {
                     .map_err(|_| TlsError::EncodeError)?;
                 buf.extend_from_slice(opaque.as_ref())
                     .map_err(|_| TlsError::EncodeError)?;
+            }
+            ClientExtension::PreSharedKey {
+                identities,
+                hash_size,
+            } => {
+                // Each identity entry is of length identity.len() + u32 (for the ticket age)
+                let identities_len: usize = identities.iter().map(|i| i.len() + 2 + 4).sum();
+                buf.extend_from_slice(&(identities_len as u16).to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
+                for identity in identities {
+                    buf.extend_from_slice(&(identity.len() as u16).to_be_bytes())
+                        .map_err(|_| TlsError::EncodeError)?;
+
+                    buf.extend_from_slice(&identity)
+                        .map_err(|_| TlsError::EncodeError)?;
+
+                    // NOTE: No support for ticket age, set to 0 as recommended by RFC
+                    buf.extend_from_slice(&0u32.to_be_bytes())
+                        .map_err(|_| TlsError::EncodeError)?;
+                }
+
+                // NOTE: We encode binders later after computing the transcript.
+                let binders_len = (1 + hash_size) * identities.len();
+                buf.extend_from_slice(&(binders_len as u16).to_be_bytes())
+                    .map_err(|_| TlsError::EncodeError)?;
+
+                for _ in 0..binders_len {
+                    buf.push(0).map_err(|_| TlsError::EncodeError)?;
+                }
             }
             ClientExtension::MaxFragmentLength(len) => {
                 //info!("max fragment length");

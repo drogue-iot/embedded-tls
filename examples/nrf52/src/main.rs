@@ -23,7 +23,7 @@ fn main() -> ! {
     let mut tls: TlsConnection<Dummy, Aes128GcmSha256> =
         TlsConnection::new(Dummy {}, &mut record_buffer[..]);
 
-    tls.open::<Rng, NoClock, 4096>(TlsContext::new(&config, &mut rng))
+    tls.open::<Rng, NoVerify>(TlsContext::new(&config, &mut rng))
         .expect("error establishing TLS connection");
 
     tls.write(b"ping").expect("error writing data");

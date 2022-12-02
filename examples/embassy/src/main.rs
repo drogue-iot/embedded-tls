@@ -7,7 +7,7 @@ use clap::Parser;
 use embassy_executor::{Executor, Spawner};
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{ConfigStrategy, Ipv4Address, Ipv4Cidr, Stack, StackResources};
-use embedded_tls::{Aes128GcmSha256, NoClock, TlsConfig, TlsConnection, TlsContext};
+use embedded_tls::{Aes128GcmSha256, NoVerify, TlsConfig, TlsConnection, TlsContext};
 use heapless::Vec;
 use log::*;
 use rand::{rngs::OsRng, RngCore};
@@ -97,7 +97,7 @@ async fn main_task(spawner: Spawner) {
     let mut tls: TlsConnection<TcpSocket, Aes128GcmSha256> =
         TlsConnection::new(socket, &mut record_buffer);
 
-    tls.open::<OsRng, NoClock, 4096>(TlsContext::new(&config, &mut rng))
+    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
         .await
         .expect("error establishing TLS connection");
 

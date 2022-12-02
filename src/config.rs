@@ -1,7 +1,10 @@
 use crate::cipher_suites::CipherSuite;
+use crate::handshake::certificate::CertificateRef;
+use crate::handshake::certificate_verify::CertificateVerify;
 use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
 use crate::signature_schemes::SignatureScheme;
+use crate::TlsError;
 use aes_gcm::{AeadInPlace, Aes128Gcm, KeyInit};
 use core::marker::PhantomData;
 use digest::core_api::BlockSizeUser;
@@ -14,6 +17,7 @@ use typenum::{U12, U16};
 
 const TLS_RECORD_MAX: usize = 16384;
 
+/// Represents a TLS 1.3 cipher suite
 pub trait TlsCipherSuite {
     const CODE_POINT: u16;
     type Cipher: KeyInit<KeySize = Self::KeyLen> + AeadInPlace<NonceSize = Self::IvLen>;
@@ -33,6 +37,64 @@ impl TlsCipherSuite for Aes128GcmSha256 {
     type Hash = Sha256;
 }
 
+/// A TLS 1.3 verifier.
+///
+/// The verifier is responsible for verifying certificates and signatures. Since certificate verification is
+/// an expensive process, this trait allows clients to choose how much verification should take place,
+/// and also to skip the verification if the server is verified through other means (I.e. a pre-shared key).
+pub trait TlsVerifier<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    /// Create a new verification instance.
+    ///
+    /// This method is called for every TLS handshake.
+    ///
+    /// Host verification is enabled by passing a server hostname.
+    fn new(host: Option<&str>) -> Self;
+
+    /// Verify a certificate.
+    ///
+    /// The handshake transcript up to this point and the server certificate is provided
+    /// for the implementation
+    /// to use.
+    fn verify_certificate(
+        &mut self,
+        transcript: &CipherSuite::Hash,
+        ca: &Option<Certificate>,
+        cert: CertificateRef,
+    ) -> Result<(), TlsError>;
+
+    /// Verify the certificate signature.
+    ///
+    /// The signature verification uses the transcript and certificate provided earlier to decode the provided signature.
+    fn verify_signature(&mut self, verify: CertificateVerify) -> Result<(), crate::TlsError>;
+}
+
+pub struct NoVerify;
+
+impl<CipherSuite> TlsVerifier<CipherSuite> for NoVerify
+where
+    CipherSuite: TlsCipherSuite,
+{
+    fn new(_host: Option<&str>) -> Self {
+        Self
+    }
+
+    fn verify_certificate(
+        &mut self,
+        _transcript: &CipherSuite::Hash,
+        _ca: &Option<Certificate>,
+        _cert: CertificateRef,
+    ) -> Result<(), TlsError> {
+        Ok(())
+    }
+
+    fn verify_signature(&mut self, _verify: CertificateVerify) -> Result<(), crate::TlsError> {
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TlsConfig<'a, CipherSuite>
@@ -41,15 +103,13 @@ where
 {
     //pub(crate) cipher_suites: Vec<CipherSuite, U16>,
     pub(crate) server_name: Option<&'a str>,
+    pub(crate) psk: Option<(&'a [u8], Vec<&'a [u8], 4>)>,
     pub(crate) cipher_suite: PhantomData<CipherSuite>,
     pub(crate) signature_schemes: Vec<SignatureScheme, 16>,
-    pub(crate) signature_schemes_alloc: Vec<SignatureScheme, 16>,
     pub(crate) named_groups: Vec<NamedGroup, 16>,
     pub(crate) max_fragment_length: MaxFragmentLength,
     pub(crate) ca: Option<Certificate<'a>>,
     pub(crate) cert: Option<Certificate<'a>>,
-    pub(crate) verify_host: bool,
-    pub(crate) verify_cert: bool,
 }
 
 pub trait TlsClock {
@@ -94,48 +154,19 @@ where
         let mut config = Self {
             cipher_suite: PhantomData,
             signature_schemes: Vec::new(),
-            signature_schemes_alloc: Vec::new(),
             named_groups: Vec::new(),
             max_fragment_length: MaxFragmentLength::Bits10,
+            psk: None,
             server_name: None,
-            verify_cert: true,
-            verify_host: true,
             ca: None,
             cert: None,
         };
 
-        #[cfg(not(feature = "webpki"))]
-        {
-            config.verify_cert = false;
-            config.verify_host = false;
-        }
-
         //config.cipher_suites.push(CipherSuite::TlsAes128GcmSha256);
-
-        config
-            .signature_schemes_alloc
-            .push(SignatureScheme::RsaPkcs1Sha256)
-            .unwrap();
-        config
-            .signature_schemes_alloc
-            .push(SignatureScheme::RsaPkcs1Sha384)
-            .unwrap();
-        config
-            .signature_schemes_alloc
-            .push(SignatureScheme::RsaPkcs1Sha512)
-            .unwrap();
-        config
-            .signature_schemes_alloc
-            .push(SignatureScheme::RsaPssRsaeSha256)
-            .unwrap();
-        config
-            .signature_schemes_alloc
-            .push(SignatureScheme::RsaPssRsaeSha384)
-            .unwrap();
-        config
-            .signature_schemes_alloc
-            .push(SignatureScheme::RsaPssRsaeSha512)
-            .unwrap();
+        //
+        if cfg!(feature = "alloc") {
+            config = config.enable_rsa_signatures();
+        }
 
         config
             .signature_schemes
@@ -155,18 +186,31 @@ where
         config
     }
 
+    /// Enable RSA ciphers even if they might not be supported.
+    pub fn enable_rsa_signatures(mut self) -> Self {
+        self.signature_schemes
+            .push(SignatureScheme::RsaPkcs1Sha256)
+            .unwrap();
+        self.signature_schemes
+            .push(SignatureScheme::RsaPkcs1Sha384)
+            .unwrap();
+        self.signature_schemes
+            .push(SignatureScheme::RsaPkcs1Sha512)
+            .unwrap();
+        self.signature_schemes
+            .push(SignatureScheme::RsaPssRsaeSha256)
+            .unwrap();
+        self.signature_schemes
+            .push(SignatureScheme::RsaPssRsaeSha384)
+            .unwrap();
+        self.signature_schemes
+            .push(SignatureScheme::RsaPssRsaeSha512)
+            .unwrap();
+        self
+    }
+
     pub fn with_server_name(mut self, server_name: &'a str) -> Self {
         self.server_name = Some(server_name);
-        self
-    }
-
-    pub fn verify_hostname(mut self, verify_host: bool) -> Self {
-        self.verify_host = verify_host;
-        self
-    }
-
-    pub fn verify_cert(mut self, verify_cert: bool) -> Self {
-        self.verify_cert = verify_cert;
         self
     }
 
@@ -177,6 +221,12 @@ where
 
     pub fn with_cert(mut self, cert: Certificate<'a>) -> Self {
         self.cert = Some(cert);
+        self
+    }
+
+    pub fn with_psk(mut self, psk: &'a [u8], identities: &[&'a [u8]]) -> Self {
+        // TODO: Remove potential panic
+        self.psk = Some((psk, Vec::from_slice(identities).unwrap()));
         self
     }
 }

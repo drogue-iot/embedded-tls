@@ -1,5 +1,6 @@
 use embedded_io::adapters::FromStd;
 use embedded_tls::blocking::*;
+use embedded_tls::webpki::CertVerifier;
 use rand::rngs::OsRng;
 use std::net::TcpStream;
 use std::time::SystemTime;
@@ -17,8 +18,10 @@ fn main() {
         TlsConnection::new(FromStd::new(stream), &mut record_buffer);
     let mut rng = OsRng;
 
-    tls.open::<OsRng, SystemTime, 4096>(TlsContext::new(&config, &mut rng))
-        .expect("error establishing TLS connection");
+    tls.open::<OsRng, CertVerifier<Aes128GcmSha256, SystemTime, 4096>>(TlsContext::new(
+        &config, &mut rng,
+    ))
+    .expect("error establishing TLS connection");
 
     tls.write(b"ping").expect("error writing data");
 

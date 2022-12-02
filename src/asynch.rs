@@ -58,24 +58,20 @@ where
     ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection instance
     /// must be recreated.
-    pub async fn open<
-        'm,
-        RNG: CryptoRng + RngCore + 'm,
-        Clock: TlsClock + 'static,
-        const CERT_SIZE: usize,
-    >(
+    pub async fn open<'m, RNG: CryptoRng + RngCore + 'm, Verifier: TlsVerifier<CipherSuite> + 'm>(
         &mut self,
         context: TlsContext<'m, CipherSuite, RNG>,
     ) -> Result<(), TlsError>
     where
         'a: 'm,
     {
-        let mut handshake: Handshake<CipherSuite, CERT_SIZE> = Handshake::new();
+        let mut handshake: Handshake<CipherSuite, Verifier> =
+            Handshake::new(Verifier::new(context.config.server_name));
         let mut state = State::ClientHello;
 
         loop {
             let next_state = state
-                .process::<_, _, _, Clock, CERT_SIZE>(
+                .process::<_, _, _, Verifier>(
                     &mut self.delegate,
                     &mut handshake,
                     self.record_buf,
@@ -211,7 +207,7 @@ where
     pub async fn close(mut self) -> Result<Socket, (Socket, TlsError)> {
         match self.close_internal().await {
             Ok(()) => Ok(self.delegate),
-            Err(e) => Err((self.delegate, e))
+            Err(e) => Err((self.delegate, e)),
         }
     }
 }
