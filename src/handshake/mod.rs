@@ -18,6 +18,7 @@ use core::ops::Range;
 use digest::OutputSizeUser;
 use sha2::Digest;
 
+pub mod binder;
 pub mod certificate;
 pub mod certificate_request;
 pub mod certificate_verify;

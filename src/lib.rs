@@ -43,12 +43,13 @@ async fn main() {
     println!("TCP connection opened");
     let mut record_buffer = [0; 16384];
     let config = TlsConfig::new()
-        .verify_cert(false)
         .with_server_name("http.sandbox.drogue.cloud");
     let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
         TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
 
-    tls.open::<OsRng, NoClock, 4096>(TlsContext::new(&config, &mut OsRng)).await.expect("error establishing TLS connection");
+    // Allows disabling cert verification, in case you are using PSK and don't need it, or are just testing.
+    // otherwise, use embedded_tls::webpki::CertVerifier, which only works on std for now.
+    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng)).await.expect("error establishing TLS connection");
 
     println!("TLS session opened");
 }
@@ -79,42 +80,7 @@ mod signature_schemes;
 mod supported_versions;
 
 #[cfg(feature = "webpki")]
-mod verify;
-
-// TODO: Fix `ring` crate to build for ARM embedded targets
-#[cfg(not(feature = "webpki"))]
-mod verify {
-    pub(crate) fn verify_signature<'a, CipherSuite>(
-        config: &crate::config::TlsConfig<'a, CipherSuite>,
-        _message: &[u8],
-        _certificate: crate::handshake::certificate::CertificateRef,
-        _verify: crate::handshake::certificate_verify::CertificateVerify,
-    ) -> Result<(), crate::TlsError>
-    where
-        CipherSuite: crate::config::TlsCipherSuite + 'static,
-    {
-        if config.verify_cert {
-            todo!("Not implemented!")
-        } else {
-            Ok(())
-        }
-    }
-
-    pub(crate) fn verify_certificate<'a, CipherSuite>(
-        config: &crate::config::TlsConfig<'a, CipherSuite>,
-        _certificate: &crate::handshake::certificate::CertificateRef,
-        _now: Option<u64>,
-    ) -> Result<(), crate::TlsError>
-    where
-        CipherSuite: crate::config::TlsCipherSuite + 'static,
-    {
-        if config.verify_cert {
-            todo!("Not implemented!")
-        } else {
-            Ok(())
-        }
-    }
-}
+pub mod webpki;
 
 #[cfg(feature = "async")]
 mod asynch;

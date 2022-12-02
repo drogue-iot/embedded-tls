@@ -1,3 +1,4 @@
+use crate::handshake::binder::PskBinder;
 use crate::handshake::finished::Finished;
 use crate::TlsError;
 use core::marker::PhantomData;
@@ -24,6 +25,7 @@ where
     hkdf: Option<Hkdf<D, SimpleHmac<D>>>,
     client_traffic_secret: Option<Hkdf<D, SimpleHmac<D>>>,
     server_traffic_secret: Option<Hkdf<D, SimpleHmac<D>>>,
+    binder_key: Option<Hkdf<D, SimpleHmac<D>>>,
     read_counter: u64,
     write_counter: u64,
     _key_len: PhantomData<KeyLen>,
@@ -51,6 +53,7 @@ where
             hkdf: None,
             client_traffic_secret: None,
             server_traffic_secret: None,
+            binder_key: None,
             read_counter: 0,
             write_counter: 0,
             _key_len: PhantomData,
@@ -132,6 +135,23 @@ where
         Ok(Finished { verify, hash: None })
     }
 
+    pub fn create_psk_binder(
+        &self,
+    ) -> Result<PskBinder<<D as OutputSizeUser>::OutputSize>, TlsError> {
+        let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
+            self.binder_key.as_ref().unwrap(),
+            &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16())?,
+        )?;
+
+        let mut hmac = SimpleHmac::<D>::new_from_slice(&key).map_err(|_| TlsError::CryptoError)?;
+        Mac::update(
+            &mut hmac,
+            &self.transcript_hash.as_ref().unwrap().clone().finalize(),
+        );
+        let verify = hmac.finalize().into_bytes();
+        Ok(PskBinder { verify })
+    }
+
     pub fn verify_server_finished(
         &self,
         finished: &Finished<<D as OutputSizeUser>::OutputSize>,
@@ -198,12 +218,17 @@ where
         Ok(())
     }
 
-    pub fn initialize_early_secret(&mut self) -> Result<(), TlsError> {
-        let (secret, hkdf) =
-            Hkdf::<D, SimpleHmac<D>>::extract(Some(self.secret.as_ref()), Self::zero().as_slice());
+    // Initializes the early secrets with a callback for any PSK binders
+    pub fn initialize_early_secret(&mut self, psk: Option<&[u8]>) -> Result<(), TlsError> {
+        let (secret, hkdf) = Hkdf::<D, SimpleHmac<D>>::extract(
+            Some(self.secret.as_ref()),
+            psk.unwrap_or(Self::zero().as_slice()),
+        );
         self.hkdf.replace(hkdf);
         self.secret = secret;
-        // no right-hand jaunts (yet)
+        let binder_key = self.derive_secret(b"ext binder", ContextType::EmptyHash)?;
+        self.binder_key
+            .replace(Hkdf::from_prk(&binder_key).unwrap());
         self.derived()
     }
 

@@ -1,0 +1,35 @@
+#![macro_use]
+
+use embedded_io::adapters::FromTokio;
+use embedded_tls::*;
+use rand::rngs::OsRng;
+use std::error::Error;
+use tokio::net::TcpStream;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
+    let stream = TcpStream::connect("localhost:4433").await?;
+
+    log::info!("Connected");
+    let mut record_buffer = [0; 16384];
+    let config = TlsConfig::new()
+        .with_server_name("localhost")
+        .with_psk(&[0xaa, 0xbb, 0xcc, 0xdd], &[b"vader"])
+    let mut rng = OsRng;
+    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
+        TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
+
+    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
+        .await
+        .expect("error establishing TLS connection");
+
+    tls.write(b"ping").await.expect("error writing data");
+
+    let mut rx_buf = [0; 4096];
+    let sz = tls.read(&mut rx_buf).await.expect("error reading data");
+    log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
+
+    Ok(())
+}

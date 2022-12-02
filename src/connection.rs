@@ -1,19 +1,14 @@
-use crate::config::{TlsCipherSuite, TlsClock, TlsConfig};
+use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, RecordHeader, ServerRecord};
-use crate::verify::{verify_certificate, verify_signature};
 use crate::TlsError;
 use crate::{
     alert::*,
-    handshake::{
-        certificate::{Certificate, CertificateRef},
-        certificate_request::CertificateRequest,
-    },
+    handshake::{certificate::CertificateRef, certificate_request::CertificateRequest},
 };
 use core::fmt::Debug;
 use embedded_io::Error as _;
-use heapless::Vec;
 use rand_core::{CryptoRng, RngCore};
 
 use embedded_io::blocking::{Read as BlockingRead, Write as BlockingWrite};
@@ -188,7 +183,43 @@ where
     })?;
 
     if let Some(range) = range {
-        Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
+        if let ClientRecord::Handshake(ClientHandshake::ClientHello(hello), false) = record {
+            // Special case for PSK which needs to:
+            //
+            // 1. Add the client hello without the binders to the transcript
+            // 2. Create the binders for each identity using the transcript
+            // 3. Add the rest of the client hello.
+            //
+            // This causes a few issues since lengths must be correctly inside the payload,
+            // but won't actually be added to the record buffer until the end.
+            if let Some((_, identities)) = &hello.config.psk {
+                let binders_len =
+                    identities.len() * (1 + <CipherSuite::Hash as OutputSizeUser>::output_size());
+
+                // NOTE: Exclude the binders_len itself from the digest
+                Digest::update(
+                    key_schedule.transcript_hash(),
+                    &tx_buf[range.start..range.end - binders_len - 2],
+                );
+
+                // Append after the client hello data. Sizes have already been set.
+                let mut buf = CryptoBuffer::wrap(&mut tx_buf[range.end - binders_len..]);
+                // Create a binder and encode for each identity
+                for _id in identities {
+                    let binder = key_schedule.create_psk_binder()?;
+                    binder.encode(&mut buf)?;
+                }
+
+                Digest::update(
+                    key_schedule.transcript_hash(),
+                    &tx_buf[range.end - binders_len - 2..range.end],
+                );
+            } else {
+                Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
+            }
+        } else {
+            Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
+        }
     }
 
     Ok((next_hash, len))
@@ -271,28 +302,28 @@ where
     ServerRecord::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
 }
 
-pub struct Handshake<CipherSuite, const CERT_SIZE: usize>
+pub struct Handshake<CipherSuite, Verifier>
 where
     CipherSuite: TlsCipherSuite + 'static,
+    Verifier: TlsVerifier<CipherSuite>,
 {
     traffic_hash: Option<CipherSuite::Hash>,
     secret: Option<EphemeralSecret>,
-    certificate_transcript: Option<CipherSuite::Hash>,
     certificate_request: Option<CertificateRequest>,
-    certificate: Option<Certificate<CERT_SIZE>>,
+    verifier: Verifier,
 }
 
-impl<'a, CipherSuite, const CERT_SIZE: usize> Handshake<CipherSuite, CERT_SIZE>
+impl<'a, CipherSuite, Verifier> Handshake<CipherSuite, Verifier>
 where
     CipherSuite: TlsCipherSuite + 'static,
+    Verifier: TlsVerifier<CipherSuite>,
 {
-    pub fn new() -> Handshake<CipherSuite, CERT_SIZE> {
+    pub fn new(verifier: Verifier) -> Handshake<CipherSuite, Verifier> {
         Handshake {
             traffic_hash: None,
             secret: None,
-            certificate_transcript: None,
-            certificate: None,
             certificate_request: None,
+            verifier,
         }
     }
 }
@@ -310,10 +341,10 @@ pub enum State {
 
 impl<'a> State {
     #[cfg(feature = "async")]
-    pub async fn process<Transport, CipherSuite, RNG, Clock, const CERT_SIZE: usize>(
+    pub async fn process<Transport, CipherSuite, RNG, Verifier>(
         self,
         transport: &mut Transport,
-        handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
+        handshake: &mut Handshake<CipherSuite, Verifier>,
         record_buf: &mut [u8],
         key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         config: &TlsConfig<'a, CipherSuite>,
@@ -323,11 +354,11 @@ impl<'a> State {
         Transport: AsyncRead + AsyncWrite + 'a,
         RNG: CryptoRng + RngCore + 'a,
         CipherSuite: TlsCipherSuite + 'static,
-        Clock: TlsClock + 'static,
+        Verifier: TlsVerifier<CipherSuite>,
     {
         match self {
             State::ClientHello => {
-                key_schedule.initialize_early_secret()?;
+                key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
                 let client_hello = ClientRecord::client_hello(config, rng);
                 let (_, len) = encode_record(record_buf, key_schedule, &client_hello)?;
 
@@ -362,7 +393,7 @@ impl<'a> State {
                     decode_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
                         .await?;
 
-                Ok(process_server_verify::<_, Clock, CERT_SIZE>(
+                Ok(process_server_verify::<_, Verifier>(
                     handshake,
                     key_schedule,
                     config,
@@ -430,10 +461,10 @@ impl<'a> State {
         }
     }
 
-    pub fn process_blocking<Transport, CipherSuite, RNG, Clock, const CERT_SIZE: usize>(
+    pub fn process_blocking<Transport, CipherSuite, RNG, Verifier>(
         self,
         transport: &mut Transport,
-        handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
+        handshake: &mut Handshake<CipherSuite, Verifier>,
         record_buf: &mut [u8],
         key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         config: &TlsConfig<'a, CipherSuite>,
@@ -443,11 +474,11 @@ impl<'a> State {
         Transport: BlockingRead + BlockingWrite + 'a,
         RNG: CryptoRng + RngCore,
         CipherSuite: TlsCipherSuite + 'static,
-        Clock: TlsClock + 'static,
+        Verifier: TlsVerifier<CipherSuite>,
     {
         match self {
             State::ClientHello => {
-                key_schedule.initialize_early_secret()?;
+                key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
                 let client_hello = ClientRecord::client_hello(config, rng);
                 let (_, len) = encode_record(record_buf, key_schedule, &client_hello)?;
 
@@ -485,7 +516,7 @@ impl<'a> State {
                     key_schedule,
                 )?;
 
-                Ok(process_server_verify::<_, Clock, CERT_SIZE>(
+                Ok(process_server_verify::<_, Verifier>(
                     handshake,
                     key_schedule,
                     config,
@@ -548,13 +579,14 @@ impl<'a> State {
     }
 }
 
-fn process_server_hello<CipherSuite, const CERT_SIZE: usize>(
-    handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
+fn process_server_hello<CipherSuite, Verifier>(
+    handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record: ServerRecord<'_, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
 ) -> Result<(), TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
+    Verifier: TlsVerifier<CipherSuite>,
 {
     {
         match record {
@@ -578,15 +610,15 @@ where
     }
 }
 
-fn process_server_verify<'a, CipherSuite, Clock, const CERT_SIZE: usize>(
-    handshake: &mut Handshake<CipherSuite, CERT_SIZE>,
+fn process_server_verify<'a, CipherSuite, Verifier>(
+    handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     config: &TlsConfig<'a, CipherSuite>,
     record: ServerRecord<'_, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
-    Clock: TlsClock + 'static,
+    Verifier: TlsVerifier<CipherSuite>,
 {
     let mut records = Queue::new();
     decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
@@ -599,31 +631,19 @@ where
                     ServerHandshake::EncryptedExtensions(_) => Ok(State::ServerVerify),
                     ServerHandshake::Certificate(certificate) => {
                         trace!("Verifying certificate!");
-                        verify_certificate(config, &certificate, Clock::now())?;
-
-                        if config.verify_cert {
-                            handshake.certificate.replace(certificate.try_into()?);
-                        }
-                        handshake
-                            .certificate_transcript
-                            .replace(key_schedule.transcript_hash().clone());
+                        let transcript = key_schedule.transcript_hash();
+                        handshake.verifier.verify_certificate(
+                            transcript,
+                            &config.ca,
+                            certificate,
+                        )?;
                         trace!("Certificate verified!");
                         Ok(State::ServerVerify)
                     }
                     ServerHandshake::CertificateVerify(verify) => {
-                        let handshake_hash = handshake.certificate_transcript.take().unwrap();
-                        let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
-                        let mut msg: Vec<u8, 130> = Vec::new();
-                        msg.resize(64, 0x20u8).map_err(|_| TlsError::EncodeError)?;
-                        msg.extend_from_slice(ctx_str)
-                            .map_err(|_| TlsError::EncodeError)?;
-                        msg.extend_from_slice(&handshake_hash.finalize())
-                            .map_err(|_| TlsError::EncodeError)?;
-
-                        if config.verify_cert {
-                            let certificate = handshake.certificate.as_ref().unwrap().try_into()?;
-                            verify_signature(config, &msg[..], certificate, verify)?;
-                        }
+                        trace!("Verifying signature!");
+                        handshake.verifier.verify_signature(verify)?;
+                        trace!("Signature verified!");
                         Ok(State::ServerVerify)
                     }
                     ServerHandshake::CertificateRequest(request) => {

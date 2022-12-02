@@ -10,6 +10,7 @@ use heapless::Vec;
 pub enum ServerExtension<'a> {
     SupportedVersion(SupportedVersion),
     KeyShare(KeyShare<'a>),
+    PreSharedKey(u16),
 }
 
 #[derive(Debug)]
@@ -88,6 +89,16 @@ impl<'a> ServerExtension<'a> {
                 }
                 ExtensionType::ServerName => {
                     let _ = buf.slice(extension_length as usize);
+                }
+                ExtensionType::PreSharedKey => {
+                    let data = buf
+                        .slice(extension_length as usize)
+                        .map_err(|_| TlsError::DecodeError)?;
+                    let data = data.as_slice();
+                    let value = u16::from_be_bytes([data[0], data[1]]);
+                    extensions
+                        .push(ServerExtension::PreSharedKey(value))
+                        .map_err(|_| TlsError::DecodeError)?;
                 }
                 t => {
                     info!("Unsupported extension type {:?}", t);
