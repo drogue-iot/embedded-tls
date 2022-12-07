@@ -11,9 +11,7 @@ fn main() {
 
     log::info!("Connected");
     let mut record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("localhost")
-        .verify_cert(false);
+    let config = TlsConfig::new().with_server_name("localhost");
     let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> =
         TlsConnection::new(FromStd::new(stream), &mut record_buffer);
     let mut rng = OsRng;

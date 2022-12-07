@@ -8,7 +8,7 @@ authors = [
 ]
 
 [dependencies]
-embedded-tls = { path = "../..", features = ["log", "std"], default-features = false }
+embedded-tls = { path = "../..", features = ["log", "std", "webpki"], default-features = false }
 embedded-io = { version = "0.4.0", features = ["std"] }
 pem-parser = "0.1"
 env_logger = "0.8"
