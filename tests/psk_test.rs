@@ -4,53 +4,70 @@
 #![feature(impl_trait_projections)]
 use embedded_io::adapters::FromTokio;
 use embedded_tls::*;
+use openssl::ssl;
 use rand::rngs::OsRng;
-use std::process::Command;
+use std::io::{Read, Write};
+use std::net::SocketAddr;
+use std::net::TcpListener;
 use std::sync::Once;
 use tokio::net::TcpStream;
+use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio::time::Duration;
 
 static INIT: Once = Once::new();
 
-fn setup() -> tokio::task::JoinHandle<()> {
+fn setup() -> (SocketAddr, JoinHandle<()>) {
     INIT.call_once(|| {
         env_logger::init();
     });
 
-    let h = tokio::task::spawn_blocking(move || {
-        let mut child = Command::new("openssl")
-            .arg("s_server")
-            .arg("-tls1_3")
-            .arg("-psk_identity")
-            .arg("vader")
-            .arg("-psk")
-            .arg("aabbccdd")
-            .arg("-key")
-            .arg("tests/data/server-key.pem")
-            .arg("-cert")
-            .arg("tests/data/server-cert.pem")
-            .arg("-ciphersuites")
-            .arg("TLS_AES_128_GCM_SHA256")
-            .arg("-naccept")
-            .arg("1")
-            .spawn()
-            .expect("failed to execute process");
-        println!("Process completed: {:?}", child.wait().unwrap());
+    const DEFAULT_CIPHERS: &[&str] = &["PSK"];
+    let mut builder =
+        ssl::SslAcceptor::mozilla_intermediate_v5(ssl::SslMethod::tls_server()).unwrap();
+    builder
+        .set_private_key_file("tests/data/server-key.pem", ssl::SslFiletype::PEM)
+        .unwrap();
+    builder
+        .set_certificate_chain_file("tests/data/server-cert.pem")
+        .unwrap();
+    builder
+        .set_min_proto_version(Some(ssl::SslVersion::TLS1_3))
+        .unwrap();
+    builder.set_cipher_list(&DEFAULT_CIPHERS.join(",")).unwrap();
+    builder.set_psk_server_callback(move |_ssl, identity, secret_mut| {
+        if let Some(b"vader") = identity {
+            secret_mut[..4].copy_from_slice(&[0xaa, 0xbb, 0xcc, 0xdd]);
+            Ok(4)
+        } else {
+            Ok(0)
+        }
     });
-    println!("Returning join handle");
-    h
+    let acceptor = builder.build();
+
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+
+    let listener = TcpListener::bind(addr).expect("cannot listen on port");
+    let addr = listener
+        .local_addr()
+        .expect("error retrieving socket address");
+
+    let h = tokio::task::spawn_blocking(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut conn = acceptor.accept(stream).unwrap();
+        let mut buf = [0; 64];
+        let len = conn.read(&mut buf[..]).unwrap();
+        conn.write(&buf[..len]).unwrap();
+    });
+    (addr, h)
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_psk_open() {
+    let (addr, h) = setup();
     timeout(Duration::from_secs(120), async move {
-        let _h = setup();
-        println!("Setup complete");
-        tokio::time::sleep(core::time::Duration::from_secs(10)).await;
-
-        println!("Connectiong...");
-        let stream = TcpStream::connect("127.0.0.1:4433")
+        println!("Connecting...");
+        let stream = TcpStream::connect(addr)
             .await
             .expect("error connecting to server");
 
@@ -69,6 +86,18 @@ async fn test_psk_open() {
             .await
             .is_ok());
         println!("TLS session opened");
+
+        tls.write(b"ping").await.unwrap();
+
+        println!("TLS data written");
+        let mut rx = [0; 4];
+        let l = tls.read(&mut rx[..]).await.unwrap();
+
+        println!("TLS data read");
+        assert_eq!(4, l);
+        assert_eq!(b"ping", &rx[..l]);
+
+        h.await.unwrap();
     })
     .await
     .unwrap();
