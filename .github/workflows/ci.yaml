@@ -23,7 +23,7 @@ jobs:
         run: cargo check
 
       - name: Test
-        run: cargo test
+        run: cargo test -- --nocapture
 
       - name: Build examples
         run: for i in embassy blocking tokio nrf52; do pushd examples/$i; cargo build; popd; done;
