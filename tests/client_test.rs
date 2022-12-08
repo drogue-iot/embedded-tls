@@ -34,9 +34,7 @@ fn setup() -> SocketAddr {
 
 #[tokio::test]
 async fn test_ping() {
-    use embedded_tls::webpki::CertVerifier;
     use embedded_tls::*;
-    use std::time::SystemTime;
     use tokio::net::TcpStream;
     let addr = setup();
     let pem = include_str!("data/ca-cert.pem");
@@ -59,9 +57,7 @@ async fn test_ping() {
     log::info!("SIZE of connection is {}", sz);
 
     let mut rng = OsRng;
-    let open_fut = tls.open::<OsRng, CertVerifier<Aes128GcmSha256, SystemTime, 4096>>(
-        TlsContext::new(&config, &mut rng),
-    );
+    let open_fut = tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng));
     log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
     open_fut.await.expect("error establishing TLS connection");
     log::info!("Established");
@@ -90,9 +86,7 @@ async fn test_ping() {
 #[test]
 fn test_blocking_ping() {
     use embedded_tls::blocking::*;
-    use embedded_tls::webpki::CertVerifier;
     use std::net::TcpStream;
-    use std::time::SystemTime;
 
     let addr = setup();
     let pem = include_str!("data/ca-cert.pem");
@@ -108,10 +102,8 @@ fn test_blocking_ping() {
     let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> =
         TlsConnection::new(FromStd::new(stream), &mut record_buffer);
 
-    tls.open::<OsRng, CertVerifier<Aes128GcmSha256, SystemTime, 4096>>(TlsContext::new(
-        &config, &mut OsRng,
-    ))
-    .expect("error establishing TLS connection");
+    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng))
+        .expect("error establishing TLS connection");
     log::info!("Established");
 
     tls.write(b"ping").expect("error writing data");
