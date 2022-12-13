@@ -11,6 +11,6 @@ authors = [
 embedded-tls = { path = "../..", features = ["log", "std", "webpki"], default-features = false }
 embedded-io = { version = "0.4.0", features = ["std"] }
 pem-parser = "0.1"
-env_logger = "0.8"
+env_logger = "0.10"
 rand = "0.8"
 log = "0.4"

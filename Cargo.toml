@@ -36,7 +36,7 @@ log = { version = "0.4", optional = true }
 defmt = { version = "0.3", optional = true }
 
 [dev-dependencies]
-env_logger = "0.9"
+env_logger = "0.10"
 tokio = { version = "1.7", features = ["full"] }
 mio = { version = "0.8.3", features = ["os-poll", "net"] }
 rustls = "0.20.6"
