@@ -5,7 +5,7 @@ edition = "2021"
 resolver = "2"
 
 [dependencies]
-embedded-tls = { path = "../..", features = ["async", "std", "log"], default-features = false }
+embedded-tls = { path = "../..", features = ["async", "alloc", "std", "log"], default-features = false }
 env_logger = "0.10"
 rand = "0.8"
 log = "0.4"
