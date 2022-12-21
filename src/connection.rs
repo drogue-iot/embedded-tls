@@ -2,6 +2,7 @@ use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, RecordHeader, ServerRecord};
+use crate::session::Session;
 use crate::TlsError;
 use crate::{
     alert::*,
@@ -168,7 +169,8 @@ where
     Ok(buf.len())
 }
 
-pub fn encode_record<'m, CipherSuite>(
+pub(crate) fn encode_record<'m, CipherSuite>(
+    session: &mut Session,
     tx_buf: &mut [u8],
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record: &ClientRecord<'_, 'm, CipherSuite>,
@@ -178,7 +180,7 @@ where
 {
     let mut next_hash = key_schedule.transcript_hash().clone();
 
-    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| {
+    let (len, range) = record.encode(session, tx_buf, &mut next_hash, |buf| {
         encrypt::<CipherSuite>(key_schedule, buf)
     })?;
 
@@ -226,7 +228,7 @@ where
 }
 
 #[cfg(feature = "async")]
-pub async fn decode_record<'m, Transport, CipherSuite>(
+pub(crate) async fn decode_record<'m, Transport, CipherSuite>(
     transport: &mut Transport,
     rx_buf: &'m mut [u8],
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
@@ -265,7 +267,7 @@ where
     ServerRecord::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
 }
 
-pub fn decode_record_blocking<'m, Transport, CipherSuite>(
+pub(crate) fn decode_record_blocking<'m, Transport, CipherSuite>(
     transport: &mut Transport,
     rx_buf: &'m mut [u8],
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
@@ -302,7 +304,7 @@ where
     ServerRecord::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
 }
 
-pub struct Handshake<CipherSuite, Verifier>
+pub(crate) struct Handshake<CipherSuite, Verifier>
 where
     CipherSuite: TlsCipherSuite + 'static,
     Verifier: TlsVerifier<CipherSuite>,
@@ -318,7 +320,7 @@ where
     CipherSuite: TlsCipherSuite + 'static,
     Verifier: TlsVerifier<CipherSuite>,
 {
-    pub fn new(verifier: Verifier) -> Handshake<CipherSuite, Verifier> {
+    pub(crate) fn new(verifier: Verifier) -> Handshake<CipherSuite, Verifier> {
         Handshake {
             traffic_hash: None,
             secret: None,
@@ -330,7 +332,7 @@ where
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum State {
+pub(crate) enum State {
     ClientHello,
     ServerHello,
     ServerVerify,
@@ -343,6 +345,7 @@ impl<'a> State {
     #[cfg(feature = "async")]
     pub async fn process<Transport, CipherSuite, RNG, Verifier>(
         self,
+        session: &mut Session,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_buf: &mut [u8],
@@ -360,7 +363,7 @@ impl<'a> State {
             State::ClientHello => {
                 key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
                 let client_hello = ClientRecord::client_hello(config, rng);
-                let (_, len) = encode_record(record_buf, key_schedule, &client_hello)?;
+                let (_, len) = encode_record(session, record_buf, key_schedule, &client_hello)?;
 
                 transport
                     .write(&record_buf[..len])
@@ -423,7 +426,8 @@ impl<'a> State {
                 let client_cert: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::Handshake(client_handshake, true);
 
-                let (next_hash, len) = encode_record(record_buf, key_schedule, &client_cert)?;
+                let (next_hash, len) =
+                    encode_record(session, record_buf, key_schedule, &client_cert)?;
                 transport
                     .write(&record_buf[..len])
                     .await
@@ -440,7 +444,7 @@ impl<'a> State {
                 let client_finished = ClientHandshake::<CipherSuite>::Finished(client_finished);
                 let client_finished = ClientRecord::Handshake(client_finished, true);
 
-                let (_, len) = encode_record(record_buf, key_schedule, &client_finished)?;
+                let (_, len) = encode_record(session, record_buf, key_schedule, &client_finished)?;
                 transport
                     .write(&record_buf[..len])
                     .await
@@ -463,6 +467,7 @@ impl<'a> State {
 
     pub fn process_blocking<Transport, CipherSuite, RNG, Verifier>(
         self,
+        session: &mut Session,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_buf: &mut [u8],
@@ -480,7 +485,7 @@ impl<'a> State {
             State::ClientHello => {
                 key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
                 let client_hello = ClientRecord::client_hello(config, rng);
-                let (_, len) = encode_record(record_buf, key_schedule, &client_hello)?;
+                let (_, len) = encode_record(session, record_buf, key_schedule, &client_hello)?;
 
                 transport
                     .write(&record_buf[..len])
@@ -542,7 +547,8 @@ impl<'a> State {
                 let client_cert: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::Handshake(client_handshake, true);
 
-                let (next_hash, len) = encode_record(record_buf, key_schedule, &client_cert)?;
+                let (next_hash, len) =
+                    encode_record(session, record_buf, key_schedule, &client_cert)?;
                 transport
                     .write(&record_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;
@@ -558,7 +564,7 @@ impl<'a> State {
                 let client_finished = ClientHandshake::<CipherSuite>::Finished(client_finished);
                 let client_finished = ClientRecord::Handshake(client_finished, true);
 
-                let (_, len) = encode_record(record_buf, key_schedule, &client_finished)?;
+                let (_, len) = encode_record(session, record_buf, key_schedule, &client_finished)?;
                 transport
                     .write(&record_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;

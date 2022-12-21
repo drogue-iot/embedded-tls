@@ -3,6 +3,7 @@ use crate::connection::*;
 use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
+use crate::session::*;
 use crate::TlsError;
 use embedded_io::Error as _;
 use embedded_io::{
@@ -28,9 +29,9 @@ where
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
+    session: Option<Session>,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record_buf: &'a mut [u8],
-    opened: bool,
 }
 
 impl<'a, Socket, CipherSuite> TlsConnection<'a, Socket, CipherSuite>
@@ -45,7 +46,7 @@ where
     pub fn new(delegate: Socket, record_buf: &'a mut [u8]) -> Self {
         Self {
             delegate,
-            opened: false,
+            session: None,
             key_schedule: KeySchedule::new(),
             record_buf,
         }
@@ -68,10 +69,12 @@ where
         let mut handshake: Handshake<CipherSuite, Verifier> =
             Handshake::new(Verifier::new(context.config.server_name));
         let mut state = State::ClientHello;
+        let mut session = Session::from(context.config.version);
 
         loop {
             let next_state = state
                 .process::<_, _, _, Verifier>(
+                    &mut session,
                     &mut self.delegate,
                     &mut handshake,
                     self.record_buf,
@@ -83,7 +86,7 @@ where
             trace!("State {:?} -> {:?}", state, next_state);
             state = next_state;
             if let State::ApplicationData = state {
-                self.opened = true;
+                self.session.replace(session);
                 break;
             }
         }
@@ -96,7 +99,7 @@ where
     ///
     /// Returns the number of bytes written.
     pub async fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
-        if self.opened {
+        if let Some(session) = &mut self.session {
             let mut wp = 0;
             let mut remaining = buf.len();
 
@@ -108,7 +111,7 @@ where
                 let record: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::ApplicationData(&buf[wp..to_write]);
 
-                let (_, len) = encode_record(self.record_buf, key_schedule, &record)?;
+                let (_, len) = encode_record(session, self.record_buf, key_schedule, &record)?;
 
                 delegate
                     .write(&self.record_buf[..len])
@@ -129,7 +132,7 @@ where
     /// keep the expected amount of data that can be received in one record to avoid
     /// loosing data.
     pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
-        if self.opened {
+        if let Some(session) = &mut self.session {
             let mut remaining = buf.len();
             // Note: Read only a single ApplicationData record for now, as we don't do any buffering.
             while remaining == buf.len() {
@@ -182,23 +185,26 @@ where
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
     async fn close_internal(&mut self) -> Result<(), TlsError> {
-        let record = ClientRecord::Alert(
-            Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
-            self.opened,
-        );
+        if let Some(session) = &mut self.session {
+            let record = ClientRecord::Alert(
+                Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
+                true,
+            );
 
-        let mut key_schedule = &mut self.key_schedule;
-        let delegate = &mut self.delegate;
-        let record_buf = &mut self.record_buf;
+            let mut key_schedule = &mut self.key_schedule;
+            let delegate = &mut self.delegate;
+            let record_buf = &mut self.record_buf;
 
-        let (_, len) = encode_record::<CipherSuite>(record_buf, &mut key_schedule, &record)?;
+            let (_, len) =
+                encode_record::<CipherSuite>(session, record_buf, &mut key_schedule, &record)?;
 
-        delegate
-            .write(&record_buf[..len])
-            .await
-            .map_err(|e| TlsError::Io(e.kind()))?;
+            delegate
+                .write(&record_buf[..len])
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
 
-        key_schedule.increment_write_counter();
+            key_schedule.increment_write_counter();
+        }
 
         Ok(())
     }

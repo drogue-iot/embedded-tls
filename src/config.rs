@@ -102,6 +102,7 @@ where
     CipherSuite: TlsCipherSuite,
 {
     //pub(crate) cipher_suites: Vec<CipherSuite, U16>,
+    pub(crate) version: TlsVersion,
     pub(crate) server_name: Option<&'a str>,
     pub(crate) psk: Option<(&'a [u8], Vec<&'a [u8], 4>)>,
     pub(crate) cipher_suite: PhantomData<CipherSuite>,
@@ -122,6 +123,13 @@ impl TlsClock for NoClock {
     fn now() -> Option<u64> {
         None
     }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum TlsVersion {
+    TLS_1_3,
+    DTLS_1_2,
 }
 
 #[derive(Debug)]
@@ -160,6 +168,7 @@ where
             server_name: None,
             ca: None,
             cert: None,
+            version: TlsVersion::TLS_1_3,
         };
 
         //config.cipher_suites.push(CipherSuite::TlsAes128GcmSha256);

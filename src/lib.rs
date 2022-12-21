@@ -5,8 +5,9 @@
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
 #![cfg_attr(feature = "async", feature(impl_trait_projections))]
 
-//! Embedded-TLS is a Rust-native TLS 1.3 implementation that works in a no-std environment. The
-//! implementation is work in progress, but the [example clients](https://github.com/drogue-iot/embedded-tls/tree/main/examples) should work against the [rustls](https://github.com/ctz/rustls) echo server.
+//! Embedded-TLS is a Rust-native TLS and DTLS implementation that works in a no-std environment. The
+//! implementation is work in progress, but the [example clients](https://github.com/drogue-iot/embedded-tls/tree/main/examples) should work against the [rustls](https://github.com/ctz/rustls) as well as
+//! an openssl echo server with the supported ciphers enabled.
 //!
 //! The client supports both async and blocking modes. By default, the `async` and `std` features are enabled. The `async` feature requires Rust nightly, while the blocking feature works on Rust stable.
 //!
@@ -76,6 +77,7 @@ mod max_fragment_length;
 mod named_groups;
 mod parse_buffer;
 mod record;
+mod session;
 mod signature_schemes;
 mod supported_versions;
 

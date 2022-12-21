@@ -5,6 +5,7 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
+use crate::session::*;
 use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
@@ -61,6 +62,7 @@ where
         F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>,
     >(
         &self,
+        session: &mut Session,
         enc_buf: &mut [u8],
         transcript: &mut N,
         mut encrypt_fn: F,
@@ -80,6 +82,8 @@ where
 
         buf.extend_from_slice(version)
             .map_err(|_| TlsError::EncodeError)?;
+
+        session.encode(&mut buf)?;
 
         let record_length_marker = buf.len();
         buf.push(0).map_err(|_| TlsError::EncodeError)?;

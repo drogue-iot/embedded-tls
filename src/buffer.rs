@@ -38,10 +38,31 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
+    pub fn push_u16(&mut self, num: u16) -> Result<(), TlsError> {
+        if self.capacity - (self.len + self.offset) > 2 {
+            let data = num.to_be_bytes();
+            self.extend_from_slice(&data[..]);
+            Ok(())
+        } else {
+            Err(TlsError::InsufficientSpace)
+        }
+    }
+
     pub fn push_u24(&mut self, num: u32) -> Result<(), TlsError> {
         if self.capacity - (self.len + self.offset) > 2 {
             let data = num.to_be_bytes();
-            self.extend_from_slice(&[data[0], data[1], data[2]])
+            self.extend_from_slice(&[data[0], data[1], data[2]]);
+            Ok(())
+        } else {
+            Err(TlsError::InsufficientSpace)
+        }
+    }
+
+    pub fn push_u48(&mut self, num: u64) -> Result<(), TlsError> {
+        if self.capacity - (self.len + self.offset) > 5 {
+            let data = num.to_be_bytes();
+            self.extend_from_slice(&[data[0], data[1], data[2], data[3], data[4], data[5]]);
+            Ok(())
         } else {
             Err(TlsError::InsufficientSpace)
         }
