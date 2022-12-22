@@ -14,12 +14,12 @@ sudo ip -6 route add fe80::/64 dev tap0
 sudo ip -6 route add fdaa::/64 dev tap0
 ```
 
-You can use the [rustls-mio](https://github.com/ctz/rustls/tree/main/rustls-mio) server example to test it as follows:
+You can use the [rustls-mio](https://github.com/rustls/rustls/tree/main/examples) server example to test it as follows:
 
 ```sh
 # In the rustls-mio folder
 openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout key.pem -out cert.pem -batch
-cargo run --example tlsserver -- -p 12345 --certs cert.pem --key key.pem --protover 1.3 --tickets --verbose echo
+cargo run --bin tlsserver-mio -- -p 8000 --certs cert.pem --key key.pem --protover 1.3 --tickets --verbose echo
 
 # In this folder
 RUST_LOG=trace cargo run
