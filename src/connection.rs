@@ -225,83 +225,6 @@ where
     Ok((next_hash, len))
 }
 
-#[cfg(feature = "async")]
-pub async fn decode_record<'m, Transport, CipherSuite>(
-    transport: &mut Transport,
-    rx_buf: &'m mut [u8],
-    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
-where
-    Transport: AsyncRead + 'm,
-    CipherSuite: TlsCipherSuite + 'static,
-{
-    let mut pos: usize = 0;
-    let mut header: [u8; 5] = [0; 5];
-    loop {
-        pos += transport
-            .read(&mut header[pos..5])
-            .await
-            .map_err(|e| TlsError::Io(e.kind()))?;
-        if pos == 5 {
-            break;
-        }
-    }
-    let header = RecordHeader::decode(header)?;
-
-    let content_length = header.content_length();
-    if content_length > rx_buf.len() {
-        return Err(TlsError::InsufficientSpace);
-    }
-
-    let mut pos = 0;
-    while pos < content_length {
-        let read = transport
-            .read(&mut rx_buf[pos..content_length])
-            .await
-            .map_err(|_| TlsError::InvalidRecord)?;
-        pos += read;
-    }
-
-    ServerRecord::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
-}
-
-pub fn decode_record_blocking<'m, Transport, CipherSuite>(
-    transport: &mut Transport,
-    rx_buf: &'m mut [u8],
-    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
-where
-    Transport: BlockingRead + 'm,
-    CipherSuite: TlsCipherSuite + 'static,
-{
-    let mut pos: usize = 0;
-    let mut header: [u8; 5] = [0; 5];
-    loop {
-        pos += transport
-            .read(&mut header[pos..5])
-            .map_err(|e| TlsError::Io(e.kind()))?;
-        if pos == 5 {
-            break;
-        }
-    }
-    let header = RecordHeader::decode(header)?;
-
-    let content_length = header.content_length();
-    if content_length > rx_buf.len() {
-        return Err(TlsError::InsufficientSpace);
-    }
-
-    let mut pos = 0;
-    while pos < content_length {
-        let read = transport
-            .read(&mut rx_buf[pos..content_length])
-            .map_err(|_| TlsError::InvalidRecord)?;
-        pos += read;
-    }
-
-    ServerRecord::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
-}
-
 pub struct Handshake<CipherSuite, Verifier>
 where
     CipherSuite: TlsCipherSuite + 'static,
@@ -378,9 +301,12 @@ impl<'a> State {
                 }
             }
             State::ServerHello => {
-                let record =
-                    decode_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
-                        .await?;
+                let record = ServerRecord::read::<Transport, CipherSuite>(
+                    transport,
+                    record_buf,
+                    key_schedule,
+                )
+                .await?;
                 process_server_hello(handshake, key_schedule, record)?;
                 Ok(State::ServerVerify)
             }
@@ -389,9 +315,12 @@ impl<'a> State {
                     "SIZE of server record queue : {}",
                     core::mem::size_of_val(&records)
                 );*/
-                let record =
-                    decode_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
-                        .await?;
+                let record = ServerRecord::read::<Transport, CipherSuite>(
+                    transport,
+                    record_buf,
+                    key_schedule,
+                )
+                .await?;
 
                 Ok(process_server_verify::<_, Verifier>(
                     handshake,
@@ -497,7 +426,7 @@ impl<'a> State {
                 }
             }
             State::ServerHello => {
-                let record = decode_record_blocking::<Transport, CipherSuite>(
+                let record = ServerRecord::read_blocking::<Transport, CipherSuite>(
                     transport,
                     record_buf,
                     key_schedule,
@@ -510,7 +439,7 @@ impl<'a> State {
                     "SIZE of server record queue : {}",
                     core::mem::size_of_val(&records)
                 );*/
-                let record = decode_record_blocking::<Transport, CipherSuite>(
+                let record = ServerRecord::read_blocking::<Transport, CipherSuite>(
                     transport,
                     record_buf,
                     key_schedule,

@@ -135,9 +135,12 @@ where
             while remaining == buf.len() {
                 let socket = &mut self.delegate;
                 let key_schedule = &mut self.key_schedule;
-                let record =
-                    decode_record::<Socket, CipherSuite>(socket, self.record_buf, key_schedule)
-                        .await?;
+                let record = ServerRecord::read::<Socket, CipherSuite>(
+                    socket,
+                    self.record_buf,
+                    key_schedule,
+                )
+                .await?;
                 let mut records = Queue::new();
                 decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
                 while let Some(record) = records.dequeue() {

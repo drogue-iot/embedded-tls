@@ -5,13 +5,20 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
+use crate::key_schedule::KeySchedule;
 use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
 use core::ops::Range;
+use embedded_io::Error;
 use generic_array::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
+
+#[cfg(feature = "async")]
+use embedded_io::asynch::{Read as AsyncRead, Write as AsyncWrite};
+
+use embedded_io::blocking::{Read as BlockingRead, Write as BlockingWrite};
 
 pub type Encrypted = bool;
 
@@ -197,7 +204,7 @@ impl RecordHeader {
 }
 
 impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
-    pub fn decode<D>(
+    fn decode<D>(
         header: RecordHeader,
         rx_buf: &'a mut [u8],
         digest: &mut D,
@@ -231,5 +238,80 @@ impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
         }
     }
 
-    //pub fn parse<D: Digest>(buf: &[u8]) -> Result<Self, TlsError> {}
+    #[cfg(feature = "async")]
+    pub async fn read<'m, Transport, CipherSuite>(
+        transport: &mut Transport,
+        rx_buf: &'m mut [u8],
+        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    ) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
+    where
+        Transport: AsyncRead + 'm,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        let mut pos: usize = 0;
+        let mut header: [u8; 5] = [0; 5];
+        loop {
+            pos += transport
+                .read(&mut header[pos..5])
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+            if pos == 5 {
+                break;
+            }
+        }
+        let header = RecordHeader::decode(header)?;
+
+        let content_length = header.content_length();
+        if content_length > rx_buf.len() {
+            return Err(TlsError::InsufficientSpace);
+        }
+
+        let mut pos = 0;
+        while pos < content_length {
+            let read = transport
+                .read(&mut rx_buf[pos..content_length])
+                .await
+                .map_err(|_| TlsError::InvalidRecord)?;
+            pos += read;
+        }
+
+        Self::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
+    }
+
+    pub fn read_blocking<'m, Transport, CipherSuite>(
+        transport: &mut Transport,
+        rx_buf: &'m mut [u8],
+        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    ) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
+    where
+        Transport: BlockingRead + 'm,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        let mut pos: usize = 0;
+        let mut header: [u8; 5] = [0; 5];
+        loop {
+            pos += transport
+                .read(&mut header[pos..5])
+                .map_err(|e| TlsError::Io(e.kind()))?;
+            if pos == 5 {
+                break;
+            }
+        }
+        let header = RecordHeader::decode(header)?;
+
+        let content_length = header.content_length();
+        if content_length > rx_buf.len() {
+            return Err(TlsError::InsufficientSpace);
+        }
+
+        let mut pos = 0;
+        while pos < content_length {
+            let read = transport
+                .read(&mut rx_buf[pos..content_length])
+                .map_err(|_| TlsError::InvalidRecord)?;
+            pos += read;
+        }
+
+        Self::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
+    }
 }

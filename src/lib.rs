@@ -76,6 +76,7 @@ mod max_fragment_length;
 mod named_groups;
 mod parse_buffer;
 mod record;
+mod record_buffer;
 mod signature_schemes;
 mod supported_versions;
 

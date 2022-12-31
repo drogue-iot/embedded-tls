@@ -132,7 +132,7 @@ where
             while remaining == buf.len() {
                 let socket = &mut self.delegate;
                 let key_schedule = &mut self.key_schedule;
-                let record = decode_record_blocking::<Socket, CipherSuite>(
+                let record = ServerRecord::read_blocking::<Socket, CipherSuite>(
                     socket,
                     self.record_buf,
                     key_schedule,
