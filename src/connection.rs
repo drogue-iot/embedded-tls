@@ -258,7 +258,7 @@ where
         let read = transport
             .read(&mut rx_buf[pos..content_length])
             .await
-            .map_err(|_| TlsError::InvalidRecord)?;
+            .map_err(|e| TlsError::Io(e.kind()))?;
         pos += read;
     }
 
@@ -295,7 +295,7 @@ where
     while pos < content_length {
         let read = transport
             .read(&mut rx_buf[pos..content_length])
-            .map_err(|_| TlsError::InvalidRecord)?;
+            .map_err(|e| TlsError::Io(e.kind()))?;
         pos += read;
     }
 
