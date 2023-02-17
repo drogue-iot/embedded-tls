@@ -10,6 +10,15 @@ pub struct CryptoBuffer<'b> {
 }
 
 impl<'b> CryptoBuffer<'b> {
+    pub(crate) fn empty() -> Self {
+        Self {
+            capacity: 0,
+            buf: &mut [],
+            offset: 0,
+            len: 0,
+        }
+    }
+
     pub(crate) fn wrap(buf: &'b mut [u8]) -> Self {
         Self {
             capacity: buf.len(),
