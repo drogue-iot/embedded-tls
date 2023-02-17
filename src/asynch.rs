@@ -213,6 +213,7 @@ where
                 }
                 ServerRecord::Alert(alert) => {
                     if let AlertDescription::CloseNotify = alert.description {
+                        self.opened = false;
                         Err(TlsError::ConnectionClosed)
                     } else {
                         Err(TlsError::InternalError)
