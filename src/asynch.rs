@@ -197,7 +197,8 @@ where
                 ServerRecord::ApplicationData(data) => {
                     trace!("Got application data record");
 
-                    // SAFETY: Assyme `decrypt_record()` to decrypt in-place
+                    // SAFETY: Assume `decrypt_record()` to decrypt in-place
+                    // We have assertions to ensure this is valid.
                     let slice = data.data.as_slice();
                     let slice_ptr = slice.as_ptr();
                     let offset = unsafe { slice_ptr.offset_from(buf_ptr) };
