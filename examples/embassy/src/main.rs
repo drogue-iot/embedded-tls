@@ -91,11 +91,12 @@ async fn main_task(spawner: Spawner) {
     }
     log::info!("TCP connected!");
 
-    let mut record_buffer = [0; 16384];
+    let mut read_record_buffer = [0; 16384];
+    let mut write_record_buffer = [0; 16384];
     let mut rng = OsRng;
     let config = TlsConfig::new().with_server_name("example.com");
     let mut tls: TlsConnection<TcpSocket, Aes128GcmSha256> =
-        TlsConnection::new(socket, &mut record_buffer);
+        TlsConnection::new(socket, &mut read_record_buffer, &mut write_record_buffer);
 
     tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
         .await
