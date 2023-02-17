@@ -10,10 +10,11 @@ fn main() {
     let stream = TcpStream::connect("127.0.0.1:12345").expect("error connecting to server");
 
     log::info!("Connected");
-    let mut record_buffer = [0; 16384];
+    let mut read_record_buffer = [0; 16384];
+    let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new().with_server_name("localhost");
     let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> =
-        TlsConnection::new(FromStd::new(stream), &mut record_buffer);
+        TlsConnection::new(FromStd::new(stream), &mut read_record_buffer, &mut write_record_buffer);
     let mut rng = OsRng;
 
     tls.open::<OsRng, CertVerifier<Aes128GcmSha256, SystemTime, 4096>>(TlsContext::new(

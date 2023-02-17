@@ -13,13 +13,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let stream = TcpStream::connect("localhost:4433").await?;
 
     log::info!("Connected");
-    let mut record_buffer = [0; 16384];
+    let mut read_record_buffer = [0; 16384];
+    let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new()
         .with_server_name("localhost")
         .with_psk(&[0xaa, 0xbb, 0xcc, 0xdd], &[b"vader"])
     let mut rng = OsRng;
     let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
-        TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
+        TlsConnection::new(FromTokio::new(stream), &mut read_record_buffer, &mut write_record_buffer);
 
     tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
         .await

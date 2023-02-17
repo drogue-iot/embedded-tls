@@ -41,11 +41,12 @@ async fn main() {
     let stream = TcpStream::connect("http.sandbox.drogue.cloud:443").await.expect("error creating TCP connection");
 
     println!("TCP connection opened");
-    let mut record_buffer = [0; 16384];
+    let mut read_record_buffer = [0; 16384];
+    let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new()
         .with_server_name("http.sandbox.drogue.cloud");
     let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
-        TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
+        TlsConnection::new(FromTokio::new(stream), &mut read_record_buffer, &mut write_record_buffer);
 
     // Allows disabling cert verification, in case you are using PSK and don't need it, or are just testing.
     // otherwise, use embedded_tls::webpki::CertVerifier, which only works on std for now.

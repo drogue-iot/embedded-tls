@@ -72,13 +72,17 @@ async fn test_psk_open() {
             .expect("error connecting to server");
 
         println!("Connected");
-        let mut record_buffer = [0; 16384];
+        let mut read_record_buffer = [0; 16384];
+        let mut write_record_buffer = [0; 16384];
         let config = TlsConfig::new()
             .with_psk(&[0xaa, 0xbb, 0xcc, 0xdd], &[b"vader"])
             .with_server_name("localhost");
 
-        let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
-            TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
+        let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+            FromTokio::new(stream),
+            &mut read_record_buffer,
+            &mut write_record_buffer,
+        );
 
         let mut rng = OsRng;
         assert!(tls

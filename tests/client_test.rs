@@ -45,13 +45,17 @@ async fn test_ping() {
         .expect("error connecting to server");
 
     log::info!("Connected");
-    let mut record_buffer = [0; 16384];
+    let mut read_record_buffer = [0; 16384];
+    let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new()
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
-        TlsConnection::new(FromTokio::new(stream), &mut record_buffer);
+    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+        FromTokio::new(stream),
+        &mut read_record_buffer,
+        &mut write_record_buffer,
+    );
 
     let sz = core::mem::size_of::<TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256>>();
     log::info!("SIZE of connection is {}", sz);

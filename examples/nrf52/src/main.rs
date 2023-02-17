@@ -18,10 +18,11 @@ fn main() -> ! {
     let p = hal::pac::Peripherals::take().unwrap();
     let mut rng = Rng::new(p.RNG);
     defmt::info!("Connected");
-    let mut record_buffer = [0; 16384];
+    let mut read_record_buffer = [0; 16384];
+    let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new().with_server_name("example.com");
     let mut tls: TlsConnection<Dummy, Aes128GcmSha256> =
-        TlsConnection::new(Dummy {}, &mut record_buffer[..]);
+        TlsConnection::new(Dummy {}, &mut read_record_buffer, &mut write_record_buffer);
 
     tls.open::<Rng, NoVerify>(TlsContext::new(&config, &mut rng))
         .expect("error establishing TLS connection");
