@@ -1,4 +1,5 @@
 use crate::alert::*;
+use crate::buffer::CryptoBuffer;
 use crate::connection::*;
 use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
@@ -10,7 +11,6 @@ use embedded_io::{
 };
 use rand_core::{CryptoRng, RngCore};
 
-use crate::application_data::ApplicationData;
 use heapless::spsc::Queue;
 
 pub use crate::config::*;
@@ -28,9 +28,13 @@ where
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
-    key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    record_buf: &'a mut [u8],
     opened: bool,
+    key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    record_read_buf: &'a mut [u8],
+    record_write_buf: &'a mut [u8],
+    decrypted_offset: usize,
+    decrypted_len: usize,
+    decrypted_consumed: usize,
 }
 
 impl<'a, Socket, CipherSuite> TlsConnection<'a, Socket, CipherSuite>
@@ -38,16 +42,35 @@ where
     Socket: Read + Write + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    /// Create a new TLS connection with the provided context and a I/O implementation
+    /// Create a new TLS connection with the provided context and a async I/O implementation
     ///
-    /// NOTE: The record buffer should be sized to fit an encrypted TLS record and the TLS handshake
-    /// record. The maximum value of a TLS record is 16 kB, which should be a safe value to use.
-    pub fn new(delegate: Socket, record_buf: &'a mut [u8]) -> Self {
+    /// NOTE: The record read buffer should be sized to fit an encrypted TLS record. The size of this record
+    /// depends on the server configuration, but the maximum allowed value for a TLS record is 16 kB, which
+    /// should be a safe value to use.
+    ///
+    /// The write record buffer can be smaller than the read buffer. During write [`TLS_RECORD_OVERHEAD`] over overhead
+    /// is added per record, so the buffer must at least be this large. Large writes are split into multiple records if
+    /// depending on the size of the write buffer.
+    /// The largest of the two buffers will be used to encode the TLS handshake record, hence either of the
+    /// buffers must at least be large enough to encode a handshake.
+    pub fn new(
+        delegate: Socket,
+        record_read_buf: &'a mut [u8],
+        record_write_buf: &'a mut [u8],
+    ) -> Self {
+        assert!(
+            record_write_buf.len() > TLS_RECORD_OVERHEAD,
+            "The write buffer must be sufficiently large to include the tls record overhead"
+        );
         Self {
             delegate,
             opened: false,
             key_schedule: KeySchedule::new(),
-            record_buf,
+            record_read_buf,
+            record_write_buf,
+            decrypted_offset: 0,
+            decrypted_len: 0,
+            decrypted_consumed: 0,
         }
     }
 
@@ -68,12 +91,17 @@ where
         let mut handshake: Handshake<CipherSuite, Verifier> =
             Handshake::new(Verifier::new(context.config.server_name));
         let mut state = State::ClientHello;
+        let record_buf = if self.record_read_buf.len() > self.record_write_buf.len() {
+            &mut self.record_read_buf
+        } else {
+            &mut self.record_write_buf
+        };
 
         loop {
             let next_state = state.process_blocking::<_, _, _, Verifier>(
                 &mut self.delegate,
                 &mut handshake,
-                self.record_buf,
+                record_buf,
                 &mut self.key_schedule,
                 context.config,
                 context.rng,
@@ -98,7 +126,7 @@ where
             let mut wp = 0;
             let mut remaining = buf.len();
 
-            let max_block_size = self.record_buf.len() - TLS_RECORD_OVERHEAD;
+            let max_block_size = self.record_write_buf.len() - TLS_RECORD_OVERHEAD;
             while remaining > 0 {
                 let delegate = &mut self.delegate;
                 let key_schedule = &mut self.key_schedule;
@@ -106,10 +134,10 @@ where
                 let record: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::ApplicationData(&buf[wp..to_write]);
 
-                let (_, len) = encode_record(self.record_buf, key_schedule, &record)?;
+                let (_, len) = encode_record(self.record_write_buf, key_schedule, &record)?;
 
                 delegate
-                    .write(&self.record_buf[..len])
+                    .write(&self.record_write_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
                 wp += to_write;
@@ -128,55 +156,83 @@ where
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
         if self.opened {
             let mut remaining = buf.len();
-            // Note: Read only a single ApplicationData record for now, as we don't do any buffering.
+            let mut consumed = self.decrypted_consumed;
             while remaining == buf.len() {
-                let socket = &mut self.delegate;
-                let key_schedule = &mut self.key_schedule;
-                let record = decode_record_blocking::<Socket, CipherSuite>(
-                    socket,
-                    self.record_buf,
-                    key_schedule,
-                )?;
-                let mut records = Queue::new();
-                decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
-                while let Some(record) = records.dequeue() {
-                    match record {
-                        ServerRecord::ApplicationData(ApplicationData { header: _, data }) => {
-                            trace!("Got application data record");
-                            if buf.len() < data.len() {
-                                warn!("Passed buffer is too small");
-                                Err(TlsError::EncodeError)
-                            } else {
-                                let to_copy = core::cmp::min(data.len(), buf.len());
-                                // TODO Need to buffer data not consumed
-                                trace!("Got {} bytes to copy", to_copy);
-                                buf[..to_copy].copy_from_slice(&data.as_slice()[..to_copy]);
-                                remaining -= to_copy;
-                                Ok(())
-                            }
-                        }
-                        ServerRecord::Alert(alert) => {
-                            if let AlertDescription::CloseNotify = alert.description {
-                                Err(TlsError::ConnectionClosed)
-                            } else {
-                                Err(TlsError::InternalError)
-                            }
-                        }
-                        ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
-                        ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
-                            // Ignore
-                            Ok(())
-                        }
-                        _ => {
-                            unimplemented!()
-                        }
-                    }?;
-                }
+                let record_data = if consumed < self.decrypted_len {
+                    // The current record is not completely consumed
+                    CryptoBuffer::wrap(
+                        &mut self.record_read_buf
+                            [self.decrypted_offset..self.decrypted_offset + self.decrypted_len],
+                    )
+                } else {
+                    // The current record is completely consumed, read the next...
+                    self.read_application_data()?
+                };
+
+                let unread = &record_data.as_slice()[consumed..];
+                let to_copy = core::cmp::min(unread.len(), buf.len());
+                trace!("Got {} bytes to copy", to_copy);
+                buf[..to_copy].copy_from_slice(&unread[..to_copy]);
+                consumed += to_copy;
+                remaining -= to_copy;
             }
+            self.decrypted_consumed = consumed;
             Ok(buf.len() - remaining)
         } else {
             Err(TlsError::MissingHandshake)
         }
+    }
+
+    fn read_application_data<'m>(&'m mut self) -> Result<CryptoBuffer<'m>, TlsError> {
+        let buf_ptr = self.record_read_buf.as_ptr();
+        let buf_len = self.record_read_buf.len();
+        let record = decode_record_blocking::<Socket, CipherSuite>(
+            &mut self.delegate,
+            self.record_read_buf,
+            &mut self.key_schedule,
+        )?;
+        let mut records = Queue::new();
+        decrypt_record::<CipherSuite>(&mut self.key_schedule, &mut records, record)?;
+
+        while let Some(record) = records.dequeue() {
+            match record {
+                ServerRecord::ApplicationData(data) => {
+                    trace!("Got application data record");
+
+                    // SAFETY: Assume `decrypt_record()` to decrypt in-place
+                    // We have assertions to ensure this is valid.
+                    let slice = data.data.as_slice();
+                    let slice_ptr = slice.as_ptr();
+                    let offset = unsafe { slice_ptr.offset_from(buf_ptr) };
+                    assert!(offset >= 0);
+                    let offset = offset as usize;
+                    assert!(offset + slice.len() <= buf_len);
+
+                    self.decrypted_offset = offset;
+                    self.decrypted_len = slice.len();
+                    self.decrypted_consumed = 0;
+                    return Ok(data.data);
+                }
+                ServerRecord::Alert(alert) => {
+                    if let AlertDescription::CloseNotify = alert.description {
+                        self.opened = false;
+                        Err(TlsError::ConnectionClosed)
+                    } else {
+                        Err(TlsError::InternalError)
+                    }
+                }
+                ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
+                ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
+                    // Ignore
+                    Ok(())
+                }
+                _ => {
+                    unimplemented!()
+                }
+            }?;
+        }
+
+        Ok(CryptoBuffer::empty())
     }
 
     fn close_internal(&mut self) -> Result<(), TlsError> {
@@ -185,11 +241,15 @@ where
             self.opened,
         );
 
-        let (_, len) =
-            encode_record::<CipherSuite>(self.record_buf, &mut self.key_schedule, &record)?;
+        let record_buf = if self.record_read_buf.len() > self.record_write_buf.len() {
+            &mut self.record_read_buf
+        } else {
+            &mut self.record_write_buf
+        };
+        let (_, len) = encode_record::<CipherSuite>(record_buf, &mut self.key_schedule, &record)?;
 
         self.delegate
-            .write(&self.record_buf[..len])
+            .write(&record_buf[..len])
             .map_err(|e| TlsError::Io(e.kind()))?;
 
         self.key_schedule.increment_write_counter();
