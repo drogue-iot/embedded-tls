@@ -58,6 +58,10 @@ where
         record_read_buf: &'a mut [u8],
         record_write_buf: &'a mut [u8],
     ) -> Self {
+        assert!(
+            record_write_buf.len() > TLS_RECORD_OVERHEAD,
+            "The write buffer must be sufficiently large to include the tls record overhead"
+        );
         Self {
             delegate,
             opened: false,
