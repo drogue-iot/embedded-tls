@@ -92,6 +92,7 @@ async fn test_psk_open() {
         println!("TLS session opened");
 
         tls.write(b"ping").await.unwrap();
+        tls.flush().await.unwrap();
 
         println!("TLS data written");
         let mut rx = [0; 4];

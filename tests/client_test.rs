@@ -72,6 +72,7 @@ async fn test_ping() {
         core::mem::size_of_val(&write_fut)
     );
     write_fut.await.expect("error writing data");
+    tls.flush().await.expect("error flushing data");
 
     let mut rx_buf = [0; 4096];
     let read_fut = tls.read(&mut rx_buf);
@@ -115,6 +116,7 @@ fn test_blocking_ping() {
     log::info!("Established");
 
     tls.write(b"ping").expect("error writing data");
+    tls.flush().expect("error flushing data");
 
     let mut rx_buf = [0; 4096];
     let sz = tls.read(&mut rx_buf).expect("error reading data");
