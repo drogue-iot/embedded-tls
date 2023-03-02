@@ -235,17 +235,16 @@ where
     Transport: AsyncRead + 'm,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let mut pos: usize = 0;
+    use embedded_io::asynch::ReadExactError;
+
     let mut header: [u8; 5] = [0; 5];
-    loop {
-        pos += transport
-            .read(&mut header[pos..5])
-            .await
-            .map_err(|e| TlsError::Io(e.kind()))?;
-        if pos == 5 {
-            break;
-        }
-    }
+    transport
+        .read_exact(&mut header)
+        .await
+        .map_err(|e| match e {
+            ReadExactError::UnexpectedEof => TlsError::IoError,
+            ReadExactError::Other(e) => TlsError::Io(e.kind()),
+        })?;
     let header = RecordHeader::decode(header)?;
 
     let content_length = header.content_length();
@@ -274,16 +273,13 @@ where
     Transport: BlockingRead + 'm,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let mut pos: usize = 0;
+    use embedded_io::blocking::ReadExactError;
+
     let mut header: [u8; 5] = [0; 5];
-    loop {
-        pos += transport
-            .read(&mut header[pos..5])
-            .map_err(|e| TlsError::Io(e.kind()))?;
-        if pos == 5 {
-            break;
-        }
-    }
+    transport.read_exact(&mut header).map_err(|e| match e {
+        ReadExactError::UnexpectedEof => TlsError::IoError,
+        ReadExactError::Other(e) => TlsError::Io(e.kind()),
+    })?;
     let header = RecordHeader::decode(header)?;
 
     let content_length = header.content_length();
