@@ -160,6 +160,51 @@ where
     }
 }
 
+pub(crate) fn encode_application_data_in_place<
+    F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>,
+>(
+    enc_buf: &mut [u8],
+    data_len: usize,
+    mut encrypt_fn: F,
+) -> Result<usize, TlsError> {
+    if 5 + data_len > enc_buf.len() {
+        return Err(TlsError::EncodeError);
+    }
+
+    // Make room for the header
+    enc_buf.copy_within(..data_len, 5);
+
+    let mut buf = CryptoBuffer::wrap(enc_buf);
+    buf.push(ContentType::ApplicationData as u8)
+        .map_err(|_| TlsError::EncodeError)?;
+    let version = &[0x03, 0x03];
+    buf.extend_from_slice(version)
+        .map_err(|_| TlsError::EncodeError)?;
+
+    let record_length_marker = buf.len();
+    buf.push(0).map_err(|_| TlsError::EncodeError)?;
+    buf.push(0).map_err(|_| TlsError::EncodeError)?;
+
+    assert_eq!(5, buf.len());
+
+    let buf = CryptoBuffer::wrap_with_pos(enc_buf, 5 + data_len);
+    let mut wrapped = buf.offset(5);
+    wrapped
+        .push(ContentType::ApplicationData as u8)
+        .map_err(|_| TlsError::EncodeError)?;
+    let _ = encrypt_fn(&mut wrapped)?;
+
+    let mut buf = wrapped.rewind();
+    let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
+
+    buf.set(record_length_marker, record_length.to_be_bytes()[0])
+        .map_err(|_| TlsError::EncodeError)?;
+    buf.set(record_length_marker + 1, record_length.to_be_bytes()[1])
+        .map_err(|_| TlsError::EncodeError)?;
+
+    Ok(buf.len())
+}
+
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ServerRecord<'a, N: ArrayLength<u8>> {

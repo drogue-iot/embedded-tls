@@ -32,6 +32,7 @@ where
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record_read_buf: &'a mut [u8],
     record_write_buf: &'a mut [u8],
+    write_pos: usize,
     decrypted_offset: usize,
     decrypted_len: usize,
     decrypted_consumed: usize,
@@ -68,6 +69,7 @@ where
             key_schedule: KeySchedule::new(),
             record_read_buf,
             record_write_buf,
+            write_pos: 0,
             decrypted_offset: 0,
             decrypted_len: 0,
             decrypted_consumed: 0,
@@ -122,35 +124,62 @@ where
     /// Encrypt and send the provided slice over the connection. The connection
     /// must be opened before writing.
     ///
-    /// Returns the number of bytes written.
+    /// The slice may be buffered internally and not written to the connection immediately.
+    /// In this case [`flush()`] should be called to force the currently buffered writes
+    /// to be written to the connection.
+    ///
+    /// Returns the number of bytes buffered/written.
     pub async fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
         if self.opened {
-            let mut wp = 0;
-            let mut remaining = buf.len();
-
             let max_block_size = self.record_write_buf.len() - TLS_RECORD_OVERHEAD;
-            while remaining > 0 {
-                let delegate = &mut self.delegate;
-                let key_schedule = &mut self.key_schedule;
-                let to_write = core::cmp::min(remaining, max_block_size);
-                let record: ClientRecord<'a, '_, CipherSuite> =
-                    ClientRecord::ApplicationData(&buf[wp..to_write]);
-
-                let (_, len) = encode_record(self.record_write_buf, key_schedule, &record)?;
-
-                delegate
-                    .write(&self.record_write_buf[..len])
-                    .await
-                    .map_err(|e| TlsError::Io(e.kind()))?;
-                key_schedule.increment_write_counter();
-                wp += to_write;
-                remaining -= to_write;
+            let buffered = usize::min(buf.len(), max_block_size - self.write_pos);
+            if buffered > 0 {
+                self.record_write_buf[self.write_pos..self.write_pos + buffered]
+                    .copy_from_slice(&buf[..buffered]);
+                self.write_pos += buffered;
             }
 
-            Ok(buf.len())
+            if self.write_pos == max_block_size {
+                let len = encode_application_data_record_in_place::<CipherSuite>(
+                    self.record_write_buf,
+                    self.write_pos,
+                    &mut self.key_schedule,
+                )?;
+
+                self.delegate
+                    .write_all(&self.record_write_buf[..len])
+                    .await
+                    .map_err(|e| TlsError::Io(e.kind()))?;
+
+                self.key_schedule.increment_write_counter();
+                self.write_pos = 0;
+            }
+
+            Ok(buffered)
         } else {
             Err(TlsError::MissingHandshake)
         }
+    }
+
+    /// Force all previously written, buffered bytes to be encoded into a tls record and written to the connection.
+    pub async fn flush(&mut self) -> Result<(), TlsError> {
+        if self.write_pos > 0 {
+            let len = encode_application_data_record_in_place::<CipherSuite>(
+                self.record_write_buf,
+                self.write_pos,
+                &mut self.key_schedule,
+            )?;
+
+            self.delegate
+                .write_all(&self.record_write_buf[..len])
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+
+            self.key_schedule.increment_write_counter();
+            self.write_pos = 0;
+        }
+
+        Ok(())
     }
 
     /// Read and decrypt data filling the provided slice.
@@ -302,6 +331,6 @@ where
     }
 
     async fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
+        TlsConnection::flush(self).await
     }
 }
