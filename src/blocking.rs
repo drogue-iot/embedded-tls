@@ -166,6 +166,7 @@ where
                     )
                 } else {
                     // The current record is completely consumed, read the next...
+                    consumed = 0;
                     self.read_application_data()?
                 };
 
