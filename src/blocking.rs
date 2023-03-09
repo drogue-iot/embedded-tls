@@ -32,6 +32,7 @@ where
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record_read_buf: &'a mut [u8],
     record_write_buf: &'a mut [u8],
+    read_reminder: Reminder,
     decrypted_offset: usize,
     decrypted_len: usize,
     decrypted_consumed: usize,
@@ -68,6 +69,7 @@ where
             key_schedule: KeySchedule::new(),
             record_read_buf,
             record_write_buf,
+            read_reminder: Reminder::default(),
             decrypted_offset: 0,
             decrypted_len: 0,
             decrypted_consumed: 0,
@@ -91,23 +93,21 @@ where
         let mut handshake: Handshake<CipherSuite, Verifier> =
             Handshake::new(Verifier::new(context.config.server_name));
         let mut state = State::ClientHello;
-        let record_buf = if self.record_read_buf.len() > self.record_write_buf.len() {
-            &mut self.record_read_buf
-        } else {
-            &mut self.record_write_buf
-        };
 
         loop {
-            let next_state = state.process_blocking::<_, _, _, Verifier>(
+            let (next_state, reminder) = state.process_blocking::<_, _, _, Verifier>(
                 &mut self.delegate,
                 &mut handshake,
-                record_buf,
+                self.record_read_buf,
+                self.record_write_buf,
+                self.read_reminder,
                 &mut self.key_schedule,
                 context.config,
                 context.rng,
             )?;
             trace!("State {:?} -> {:?}", state, next_state);
             state = next_state;
+            self.read_reminder = reminder;
             if let State::ApplicationData = state {
                 self.opened = true;
                 break;
@@ -187,11 +187,13 @@ where
     fn read_application_data<'m>(&'m mut self) -> Result<CryptoBuffer<'m>, TlsError> {
         let buf_ptr = self.record_read_buf.as_ptr();
         let buf_len = self.record_read_buf.len();
-        let record = decode_record_blocking::<Socket, CipherSuite>(
+        let (record, reminder) = decode_record_blocking::<Socket, CipherSuite>(
             &mut self.delegate,
             self.record_read_buf,
+            self.read_reminder,
             &mut self.key_schedule,
         )?;
+        self.read_reminder = reminder;
         let mut records = Queue::new();
         decrypt_record::<CipherSuite>(&mut self.key_schedule, &mut records, record)?;
 
@@ -242,15 +244,11 @@ where
             self.opened,
         );
 
-        let record_buf = if self.record_read_buf.len() > self.record_write_buf.len() {
-            &mut self.record_read_buf
-        } else {
-            &mut self.record_write_buf
-        };
-        let (_, len) = encode_record::<CipherSuite>(record_buf, &mut self.key_schedule, &record)?;
+        let (_, len) =
+            encode_record::<CipherSuite>(self.record_write_buf, &mut self.key_schedule, &record)?;
 
         self.delegate
-            .write(&record_buf[..len])
+            .write_all(&self.record_write_buf[..len])
             .map_err(|e| TlsError::Io(e.kind()))?;
 
         self.key_schedule.increment_write_counter();

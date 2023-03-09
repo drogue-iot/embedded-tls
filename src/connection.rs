@@ -226,80 +226,128 @@ where
 }
 
 #[cfg(feature = "async")]
+async fn advance<'m>(
+    transport: &mut impl AsyncRead,
+    rx_buf: &'m mut [u8],
+    mut reminder: Reminder,
+    amount: usize,
+) -> Result<(&'m mut [u8], Reminder), TlsError> {
+    if reminder.offset + amount > rx_buf.len() {
+        if amount > rx_buf.len() {
+            return Err(TlsError::InsufficientSpace);
+        }
+        rx_buf.copy_within(reminder.offset..reminder.offset + reminder.len, 0);
+        reminder.offset = 0;
+    }
+
+    let mut pos = reminder.len;
+    while pos < amount {
+        let read = transport
+            .read(&mut rx_buf[reminder.offset + pos..])
+            .await
+            .map_err(|e| TlsError::Io(e.kind()))?;
+        if read == 0 {
+            return Err(TlsError::IoError);
+        }
+        pos += read;
+    }
+
+    Ok((
+        &mut rx_buf[reminder.offset..reminder.offset + amount],
+        Reminder {
+            offset: reminder.offset + amount,
+            len: pos - amount,
+        },
+    ))
+}
+
+fn advance_blocking<'m>(
+    transport: &mut impl BlockingRead,
+    rx_buf: &'m mut [u8],
+    mut reminder: Reminder,
+    amount: usize,
+) -> Result<(&'m mut [u8], Reminder), TlsError> {
+    if reminder.offset + amount > rx_buf.len() {
+        if amount > rx_buf.len() {
+            return Err(TlsError::InsufficientSpace);
+        }
+        rx_buf.copy_within(reminder.offset..reminder.offset + reminder.len, 0);
+        reminder.offset = 0;
+    }
+
+    let mut pos = reminder.len;
+    while pos < amount {
+        let read = transport
+            .read(&mut rx_buf[reminder.offset + pos..])
+            .map_err(|e| TlsError::Io(e.kind()))?;
+        if read == 0 {
+            return Err(TlsError::IoError);
+        }
+        pos += read;
+    }
+
+    Ok((
+        &mut rx_buf[reminder.offset..reminder.offset + amount],
+        Reminder {
+            offset: reminder.offset + amount,
+            len: pos - amount,
+        },
+    ))
+}
+
+#[cfg(feature = "async")]
 pub async fn decode_record<'m, Transport, CipherSuite>(
     transport: &mut Transport,
     rx_buf: &'m mut [u8],
+    reminder: Reminder,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
+) -> Result<
+    (
+        ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
+        Reminder,
+    ),
+    TlsError,
+>
 where
     Transport: AsyncRead + 'm,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let mut pos: usize = 0;
-    let mut header: [u8; 5] = [0; 5];
-    loop {
-        pos += transport
-            .read(&mut header[pos..5])
-            .await
-            .map_err(|e| TlsError::Io(e.kind()))?;
-        if pos == 5 {
-            break;
-        }
-    }
-    let header = RecordHeader::decode(header)?;
-
+    let (header, reminder) = advance(transport, rx_buf, reminder, 5).await?;
+    let header = RecordHeader::decode(header.try_into().unwrap())?;
     let content_length = header.content_length();
-    if content_length > rx_buf.len() {
-        return Err(TlsError::InsufficientSpace);
-    }
 
-    let mut pos = 0;
-    while pos < content_length {
-        let read = transport
-            .read(&mut rx_buf[pos..content_length])
-            .await
-            .map_err(|e| TlsError::Io(e.kind()))?;
-        pos += read;
-    }
-
-    ServerRecord::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
+    let (data, reminder) = advance(transport, rx_buf, reminder, content_length).await?;
+    Ok((
+        ServerRecord::decode::<CipherSuite::Hash>(header, data, key_schedule.transcript_hash())?,
+        reminder,
+    ))
 }
 
 pub fn decode_record_blocking<'m, Transport, CipherSuite>(
     transport: &mut Transport,
     rx_buf: &'m mut [u8],
+    reminder: Reminder,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
+) -> Result<
+    (
+        ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
+        Reminder,
+    ),
+    TlsError,
+>
 where
     Transport: BlockingRead + 'm,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let mut pos: usize = 0;
-    let mut header: [u8; 5] = [0; 5];
-    loop {
-        pos += transport
-            .read(&mut header[pos..5])
-            .map_err(|e| TlsError::Io(e.kind()))?;
-        if pos == 5 {
-            break;
-        }
-    }
-    let header = RecordHeader::decode(header)?;
-
+    let (header, reminder) = advance_blocking(transport, rx_buf, reminder, 5)?;
+    let header = RecordHeader::decode(header.try_into().unwrap())?;
     let content_length = header.content_length();
-    if content_length > rx_buf.len() {
-        return Err(TlsError::InsufficientSpace);
-    }
 
-    let mut pos = 0;
-    while pos < content_length {
-        let read = transport
-            .read(&mut rx_buf[pos..content_length])
-            .map_err(|e| TlsError::Io(e.kind()))?;
-        pos += read;
-    }
-
-    ServerRecord::decode::<CipherSuite::Hash>(header, rx_buf, key_schedule.transcript_hash())
+    let (data, reminder) = advance_blocking(transport, rx_buf, reminder, content_length)?;
+    Ok((
+        ServerRecord::decode::<CipherSuite::Hash>(header, data, key_schedule.transcript_hash())?,
+        reminder,
+    ))
 }
 
 pub struct Handshake<CipherSuite, Verifier>
@@ -339,17 +387,25 @@ pub enum State {
     ApplicationData,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct Reminder {
+    offset: usize,
+    len: usize,
+}
+
 impl<'a> State {
     #[cfg(feature = "async")]
     pub async fn process<Transport, CipherSuite, RNG, Verifier>(
         self,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
-        record_buf: &mut [u8],
+        rx_buf: &mut [u8],
+        tx_buf: &mut [u8],
+        reminder: Reminder,
         key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         config: &TlsConfig<'a, CipherSuite>,
         rng: &mut RNG,
-    ) -> Result<State, TlsError>
+    ) -> Result<(State, Reminder), TlsError>
     where
         Transport: AsyncRead + AsyncWrite + 'a,
         RNG: CryptoRng + RngCore + 'a,
@@ -360,10 +416,10 @@ impl<'a> State {
             State::ClientHello => {
                 key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
                 let client_hello = ClientRecord::client_hello(config, rng);
-                let (_, len) = encode_record(record_buf, key_schedule, &client_hello)?;
+                let (_, len) = encode_record(tx_buf, key_schedule, &client_hello)?;
 
                 transport
-                    .write(&record_buf[..len])
+                    .write_all(&tx_buf[..len])
                     .await
                     .map_err(|e| TlsError::Io(e.kind()))?;
 
@@ -372,33 +428,39 @@ impl<'a> State {
                     client_hello
                 {
                     handshake.secret.replace(client_hello.secret);
-                    Ok(State::ServerHello)
+                    Ok((State::ServerHello, reminder))
                 } else {
                     Err(TlsError::EncodeError)
                 }
             }
             State::ServerHello => {
-                let record =
-                    decode_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
-                        .await?;
+                let (record, reminder) = decode_record::<Transport, CipherSuite>(
+                    transport,
+                    rx_buf,
+                    reminder,
+                    key_schedule,
+                )
+                .await?;
                 process_server_hello(handshake, key_schedule, record)?;
-                Ok(State::ServerVerify)
+                Ok((State::ServerVerify, reminder))
             }
             State::ServerVerify => {
                 /*info!(
                     "SIZE of server record queue : {}",
                     core::mem::size_of_val(&records)
                 );*/
-                let record =
-                    decode_record::<Transport, CipherSuite>(transport, record_buf, key_schedule)
-                        .await?;
-
-                Ok(process_server_verify::<_, Verifier>(
-                    handshake,
+                let (record, reminder) = decode_record::<Transport, CipherSuite>(
+                    transport,
+                    rx_buf,
+                    reminder,
                     key_schedule,
-                    config,
-                    record,
-                )?)
+                )
+                .await?;
+
+                Ok((
+                    process_server_verify::<_, Verifier>(handshake, key_schedule, config, record)?,
+                    reminder,
+                ))
             }
             State::ClientCert => {
                 handshake
@@ -423,14 +485,14 @@ impl<'a> State {
                 let client_cert: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::Handshake(client_handshake, true);
 
-                let (next_hash, len) = encode_record(record_buf, key_schedule, &client_cert)?;
+                let (next_hash, len) = encode_record(tx_buf, key_schedule, &client_cert)?;
                 transport
-                    .write(&record_buf[..len])
+                    .write_all(&tx_buf[..len])
                     .await
                     .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
                 key_schedule.replace_transcript_hash(next_hash);
-                Ok(State::ClientFinished)
+                Ok((State::ClientFinished, reminder))
             }
             State::ClientFinished => {
                 let client_finished = key_schedule
@@ -440,9 +502,9 @@ impl<'a> State {
                 let client_finished = ClientHandshake::<CipherSuite>::Finished(client_finished);
                 let client_finished = ClientRecord::Handshake(client_finished, true);
 
-                let (_, len) = encode_record(record_buf, key_schedule, &client_finished)?;
+                let (_, len) = encode_record(tx_buf, key_schedule, &client_finished)?;
                 transport
-                    .write(&record_buf[..len])
+                    .write_all(&tx_buf[..len])
                     .await
                     .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
@@ -455,9 +517,9 @@ impl<'a> State {
                 );
                 key_schedule.initialize_master_secret()?;
 
-                Ok(State::ApplicationData)
+                Ok((State::ApplicationData, reminder))
             }
-            State::ApplicationData => Ok(State::ApplicationData),
+            State::ApplicationData => Ok((State::ApplicationData, reminder)),
         }
     }
 
@@ -465,11 +527,13 @@ impl<'a> State {
         self,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
-        record_buf: &mut [u8],
+        rx_buf: &mut [u8],
+        tx_buf: &mut [u8],
+        reminder: Reminder,
         key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         config: &TlsConfig<'a, CipherSuite>,
         rng: &mut RNG,
-    ) -> Result<State, TlsError>
+    ) -> Result<(State, Reminder), TlsError>
     where
         Transport: BlockingRead + BlockingWrite + 'a,
         RNG: CryptoRng + RngCore,
@@ -480,10 +544,10 @@ impl<'a> State {
             State::ClientHello => {
                 key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
                 let client_hello = ClientRecord::client_hello(config, rng);
-                let (_, len) = encode_record(record_buf, key_schedule, &client_hello)?;
+                let (_, len) = encode_record(tx_buf, key_schedule, &client_hello)?;
 
                 transport
-                    .write(&record_buf[..len])
+                    .write_all(&tx_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;
 
                 key_schedule.increment_write_counter();
@@ -491,37 +555,37 @@ impl<'a> State {
                     client_hello
                 {
                     handshake.secret.replace(client_hello.secret);
-                    Ok(State::ServerHello)
+                    Ok((State::ServerHello, reminder))
                 } else {
                     Err(TlsError::EncodeError)
                 }
             }
             State::ServerHello => {
-                let record = decode_record_blocking::<Transport, CipherSuite>(
+                let (record, reminder) = decode_record_blocking::<Transport, CipherSuite>(
                     transport,
-                    record_buf,
+                    rx_buf,
+                    reminder,
                     key_schedule,
                 )?;
                 process_server_hello(handshake, key_schedule, record)?;
-                Ok(State::ServerVerify)
+                Ok((State::ServerVerify, reminder))
             }
             State::ServerVerify => {
                 /*info!(
                     "SIZE of server record queue : {}",
                     core::mem::size_of_val(&records)
                 );*/
-                let record = decode_record_blocking::<Transport, CipherSuite>(
+                let (record, reminder) = decode_record_blocking::<Transport, CipherSuite>(
                     transport,
-                    record_buf,
+                    rx_buf,
+                    reminder,
                     key_schedule,
                 )?;
 
-                Ok(process_server_verify::<_, Verifier>(
-                    handshake,
-                    key_schedule,
-                    config,
-                    record,
-                )?)
+                Ok((
+                    process_server_verify::<_, Verifier>(handshake, key_schedule, config, record)?,
+                    reminder,
+                ))
             }
             State::ClientCert => {
                 handshake
@@ -542,13 +606,13 @@ impl<'a> State {
                 let client_cert: ClientRecord<'a, '_, CipherSuite> =
                     ClientRecord::Handshake(client_handshake, true);
 
-                let (next_hash, len) = encode_record(record_buf, key_schedule, &client_cert)?;
+                let (next_hash, len) = encode_record(tx_buf, key_schedule, &client_cert)?;
                 transport
-                    .write(&record_buf[..len])
+                    .write_all(&tx_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
                 key_schedule.replace_transcript_hash(next_hash);
-                Ok(State::ClientFinished)
+                Ok((State::ClientFinished, reminder))
             }
             State::ClientFinished => {
                 let client_finished = key_schedule
@@ -558,9 +622,9 @@ impl<'a> State {
                 let client_finished = ClientHandshake::<CipherSuite>::Finished(client_finished);
                 let client_finished = ClientRecord::Handshake(client_finished, true);
 
-                let (_, len) = encode_record(record_buf, key_schedule, &client_finished)?;
+                let (_, len) = encode_record(tx_buf, key_schedule, &client_finished)?;
                 transport
-                    .write(&record_buf[..len])
+                    .write_all(&tx_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;
                 key_schedule.increment_write_counter();
 
@@ -572,9 +636,9 @@ impl<'a> State {
                 );
                 key_schedule.initialize_master_secret()?;
 
-                Ok(State::ApplicationData)
+                Ok((State::ApplicationData, reminder))
             }
-            State::ApplicationData => Ok(State::ApplicationData),
+            State::ApplicationData => Ok((State::ApplicationData, reminder)),
         }
     }
 }
