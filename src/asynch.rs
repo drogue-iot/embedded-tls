@@ -32,7 +32,7 @@ where
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record_read_buf: &'a mut [u8],
     record_write_buf: &'a mut [u8],
-    read_reminder: Reminder,
+    read_remainder: Remainder,
     decrypted_offset: usize,
     decrypted_len: usize,
     decrypted_consumed: usize,
@@ -69,7 +69,7 @@ where
             key_schedule: KeySchedule::new(),
             record_read_buf,
             record_write_buf,
-            read_reminder: Reminder::default(),
+            read_remainder: Remainder::default(),
             decrypted_offset: 0,
             decrypted_len: 0,
             decrypted_consumed: 0,
@@ -95,13 +95,13 @@ where
         let mut state = State::ClientHello;
 
         loop {
-            let (next_state, reminder) = state
+            let (next_state, remainder) = state
                 .process::<_, _, _, Verifier>(
                     &mut self.delegate,
                     &mut handshake,
                     self.record_read_buf,
                     self.record_write_buf,
-                    self.read_reminder,
+                    self.read_remainder,
                     &mut self.key_schedule,
                     context.config,
                     context.rng,
@@ -109,7 +109,7 @@ where
                 .await?;
             trace!("State {:?} -> {:?}", state, next_state);
             state = next_state;
-            self.read_reminder = reminder;
+            self.read_remainder = remainder;
             if let State::ApplicationData = state {
                 self.opened = true;
                 break;
@@ -191,14 +191,14 @@ where
 
         let buf_ptr = self.record_read_buf.as_ptr();
         let buf_len = self.record_read_buf.len();
-        let (record, reminder) = decode_record::<Socket, CipherSuite>(
+        let (record, remainder) = decode_record::<Socket, CipherSuite>(
             socket,
             self.record_read_buf,
-            self.read_reminder,
+            self.read_remainder,
             key_schedule,
         )
         .await?;
-        self.read_reminder = reminder;
+        self.read_remainder = remainder;
         let mut records = Queue::new();
         decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
 
