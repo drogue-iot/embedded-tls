@@ -71,6 +71,7 @@ where
             record_read_buf,
             record_write_buf,
             read_remainder: Remainder::default(),
+            write_pos: 0,
             decrypted_offset: 0,
             decrypted_len: 0,
             decrypted_consumed: 0,
