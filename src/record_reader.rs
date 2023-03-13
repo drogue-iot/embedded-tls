@@ -239,4 +239,67 @@ mod tests {
             assert_eq!(0, reader.pending);
         }
     }
+
+    #[test]
+    fn can_read_blocking_must_rotate_buffer() {
+        let mut transport = [
+            // Header
+            ContentType::ApplicationData as u8,
+            0x03,
+            0x03,
+            0x00,
+            0x04,
+            // Data
+            0xde,
+            0xad,
+            0xbe,
+            0xef,
+            // Header
+            ContentType::ApplicationData as u8,
+            0x03,
+            0x03,
+            0x00,
+            0x02,
+            // Data
+            0xaa,
+            0xbb,
+        ]
+        .as_slice();
+
+        let mut buf = [0; 5]; // This buffer is so small that it cannot contain both the header and data
+        let mut reader = RecordReader::<Aes128GcmSha256>::new(&mut buf);
+        let mut key_schedule = KeySchedule::<
+            <Aes128GcmSha256 as TlsCipherSuite>::Hash,
+            <Aes128GcmSha256 as TlsCipherSuite>::KeyLen,
+            <Aes128GcmSha256 as TlsCipherSuite>::IvLen,
+        >::new();
+
+        {
+            if let ServerRecord::ApplicationData(data) = reader
+                .read_blocking(&mut transport, &mut key_schedule)
+                .unwrap()
+            {
+                assert_eq!([0xde, 0xad, 0xbe, 0xef], data.data.as_slice());
+            } else {
+                panic!("Wrong server record");
+            }
+
+            assert_eq!(4, reader.decoded); // The buffer is rotated after decoding the header
+            assert_eq!(1, reader.pending);
+        }
+
+        {
+            if let ServerRecord::ApplicationData(data) = reader
+                .read_blocking(&mut transport, &mut key_schedule)
+                .unwrap()
+            {
+                assert_eq!([0xaa, 0xbb], data.data.as_slice());
+            } else {
+                panic!("Wrong server record");
+            }
+
+            assert_eq!(2, reader.decoded);
+            assert_eq!(0, reader.pending);
+        }
+    }
 }
