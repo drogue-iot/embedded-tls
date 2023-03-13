@@ -4,6 +4,7 @@ use crate::connection::*;
 use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
 use crate::record::{ClientRecord, ServerRecord};
+use crate::record_reader::RecordReader;
 use crate::TlsError;
 use embedded_io::Error as _;
 use embedded_io::{
@@ -30,9 +31,8 @@ where
     delegate: Socket,
     opened: bool,
     key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    record_read_buf: &'a mut [u8],
+    record_reader: RecordReader<'a, CipherSuite>,
     record_write_buf: &'a mut [u8],
-    read_remainder: Remainder,
     write_pos: usize,
     decrypted_offset: usize,
     decrypted_len: usize,
@@ -68,9 +68,8 @@ where
             delegate,
             opened: false,
             key_schedule: KeySchedule::new(),
-            record_read_buf,
+            record_reader: RecordReader::new(record_read_buf),
             record_write_buf,
-            read_remainder: Remainder::default(),
             write_pos: 0,
             decrypted_offset: 0,
             decrypted_len: 0,
@@ -97,13 +96,12 @@ where
         let mut state = State::ClientHello;
 
         loop {
-            let (next_state, remainder) = state
+            let next_state = state
                 .process::<_, _, _, Verifier>(
                     &mut self.delegate,
                     &mut handshake,
-                    self.record_read_buf,
+                    &mut self.record_reader,
                     self.record_write_buf,
-                    self.read_remainder,
                     &mut self.key_schedule,
                     context.config,
                     context.rng,
@@ -111,7 +109,6 @@ where
                 .await?;
             trace!("State {:?} -> {:?}", state, next_state);
             state = next_state;
-            self.read_remainder = remainder;
             if let State::ApplicationData = state {
                 self.opened = true;
                 break;
@@ -191,7 +188,7 @@ where
                 let record_data = if consumed < self.decrypted_len {
                     // The current record is not completely consumed
                     CryptoBuffer::wrap(
-                        &mut self.record_read_buf
+                        &mut self.record_reader.buf
                             [self.decrypted_offset..self.decrypted_offset + self.decrypted_len],
                     )
                 } else {
@@ -215,21 +212,14 @@ where
     }
 
     async fn read_application_data<'m>(&'m mut self) -> Result<CryptoBuffer<'m>, TlsError> {
-        let socket = &mut self.delegate;
-        let key_schedule = &mut self.key_schedule;
-
-        let buf_ptr = self.record_read_buf.as_ptr();
-        let buf_len = self.record_read_buf.len();
-        let (record, remainder) = decode_record::<Socket, CipherSuite>(
-            socket,
-            self.record_read_buf,
-            self.read_remainder,
-            key_schedule,
-        )
-        .await?;
-        self.read_remainder = remainder;
+        let buf_ptr = self.record_reader.buf.as_ptr();
+        let buf_len = self.record_reader.buf.len();
+        let record = self
+            .record_reader
+            .read(&mut self.delegate, &mut self.key_schedule)
+            .await?;
         let mut records = Queue::new();
-        decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
+        decrypt_record::<CipherSuite>(&mut self.key_schedule, &mut records, record)?;
 
         while let Some(record) = records.dequeue() {
             match record {
