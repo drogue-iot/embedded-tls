@@ -49,8 +49,8 @@ where
     {
         let header = self.advance(transport, 5).await?;
         let header = RecordHeader::decode(header.try_into().unwrap())?;
-        let content_length = header.content_length();
 
+        let content_length = header.content_length();
         let data = self.advance(transport, content_length).await?;
         ServerRecord::decode::<CipherSuite::Hash>(header, data, key_schedule.transcript_hash())
     }
@@ -97,8 +97,8 @@ where
     {
         let header = self.advance_blocking(transport, 5)?;
         let header = RecordHeader::decode(header.try_into().unwrap())?;
-        let content_length = header.content_length();
 
+        let content_length = header.content_length();
         let data = self.advance_blocking(transport, content_length)?;
         ServerRecord::decode::<CipherSuite::Hash>(header, data, key_schedule.transcript_hash())
     }
@@ -300,6 +300,62 @@ mod tests {
             }
 
             assert_eq!(2, reader.decoded);
+            assert_eq!(0, reader.pending);
+        }
+    }
+
+    #[test]
+    fn can_read_empty_record() {
+        let mut transport = [
+            // Header
+            ContentType::ApplicationData as u8,
+            0x03,
+            0x03,
+            0x00,
+            0x00,
+            // Data
+            ContentType::ApplicationData as u8,
+            0x03,
+            0x03,
+            0x00,
+            0x00,
+            // Data
+        ]
+        .as_slice();
+
+        let mut buf = [0; 32];
+        let mut reader = RecordReader::<Aes128GcmSha256>::new(&mut buf);
+        let mut key_schedule = KeySchedule::<
+            <Aes128GcmSha256 as TlsCipherSuite>::Hash,
+            <Aes128GcmSha256 as TlsCipherSuite>::KeyLen,
+            <Aes128GcmSha256 as TlsCipherSuite>::IvLen,
+        >::new();
+
+        {
+            if let ServerRecord::ApplicationData(data) = reader
+                .read_blocking(&mut transport, &mut key_schedule)
+                .unwrap()
+            {
+                assert!(data.data.is_empty());
+            } else {
+                panic!("Wrong server record");
+            }
+
+            assert_eq!(5, reader.decoded);
+            assert_eq!(5, reader.pending);
+        }
+
+        {
+            if let ServerRecord::ApplicationData(data) = reader
+                .read_blocking(&mut transport, &mut key_schedule)
+                .unwrap()
+            {
+                assert!(data.data.is_empty());
+            } else {
+                panic!("Wrong server record");
+            }
+
+            assert_eq!(10, reader.decoded);
             assert_eq!(0, reader.pending);
         }
     }
