@@ -1,7 +1,7 @@
 use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::KeySchedule;
-use crate::record::{ClientRecord, RecordHeader, ServerRecord};
+use crate::record::{encode_application_data_in_place, ClientRecord, RecordHeader, ServerRecord};
 use crate::TlsError;
 use crate::{
     alert::*,
@@ -223,6 +223,19 @@ where
     }
 
     Ok((next_hash, len))
+}
+
+pub fn encode_application_data_record_in_place<'m, CipherSuite>(
+    tx_buf: &mut [u8],
+    data_len: usize,
+    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+) -> Result<usize, TlsError>
+where
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    encode_application_data_in_place(tx_buf, data_len, |buf| {
+        encrypt::<CipherSuite>(key_schedule, buf)
+    })
 }
 
 #[cfg(feature = "async")]
