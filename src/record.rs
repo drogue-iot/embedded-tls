@@ -244,31 +244,28 @@ impl RecordHeader {
 impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
     pub fn decode<D>(
         header: RecordHeader,
-        rx_buf: &'a mut [u8],
+        data: &'a mut [u8],
         digest: &mut D,
     ) -> Result<ServerRecord<'a, N>, TlsError>
     where
         D: Digest,
     {
-        let content_length = header.content_length();
+        assert_eq!(header.content_length(), data.len());
         match header.content_type() {
             ContentType::Invalid => Err(TlsError::Unimplemented),
             ContentType::ChangeCipherSpec => Ok(ServerRecord::ChangeCipherSpec(
-                ChangeCipherSpec::read(&mut rx_buf[..content_length])?,
+                ChangeCipherSpec::read(data)?,
             )),
             ContentType::Alert => {
-                let mut parse = ParseBuffer::from(&rx_buf[..content_length]);
+                let mut parse = ParseBuffer::new(data);
                 let alert = Alert::parse(&mut parse)?;
                 Ok(ServerRecord::Alert(alert))
             }
             ContentType::Handshake => Ok(ServerRecord::Handshake(ServerHandshake::read(
-                &mut rx_buf[..content_length],
-                digest,
+                data, digest,
             )?)),
             ContentType::ApplicationData => {
-                let mut buf = CryptoBuffer::wrap(rx_buf);
-                buf.truncate(content_length);
-
+                let buf = CryptoBuffer::wrap_with_pos(data, data.len());
                 Ok(ServerRecord::ApplicationData(ApplicationData::new(
                     buf, header,
                 )))
