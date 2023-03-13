@@ -7,9 +7,10 @@ use embedded_io::{blocking::Read as BlockingRead, Error};
 use embedded_io::asynch::Read as AsyncRead;
 
 use crate::{
+    config::TlsCipherSuite,
     key_schedule::KeySchedule,
     record::{RecordHeader, ServerRecord},
-    TlsCipherSuite, TlsError,
+    TlsError,
 };
 
 pub struct RecordReader<'a, CipherSuite>
