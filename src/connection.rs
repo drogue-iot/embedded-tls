@@ -43,7 +43,7 @@ use heapless::spsc::Queue;
 
 pub(crate) fn decrypt_record<'m, CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    records: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, 4>,
+    records: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, 8>,
     record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
 ) -> Result<(), TlsError>
 where
