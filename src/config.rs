@@ -5,7 +5,7 @@ use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
 use crate::signature_schemes::SignatureScheme;
 use crate::TlsError;
-use aes_gcm::{AeadInPlace, Aes128Gcm, KeyInit};
+use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
 use core::marker::PhantomData;
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
@@ -13,7 +13,8 @@ use generic_array::ArrayLength;
 use heapless::Vec;
 use rand_core::{CryptoRng, RngCore};
 pub use sha2::Sha256;
-use typenum::{U12, U16};
+pub use sha2::Sha384;
+use typenum::{U12, U16, U32};
 
 const TLS_RECORD_MAX: usize = 16384;
 
@@ -35,6 +36,16 @@ impl TlsCipherSuite for Aes128GcmSha256 {
     type IvLen = U12;
 
     type Hash = Sha256;
+}
+
+pub struct Aes256GcmSha384;
+impl TlsCipherSuite for Aes256GcmSha384 {
+    const CODE_POINT: u16 = CipherSuite::TlsAes256GcmSha384 as u16;
+    type Cipher = Aes256Gcm;
+    type KeyLen = U32;
+    type IvLen = U12;
+
+    type Hash = Sha384;
 }
 
 /// A TLS 1.3 verifier.
