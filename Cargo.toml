@@ -2,10 +2,6 @@
 name = "embedded-tls"
 version = "0.13.0"
 edition = "2021"
-authors = [
-    "Bob McWhirter <bmcwhirt@redhat.com>",
-    "Ulf Lilleengen <lulf@redhat.com>"
-]
 description = "TLS 1.3 client with no_std support and no allocator"
 documentation = "https://docs.rs/embedded-tls"
 readme = "README.md"
