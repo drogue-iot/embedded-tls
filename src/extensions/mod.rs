@@ -224,7 +224,7 @@ impl ClientExtension<'_> {
                     buf.extend_from_slice(&(identity.len() as u16).to_be_bytes())
                         .map_err(|_| TlsError::EncodeError)?;
 
-                    buf.extend_from_slice(&identity)
+                    buf.extend_from_slice(identity)
                         .map_err(|_| TlsError::EncodeError)?;
 
                     // NOTE: No support for ticket age, set to 0 as recommended by RFC
