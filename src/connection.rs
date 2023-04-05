@@ -226,7 +226,7 @@ where
     Ok((next_hash, len))
 }
 
-pub fn encode_application_data_record_in_place<'m, CipherSuite>(
+pub fn encode_application_data_record_in_place<CipherSuite>(
     tx_buf: &mut [u8],
     data_len: usize,
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
@@ -250,7 +250,7 @@ where
     verifier: Verifier,
 }
 
-impl<'a, CipherSuite, Verifier> Handshake<CipherSuite, Verifier>
+impl<CipherSuite, Verifier> Handshake<CipherSuite, Verifier>
 where
     CipherSuite: TlsCipherSuite + 'static,
     Verifier: TlsVerifier<CipherSuite>,
@@ -278,6 +278,7 @@ pub enum State {
 
 impl<'a> State {
     #[cfg(feature = "async")]
+    #[allow(clippy::too_many_arguments)]
     pub async fn process<Transport, CipherSuite, RNG, Verifier>(
         self,
         transport: &mut Transport,
@@ -390,6 +391,7 @@ impl<'a> State {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn process_blocking<Transport, CipherSuite, RNG, Verifier>(
         self,
         transport: &mut Transport,

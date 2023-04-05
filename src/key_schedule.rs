@@ -222,6 +222,7 @@ where
     pub fn initialize_early_secret(&mut self, psk: Option<&[u8]>) -> Result<(), TlsError> {
         let (secret, hkdf) = Hkdf::<D, SimpleHmac<D>>::extract(
             Some(self.secret.as_ref()),
+            #[allow(clippy::or_fun_call)]
             psk.unwrap_or(Self::zero().as_slice()),
         );
         self.hkdf.replace(hkdf);
@@ -315,7 +316,7 @@ where
 
         let label_len = 6 + label.len() as u8;
         hkdf_label
-            .extend_from_slice(&(label_len as u8).to_be_bytes())
+            .extend_from_slice(&label_len.to_be_bytes())
             .map_err(|_| TlsError::InternalError)?;
         hkdf_label
             .extend_from_slice(b"tls13 ")
@@ -338,7 +339,7 @@ where
                     .map_err(|_| TlsError::InternalError)?;
             }
             ContextType::EmptyHash => {
-                let context = D::new().chain_update(&[]).finalize();
+                let context = D::new().chain_update([]).finalize();
                 hkdf_label
                     .extend_from_slice(&(context.len() as u8).to_be_bytes())
                     .map_err(|_| TlsError::InternalError)?;

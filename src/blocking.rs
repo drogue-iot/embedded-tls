@@ -209,7 +209,7 @@ where
         }
     }
 
-    fn read_application_data<'m>(&'m mut self) -> Result<CryptoBuffer<'m>, TlsError> {
+    fn read_application_data(&mut self) -> Result<CryptoBuffer, TlsError> {
         let buf_ptr = self.record_reader.buf.as_ptr();
         let buf_len = self.record_reader.buf.len();
         let record = self

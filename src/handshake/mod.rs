@@ -72,6 +72,7 @@ impl HandshakeType {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum ClientHandshake<'config, 'a, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
@@ -172,9 +173,9 @@ impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
                 match handshake_type {
                     HandshakeType::ServerHello => {
                         // info!("hash [{:x?}]", &header);
-                        digest.update(&header);
+                        digest.update(header);
                         Ok(ServerHandshake::ServerHello(ServerHello::read(
-                            &rx_buf
+                            rx_buf
                                 .get(4..length + 4)
                                 .ok_or(TlsError::InvalidHandshake)?,
                             digest,

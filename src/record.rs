@@ -15,6 +15,7 @@ use sha2::Digest;
 
 pub type Encrypted = bool;
 
+#[allow(clippy::large_enum_variant)]
 pub enum ClientRecord<'config, 'a, CipherSuite>
 where
     // N: ArrayLength<u8>,
@@ -109,7 +110,7 @@ where
             ClientRecord::ChangeCipherSpec(spec, true) => {
                 let mut wrapped = buf.forward();
 
-                let _ = spec.encode(&mut wrapped)?;
+                spec.encode(&mut wrapped)?;
                 wrapped
                     .push(ContentType::ChangeCipherSpec as u8)
                     .map_err(|_| TlsError::EncodeError)?;
@@ -124,7 +125,7 @@ where
             ClientRecord::Alert(alert, true) => {
                 let mut wrapped = buf.forward();
 
-                let _ = alert.encode(&mut wrapped)?;
+                alert.encode(&mut wrapped)?;
                 wrapped
                     .push(ContentType::Alert as u8)
                     .map_err(|_| TlsError::EncodeError)?;
@@ -207,6 +208,7 @@ pub(crate) fn encode_application_data_in_place<
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[allow(clippy::large_enum_variant)]
 pub enum ServerRecord<'a, N: ArrayLength<u8>> {
     Handshake(ServerHandshake<'a, N>),
     ChangeCipherSpec(ChangeCipherSpec),

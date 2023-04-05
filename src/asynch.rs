@@ -269,16 +269,15 @@ where
             self.opened,
         );
 
-        let mut key_schedule = &mut self.key_schedule;
         let (_, len) =
-            encode_record::<CipherSuite>(self.record_write_buf, &mut key_schedule, &record)?;
+            encode_record::<CipherSuite>(self.record_write_buf, &mut self.key_schedule, &record)?;
 
         self.delegate
             .write_all(&self.record_write_buf[..len])
             .await
             .map_err(|e| TlsError::Io(e.kind()))?;
 
-        key_schedule.increment_write_counter();
+        self.key_schedule.increment_write_counter();
 
         Ok(())
     }
