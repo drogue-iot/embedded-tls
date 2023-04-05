@@ -61,14 +61,7 @@ where
         transport: &mut impl AsyncRead,
         amount: usize,
     ) -> Result<&'m mut [u8], TlsError> {
-        if self.decoded + amount > self.buf.len() {
-            if amount > self.buf.len() {
-                return Err(TlsError::InsufficientSpace);
-            }
-            self.buf
-                .copy_within(self.decoded..self.decoded + self.pending, 0);
-            self.decoded = 0;
-        }
+        self.ensure_contiguous(amount)?;
 
         while self.pending < amount {
             let read = transport
@@ -108,14 +101,7 @@ where
         transport: &mut impl BlockingRead,
         amount: usize,
     ) -> Result<&'m mut [u8], TlsError> {
-        if self.decoded + amount > self.buf.len() {
-            if amount > self.buf.len() {
-                return Err(TlsError::InsufficientSpace);
-            }
-            self.buf
-                .copy_within(self.decoded..self.decoded + self.pending, 0);
-            self.decoded = 0;
-        }
+        self.ensure_contiguous(amount)?;
 
         while self.pending < amount {
             let read = transport
@@ -131,6 +117,19 @@ where
         self.decoded += amount;
         self.pending -= amount;
         Ok(slice)
+    }
+
+    fn ensure_contiguous(&mut self, len: usize) -> Result<(), TlsError> {
+        if self.decoded + len > self.buf.len() {
+            if len > self.buf.len() {
+                return Err(TlsError::InsufficientSpace);
+            }
+            self.buf
+                .copy_within(self.decoded..self.decoded + self.pending, 0);
+            self.decoded = 0;
+        }
+
+        Ok(())
     }
 }
 
