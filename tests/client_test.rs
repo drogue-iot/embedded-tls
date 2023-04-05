@@ -95,6 +95,62 @@ async fn test_ping() {
         .expect("error closing session");
 }
 
+#[tokio::test]
+async fn test_ping_nocopy() {
+    use embedded_tls::*;
+    use tokio::net::TcpStream;
+    let addr = setup();
+    let pem = include_str!("data/ca-cert.pem");
+    let der = pem_parser::pem_to_der(pem);
+
+    let stream = TcpStream::connect(addr)
+        .await
+        .expect("error connecting to server");
+
+    log::info!("Connected");
+    let mut read_record_buffer = [0; 16384];
+    let mut write_record_buffer = [0; 16384];
+    let config = TlsConfig::new()
+        .with_ca(Certificate::X509(&der[..]))
+        .with_server_name("localhost");
+
+    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+        FromTokio::new(stream),
+        &mut read_record_buffer,
+        &mut write_record_buffer,
+    );
+
+    let sz = core::mem::size_of::<TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256>>();
+    log::info!("SIZE of connection is {}", sz);
+
+    let mut rng = OsRng;
+    let open_fut = tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng));
+    log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
+    open_fut.await.expect("error establishing TLS connection");
+    log::info!("Established");
+
+    let write_fut = tls.write(b"ping");
+    log::info!(
+        "SIZE of write fut is {}",
+        core::mem::size_of_val(&write_fut)
+    );
+    write_fut.await.expect("error writing data");
+    tls.flush().await.expect("error flushing data");
+
+    // TODO: solve this empty read
+    let buf = tls.read_buffered().await.expect("error reading data");
+    log::info!("Read bytes: {:?}", buf);
+
+    let buf = tls.read_buffered().await.expect("error reading data");
+    assert_eq!(b"ping", buf);
+    log::info!("Read bytes: {:?}", buf);
+
+    tls.close()
+        .await
+        .map_err(|(_, e)| e)
+        .expect("error closing session");
+}
+
 #[test]
 fn test_blocking_ping() {
     use embedded_tls::blocking::*;
@@ -135,6 +191,49 @@ fn test_blocking_ping() {
     assert_eq!(4, sz);
     assert_eq!(b"ping", &rx_buf[..sz]);
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
+
+    tls.close()
+        .map_err(|(_, e)| e)
+        .expect("error closing session");
+}
+
+#[test]
+fn test_blocking_ping_nocopy() {
+    use embedded_tls::blocking::*;
+    use std::net::TcpStream;
+
+    let addr = setup();
+    let pem = include_str!("data/ca-cert.pem");
+    let der = pem_parser::pem_to_der(pem);
+    let stream = TcpStream::connect(addr).expect("error connecting to server");
+
+    log::info!("Connected");
+    let mut read_record_buffer = [0; 16384];
+    let mut write_record_buffer = [0; 16384];
+    let config = TlsConfig::new()
+        .with_ca(Certificate::X509(&der[..]))
+        .with_server_name("localhost");
+
+    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+        FromStd::new(stream),
+        &mut read_record_buffer,
+        &mut write_record_buffer,
+    );
+
+    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng))
+        .expect("error establishing TLS connection");
+    log::info!("Established");
+
+    tls.write(b"ping").expect("error writing data");
+    tls.flush().expect("error flushing data");
+
+    // TODO: solve this empty read
+    let buf = tls.read_buffered().expect("error reading data");
+    log::info!("Read bytes: {:?}", buf);
+
+    let buf = tls.read_buffered().expect("error reading data");
+    assert_eq!(b"ping", buf);
+    log::info!("Read bytes: {:?}", buf);
 
     tls.close()
         .map_err(|(_, e)| e)

@@ -73,6 +73,10 @@ impl<'b> CryptoBuffer<'b> {
         &self.buf[self.offset..self.offset + self.len]
     }
 
+    pub fn into_slice(self) -> &'b [u8] {
+        &self.buf[self.offset..self.offset + self.len]
+    }
+
     fn extend_internal(&mut self, other: &[u8]) -> Result<(), TlsError> {
         let start = self.offset + self.len;
         if self.capacity - start < other.len() {

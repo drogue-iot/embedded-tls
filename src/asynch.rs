@@ -214,7 +214,30 @@ where
         }
     }
 
-    async fn read_application_data<'m>(&'m mut self) -> Result<CryptoBuffer<'m>, TlsError> {
+    /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
+    pub async fn read_buffered(&mut self) -> Result<&[u8], TlsError> {
+        if self.opened {
+            let record_data = if self.decrypted_consumed < self.decrypted_len {
+                // The current record is not completely consumed
+                let buffer = CryptoBuffer::wrap(
+                    &mut self.record_reader.buf
+                        [self.decrypted_offset..self.decrypted_offset + self.decrypted_len],
+                );
+
+                self.decrypted_consumed = self.decrypted_len;
+                buffer
+            } else {
+                // The current record is completely consumed, read the next...
+                self.read_application_data().await?
+            };
+
+            Ok(record_data.into_slice())
+        } else {
+            Err(TlsError::MissingHandshake)
+        }
+    }
+
+    async fn read_application_data(&mut self) -> Result<CryptoBuffer, TlsError> {
         let buf_ptr = self.record_reader.buf.as_ptr();
         let buf_len = self.record_reader.buf.len();
         let record = self
