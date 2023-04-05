@@ -97,7 +97,7 @@ where
 
         loop {
             let next_state = state
-                .process::<_, _, _, Verifier>(
+                .process(
                     &mut self.delegate,
                     &mut handshake,
                     &mut self.record_reader,
