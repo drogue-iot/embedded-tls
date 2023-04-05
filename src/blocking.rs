@@ -96,7 +96,7 @@ where
         let mut state = State::ClientHello;
 
         loop {
-            let next_state = state.process_blocking::<_, _, _, Verifier>(
+            let next_state = state.process_blocking(
                 &mut self.delegate,
                 &mut handshake,
                 &mut self.record_reader,
