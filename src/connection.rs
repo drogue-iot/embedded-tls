@@ -50,7 +50,7 @@ pub(crate) fn decrypt_record<'m, CipherSuite>(
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    decrypt_record_in_place::<CipherSuite, ()>(key_schedule, record, |record| {
+    decrypt_record_in_place::<CipherSuite, ()>(key_schedule, record, |_key_schedule, record| {
         records.enqueue(record).map_err(|_| TlsError::EncodeError)?;
 
         Ok(ControlFlow::Continue(()))
@@ -63,6 +63,7 @@ pub(crate) fn decrypt_record_in_place<'m, CipherSuite, R>(
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
     mut cb: impl FnMut(
+        &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
     ) -> Result<ControlFlow<R>, TlsError>,
 ) -> Result<Option<R>, TlsError>
@@ -120,7 +121,9 @@ where
                     //if hash_later {
                     Digest::update(key_schedule.transcript_hash(), &data[..data.len()]);
                     // info!("hash {:02x?}", &data[..data.len()]);
-                    if let ControlFlow::Break(val) = cb(ServerRecord::Handshake(inner))? {
+                    if let ControlFlow::Break(val) =
+                        cb(key_schedule, ServerRecord::Handshake(inner))?
+                    {
                         return Ok(Some(val));
                     }
                 }
@@ -129,7 +132,9 @@ where
             ContentType::ApplicationData => {
                 app_data.truncate(app_data.len() - 1);
                 let inner = ApplicationData::new(app_data, header);
-                if let ControlFlow::Break(val) = cb(ServerRecord::ApplicationData(inner))? {
+                if let ControlFlow::Break(val) =
+                    cb(key_schedule, ServerRecord::ApplicationData(inner))?
+                {
                     return Ok(Some(val));
                 }
             }
@@ -137,7 +142,7 @@ where
                 let data = &app_data.as_slice()[..app_data.len() - 1];
                 let mut buf = ParseBuffer::new(data);
                 let alert = Alert::parse(&mut buf)?;
-                if let ControlFlow::Break(val) = cb(ServerRecord::Alert(alert))? {
+                if let ControlFlow::Break(val) = cb(key_schedule, ServerRecord::Alert(alert))? {
                     return Ok(Some(val));
                 }
             }
@@ -147,7 +152,7 @@ where
         key_schedule.increment_read_counter();
     } else {
         debug!("Not decrypting: Not encapsulated in app data");
-        if let ControlFlow::Break(val) = cb(record)? {
+        if let ControlFlow::Break(val) = cb(key_schedule, record)? {
             return Ok(Some(val));
         }
     }
@@ -563,15 +568,11 @@ where
     CipherSuite: TlsCipherSuite + 'static,
     Verifier: TlsVerifier<CipherSuite>,
 {
-    let mut records = Queue::new();
-    decrypt_record::<CipherSuite>(key_schedule, &mut records, record)?;
-
-    let mut state = State::ServerVerify;
-    while let Some(record) = records.dequeue() {
-        if let State::ServerVerify = state {
-            let result = match record {
+    let state =
+        decrypt_record_in_place::<CipherSuite, _>(key_schedule, record, |key_schedule, record| {
+            match record {
                 ServerRecord::Handshake(server_handshake) => match server_handshake {
-                    ServerHandshake::EncryptedExtensions(_) => Ok(State::ServerVerify),
+                    ServerHandshake::EncryptedExtensions(_) => {}
                     ServerHandshake::Certificate(certificate) => {
                         trace!("Verifying certificate!");
                         let transcript = key_schedule.transcript_hash();
@@ -581,43 +582,43 @@ where
                             certificate,
                         )?;
                         trace!("Certificate verified!");
-                        Ok(State::ServerVerify)
                     }
                     ServerHandshake::CertificateVerify(verify) => {
                         trace!("Verifying signature!");
                         handshake.verifier.verify_signature(verify)?;
                         trace!("Signature verified!");
-                        Ok(State::ServerVerify)
                     }
                     ServerHandshake::CertificateRequest(request) => {
                         trace!("Certificate requested");
                         handshake.certificate_request.replace(request.try_into()?);
-                        Ok(State::ServerVerify)
                     }
                     ServerHandshake::Finished(finished) => {
                         trace!("************* Finished");
                         let verified = key_schedule.verify_server_finished(&finished)?;
-                        if verified {
-                            // trace!("server verified {}", verified);
-                            if handshake.certificate_request.is_some() {
-                                Ok(State::ClientCert)
-                            } else {
-                                handshake
-                                    .traffic_hash
-                                    .replace(key_schedule.transcript_hash().clone());
-                                Ok(State::ClientFinished)
-                            }
-                        } else {
-                            Err(TlsError::InvalidSignature)
+                        if !verified {
+                            return Err(TlsError::InvalidSignature);
                         }
+
+                        // trace!("server verified {}", verified);
+                        let state = if handshake.certificate_request.is_some() {
+                            State::ClientCert
+                        } else {
+                            handshake
+                                .traffic_hash
+                                .replace(key_schedule.transcript_hash().clone());
+                            State::ClientFinished
+                        };
+
+                        return Ok(ControlFlow::Break(state));
                     }
-                    _ => Err(TlsError::InvalidHandshake),
+                    _ => return Err(TlsError::InvalidHandshake),
                 },
-                ServerRecord::ChangeCipherSpec(_) => Ok(State::ServerVerify),
-                _ => Err(TlsError::InvalidRecord),
-            }?;
-            state = result;
-        }
-    }
-    Ok(state)
+                ServerRecord::ChangeCipherSpec(_) => {}
+                _ => return Err(TlsError::InvalidRecord),
+            }
+
+            Ok(ControlFlow::Continue(()))
+        })?;
+
+    Ok(state.unwrap_or(State::ServerVerify))
 }
