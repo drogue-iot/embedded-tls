@@ -9,7 +9,6 @@ use crate::{
     handshake::{certificate::CertificateRef, certificate_request::CertificateRequest},
 };
 use core::fmt::Debug;
-use core::ops::ControlFlow;
 use embedded_io::Error as _;
 use rand_core::{CryptoRng, RngCore};
 
@@ -41,15 +40,14 @@ use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 use digest::OutputSizeUser;
 
-pub(crate) fn decrypt_record<'m, CipherSuite, R>(
+pub(crate) fn decrypt_record<'m, CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
-    default: R,
     mut cb: impl FnMut(
         &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
-    ) -> Result<ControlFlow<R>, TlsError>,
-) -> Result<R, TlsError>
+    ) -> Result<(), TlsError>,
+) -> Result<(), TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -104,30 +102,20 @@ where
                     //if hash_later {
                     Digest::update(key_schedule.transcript_hash(), &data[..data.len()]);
                     // info!("hash {:02x?}", &data[..data.len()]);
-                    if let ControlFlow::Break(val) =
-                        cb(key_schedule, ServerRecord::Handshake(inner))?
-                    {
-                        return Ok(val);
-                    }
+                    cb(key_schedule, ServerRecord::Handshake(inner))?;
                 }
                 //}
             }
             ContentType::ApplicationData => {
                 app_data.truncate(app_data.len() - 1);
                 let inner = ApplicationData::new(app_data, header);
-                if let ControlFlow::Break(val) =
-                    cb(key_schedule, ServerRecord::ApplicationData(inner))?
-                {
-                    return Ok(val);
-                }
+                cb(key_schedule, ServerRecord::ApplicationData(inner))?;
             }
             ContentType::Alert => {
                 let data = &app_data.as_slice()[..app_data.len() - 1];
                 let mut buf = ParseBuffer::new(data);
                 let alert = Alert::parse(&mut buf)?;
-                if let ControlFlow::Break(val) = cb(key_schedule, ServerRecord::Alert(alert))? {
-                    return Ok(val);
-                }
+                cb(key_schedule, ServerRecord::Alert(alert))?;
             }
             _ => return Err(TlsError::Unimplemented),
         }
@@ -135,11 +123,9 @@ where
         key_schedule.increment_read_counter();
     } else {
         debug!("Not decrypting: Not encapsulated in app data");
-        if let ControlFlow::Break(val) = cb(key_schedule, record)? {
-            return Ok(val);
-        }
+        cb(key_schedule, record)?;
     }
-    Ok(default)
+    Ok(())
 }
 
 pub(crate) fn encrypt<CipherSuite>(
@@ -551,59 +537,53 @@ where
     CipherSuite: TlsCipherSuite + 'static,
     Verifier: TlsVerifier<CipherSuite>,
 {
-    decrypt_record::<CipherSuite, _>(
-        key_schedule,
-        record,
-        State::ServerVerify,
-        |key_schedule, record| {
-            match record {
-                ServerRecord::Handshake(server_handshake) => match server_handshake {
-                    ServerHandshake::EncryptedExtensions(_) => {}
-                    ServerHandshake::Certificate(certificate) => {
-                        trace!("Verifying certificate!");
-                        let transcript = key_schedule.transcript_hash();
-                        handshake.verifier.verify_certificate(
-                            transcript,
-                            &config.ca,
-                            certificate,
-                        )?;
-                        trace!("Certificate verified!");
+    let mut state = State::ServerVerify;
+    decrypt_record::<CipherSuite>(key_schedule, record, |key_schedule, record| {
+        match record {
+            ServerRecord::Handshake(server_handshake) => match server_handshake {
+                ServerHandshake::EncryptedExtensions(_) => {}
+                ServerHandshake::Certificate(certificate) => {
+                    trace!("Verifying certificate!");
+                    let transcript = key_schedule.transcript_hash();
+                    handshake
+                        .verifier
+                        .verify_certificate(transcript, &config.ca, certificate)?;
+                    trace!("Certificate verified!");
+                }
+                ServerHandshake::CertificateVerify(verify) => {
+                    trace!("Verifying signature!");
+                    handshake.verifier.verify_signature(verify)?;
+                    trace!("Signature verified!");
+                }
+                ServerHandshake::CertificateRequest(request) => {
+                    trace!("Certificate requested");
+                    handshake.certificate_request.replace(request.try_into()?);
+                }
+                ServerHandshake::Finished(finished) => {
+                    trace!("************* Finished");
+                    if !key_schedule.verify_server_finished(&finished)? {
+                        return Err(TlsError::InvalidSignature);
                     }
-                    ServerHandshake::CertificateVerify(verify) => {
-                        trace!("Verifying signature!");
-                        handshake.verifier.verify_signature(verify)?;
-                        trace!("Signature verified!");
-                    }
-                    ServerHandshake::CertificateRequest(request) => {
-                        trace!("Certificate requested");
-                        handshake.certificate_request.replace(request.try_into()?);
-                    }
-                    ServerHandshake::Finished(finished) => {
-                        trace!("************* Finished");
-                        let verified = key_schedule.verify_server_finished(&finished)?;
-                        if !verified {
-                            return Err(TlsError::InvalidSignature);
-                        }
 
-                        // trace!("server verified {}", verified);
-                        let state = if handshake.certificate_request.is_some() {
-                            State::ClientCert
-                        } else {
-                            handshake
-                                .traffic_hash
-                                .replace(key_schedule.transcript_hash().clone());
-                            State::ClientFinished
-                        };
+                    // trace!("server verified {}", verified);
+                    state = if handshake.certificate_request.is_some() {
+                        State::ClientCert
+                    } else {
+                        handshake
+                            .traffic_hash
+                            .replace(key_schedule.transcript_hash().clone());
+                        State::ClientFinished
+                    };
 
-                        return Ok(ControlFlow::Break(state));
-                    }
-                    _ => return Err(TlsError::InvalidHandshake),
-                },
-                ServerRecord::ChangeCipherSpec(_) => {}
-                _ => return Err(TlsError::InvalidRecord),
-            }
+                    return Ok(());
+                }
+                _ => return Err(TlsError::InvalidHandshake),
+            },
+            ServerRecord::ChangeCipherSpec(_) => {}
+            _ => return Err(TlsError::InvalidRecord),
+        }
 
-            Ok(ControlFlow::Continue(()))
-        },
-    )
+        Ok(())
+    })?;
+    Ok(state)
 }
