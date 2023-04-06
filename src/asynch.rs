@@ -221,7 +221,7 @@ where
             .read(&mut self.delegate, &mut self.key_schedule)
             .await?;
 
-        decrypt_record_in_place::<CipherSuite, _>(
+        decrypt_record::<CipherSuite, _>(
             &mut self.key_schedule,
             record,
             (),
