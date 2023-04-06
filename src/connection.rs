@@ -9,6 +9,7 @@ use crate::{
     handshake::{certificate::CertificateRef, certificate_request::CertificateRequest},
 };
 use core::fmt::Debug;
+use core::ops::ControlFlow;
 use embedded_io::Error as _;
 use rand_core::{CryptoRng, RngCore};
 
@@ -49,6 +50,25 @@ pub(crate) fn decrypt_record<'m, CipherSuite>(
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
+    decrypt_record_in_place::<CipherSuite, ()>(key_schedule, record, |record| {
+        records.enqueue(record).map_err(|_| TlsError::EncodeError)?;
+
+        Ok(ControlFlow::Continue(()))
+    })?;
+
+    Ok(())
+}
+
+pub(crate) fn decrypt_record_in_place<'m, CipherSuite, R>(
+    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
+    mut cb: impl FnMut(
+        ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
+    ) -> Result<ControlFlow<R>, TlsError>,
+) -> Result<Option<R>, TlsError>
+where
+    CipherSuite: TlsCipherSuite + 'static,
+{
     if let ServerRecord::ApplicationData(ApplicationData {
         header,
         data: mut app_data,
@@ -56,7 +76,7 @@ where
     {
         // info!("decrypting {:x?} with {}", &header, app_data.len());
         //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
-        let crypto = CipherSuite::Cipher::new(&key_schedule.get_server_key()?);
+        let crypto = <CipherSuite::Cipher as KeyInit>::new(&key_schedule.get_server_key()?);
         // let nonce = &key_schedule.get_server_nonce();
         // info!("server write nonce {:x?}", nonce);
         crypto
@@ -100,26 +120,26 @@ where
                     //if hash_later {
                     Digest::update(key_schedule.transcript_hash(), &data[..data.len()]);
                     // info!("hash {:02x?}", &data[..data.len()]);
-                    records
-                        .enqueue(ServerRecord::Handshake(inner))
-                        .map_err(|_| TlsError::EncodeError)?
+                    if let ControlFlow::Break(val) = cb(ServerRecord::Handshake(inner))? {
+                        return Ok(Some(val));
+                    }
                 }
                 //}
             }
             ContentType::ApplicationData => {
                 app_data.truncate(app_data.len() - 1);
                 let inner = ApplicationData::new(app_data, header);
-                records
-                    .enqueue(ServerRecord::ApplicationData(inner))
-                    .map_err(|_| TlsError::EncodeError)?
+                if let ControlFlow::Break(val) = cb(ServerRecord::ApplicationData(inner))? {
+                    return Ok(Some(val));
+                }
             }
             ContentType::Alert => {
                 let data = &app_data.as_slice()[..app_data.len() - 1];
                 let mut buf = ParseBuffer::new(data);
                 let alert = Alert::parse(&mut buf)?;
-                records
-                    .enqueue(ServerRecord::Alert(alert))
-                    .map_err(|_| TlsError::EncodeError)?
+                if let ControlFlow::Break(val) = cb(ServerRecord::Alert(alert))? {
+                    return Ok(Some(val));
+                }
             }
             _ => return Err(TlsError::Unimplemented),
         }
@@ -127,9 +147,11 @@ where
         key_schedule.increment_read_counter();
     } else {
         debug!("Not decrypting: Not encapsulated in app data");
-        records.enqueue(record).map_err(|_| TlsError::EncodeError)?
+        if let ControlFlow::Break(val) = cb(record)? {
+            return Ok(Some(val));
+        }
     }
-    Ok(())
+    Ok(None)
 }
 
 pub(crate) fn encrypt<CipherSuite>(
@@ -145,7 +167,7 @@ where
     // trace!("encrypt nonce {:02x?}", nonce);
     // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
     //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
-    let crypto = CipherSuite::Cipher::new(&client_key);
+    let crypto = <CipherSuite::Cipher as KeyInit>::new(&client_key);
     let len = buf.len() + <CipherSuite::Cipher as AeadCore>::TagSize::to_usize();
 
     if len > buf.capacity() {
