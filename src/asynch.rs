@@ -1,3 +1,5 @@
+use core::ops::ControlFlow;
+
 use crate::alert::*;
 use crate::connection::*;
 use crate::handshake::ServerHandshake;
@@ -12,8 +14,6 @@ use embedded_io::{
     Io,
 };
 use rand_core::{CryptoRng, RngCore};
-
-use heapless::spsc::Queue;
 
 pub use crate::config::*;
 
@@ -220,46 +220,49 @@ where
             .record_reader
             .read(&mut self.delegate, &mut self.key_schedule)
             .await?;
-        let mut records = Queue::new();
-        decrypt_record::<CipherSuite>(&mut self.key_schedule, &mut records, record)?;
 
-        while let Some(record) = records.dequeue() {
-            match record {
-                ServerRecord::ApplicationData(data) => {
-                    // SAFETY: Assume `decrypt_record()` to decrypt in-place
-                    // We have assertions to ensure this is valid.
-                    let slice = data.data.as_slice();
-                    let slice_ptr = slice.as_ptr();
-                    let offset = unsafe { slice_ptr.offset_from(buf_ptr) };
-                    debug_assert!(offset >= 0);
-                    let offset = offset as usize;
-                    debug_assert!(offset + slice.len() <= buf_len);
+        decrypt_record_in_place::<CipherSuite, _>(
+            &mut self.key_schedule,
+            record,
+            |_key_schedule, record| {
+                match record {
+                    ServerRecord::ApplicationData(data) => {
+                        trace!("Got application data record");
 
-                    self.decrypted_offset = offset;
-                    self.decrypted_len = slice.len();
-                    self.decrypted_consumed = 0;
-                    return Ok(());
-                }
-                ServerRecord::Alert(alert) => {
-                    if let AlertDescription::CloseNotify = alert.description {
-                        self.opened = false;
-                        Err(TlsError::ConnectionClosed)
-                    } else {
-                        Err(TlsError::InternalError)
+                        // SAFETY: Assume `decrypt_record()` to decrypt in-place
+                        // We have assertions to ensure this is valid.
+                        let slice = data.data.as_slice();
+                        let slice_ptr = slice.as_ptr();
+                        let offset = unsafe { slice_ptr.offset_from(buf_ptr) };
+                        assert!(offset >= 0);
+                        let offset = offset as usize;
+                        assert!(offset + slice.len() <= buf_len);
+
+                        self.decrypted_offset = offset;
+                        self.decrypted_len = slice.len();
+                        self.decrypted_consumed = 0;
+                        Ok(ControlFlow::Break(()))
+                    }
+                    ServerRecord::Alert(alert) => {
+                        if let AlertDescription::CloseNotify = alert.description {
+                            self.opened = false;
+                            Err(TlsError::ConnectionClosed)
+                        } else {
+                            Err(TlsError::InternalError)
+                        }
+                    }
+                    ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
+                    ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
+                        // Ignore
+                        Ok(ControlFlow::Continue(()))
+                    }
+                    _ => {
+                        unimplemented!()
                     }
                 }
-                ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
-                ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
-                    // Ignore
-                    Ok(())
-                }
-                _ => {
-                    unimplemented!()
-                }
-            }?;
-        }
-
-        Ok(())
+            },
+        )
+        .map(|buffer| buffer.unwrap_or(()))
     }
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
