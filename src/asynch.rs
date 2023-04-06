@@ -224,6 +224,7 @@ where
         decrypt_record_in_place::<CipherSuite, _>(
             &mut self.key_schedule,
             record,
+            (),
             |_key_schedule, record| {
                 match record {
                     ServerRecord::ApplicationData(data) => {
@@ -262,7 +263,6 @@ where
                 }
             },
         )
-        .map(|buffer| buffer.unwrap_or(()))
     }
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
