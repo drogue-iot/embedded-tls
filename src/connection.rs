@@ -40,22 +40,6 @@ use crate::content_types::ContentType;
 use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 use digest::OutputSizeUser;
-use heapless::spsc::Queue;
-
-pub(crate) fn decrypt_record<'m, CipherSuite>(
-    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    records: &mut Queue<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, 8>,
-    record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
-) -> Result<(), TlsError>
-where
-    CipherSuite: TlsCipherSuite + 'static,
-{
-    decrypt_record_in_place::<CipherSuite, _>(key_schedule, record, (), |_key_schedule, record| {
-        records.enqueue(record).map_err(|_| TlsError::EncodeError)?;
-
-        Ok(ControlFlow::Continue(()))
-    })
-}
 
 pub(crate) fn decrypt_record_in_place<'m, CipherSuite, R>(
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
