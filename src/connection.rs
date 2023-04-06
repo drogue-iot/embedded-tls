@@ -87,8 +87,8 @@ where
                 let data = &data[offset..offset + len - 1];
                 let mut buf: ParseBuffer<'m> = ParseBuffer::new(data);
                 while buf.remaining() > 1 {
-                    let mut inner = ServerHandshake::parse(&mut buf);
-                    if let Ok(ServerHandshake::Finished(ref mut finished)) = inner {
+                    let mut inner = ServerHandshake::parse(&mut buf)?;
+                    if let ServerHandshake::Finished(ref mut finished) = inner {
                         // trace!("Server finished hash: {:x?}", finished.hash);
                         finished
                             .hash
@@ -99,7 +99,7 @@ where
                     Digest::update(key_schedule.transcript_hash(), &data[..data.len()]);
                     // info!("hash {:02x?}", &data[..data.len()]);
                     records
-                        .enqueue(ServerRecord::Handshake(inner.unwrap()))
+                        .enqueue(ServerRecord::Handshake(inner))
                         .map_err(|_| TlsError::EncodeError)?
                 }
                 //}
