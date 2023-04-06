@@ -41,7 +41,7 @@ use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 use digest::OutputSizeUser;
 
-pub(crate) fn decrypt_record_in_place<'m, CipherSuite, R>(
+pub(crate) fn decrypt_record<'m, CipherSuite, R>(
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
     default: R,
@@ -551,7 +551,7 @@ where
     CipherSuite: TlsCipherSuite + 'static,
     Verifier: TlsVerifier<CipherSuite>,
 {
-    decrypt_record_in_place::<CipherSuite, _>(
+    decrypt_record::<CipherSuite, _>(
         key_schedule,
         record,
         State::ServerVerify,

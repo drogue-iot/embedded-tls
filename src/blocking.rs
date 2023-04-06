@@ -216,7 +216,7 @@ where
             .record_reader
             .read_blocking(&mut self.delegate, &mut self.key_schedule)?;
 
-        decrypt_record_in_place::<CipherSuite, _>(
+        decrypt_record::<CipherSuite, _>(
             &mut self.key_schedule,
             record,
             (),
