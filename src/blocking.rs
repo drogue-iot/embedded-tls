@@ -1,5 +1,3 @@
-use core::ops::ControlFlow;
-
 use crate::alert::*;
 use crate::connection::*;
 use crate::handshake::ServerHandshake;
@@ -216,48 +214,45 @@ where
             .record_reader
             .read_blocking(&mut self.delegate, &mut self.key_schedule)?;
 
-        decrypt_record::<CipherSuite, _>(
-            &mut self.key_schedule,
-            record,
-            (),
-            |_key_schedule, record| {
-                match record {
-                    ServerRecord::ApplicationData(data) => {
-                        trace!("Got application data record");
+        decrypt_record::<CipherSuite>(&mut self.key_schedule, record, |_key_schedule, record| {
+            match record {
+                ServerRecord::ApplicationData(data) => {
+                    trace!("Got application data record");
 
-                        // SAFETY: Assume `decrypt_record()` to decrypt in-place
-                        // We have assertions to ensure this is valid.
-                        let slice = data.data.as_slice();
-                        let slice_ptr = slice.as_ptr();
-                        let offset = unsafe { slice_ptr.offset_from(buf_ptr) };
-                        assert!(offset >= 0);
-                        let offset = offset as usize;
-                        assert!(offset + slice.len() <= buf_len);
+                    // SAFETY: Assume `decrypt_record()` to decrypt in-place
+                    // We have assertions to ensure this is valid.
+                    let slice = data.data.as_slice();
+                    let slice_ptr = slice.as_ptr();
+                    let offset = unsafe { slice_ptr.offset_from(buf_ptr) };
+                    assert!(offset >= 0);
+                    let offset = offset as usize;
+                    assert!(offset + slice.len() <= buf_len);
 
-                        self.decrypted_offset = offset;
-                        self.decrypted_len = slice.len();
-                        self.decrypted_consumed = 0;
-                        Ok(ControlFlow::Break(()))
-                    }
-                    ServerRecord::Alert(alert) => {
-                        if let AlertDescription::CloseNotify = alert.description {
-                            self.opened = false;
-                            Err(TlsError::ConnectionClosed)
-                        } else {
-                            Err(TlsError::InternalError)
-                        }
-                    }
-                    ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
-                    ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
-                        // Ignore
-                        Ok(ControlFlow::Continue(()))
-                    }
-                    _ => {
-                        unimplemented!()
+                    self.decrypted_offset = offset;
+                    self.decrypted_len = slice.len();
+                    self.decrypted_consumed = 0;
+                    Ok(())
+                }
+                ServerRecord::Alert(alert) => {
+                    if let AlertDescription::CloseNotify = alert.description {
+                        self.opened = false;
+                        Err(TlsError::ConnectionClosed)
+                    } else {
+                        Err(TlsError::InternalError)
                     }
                 }
-            },
-        )
+                ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
+                ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
+                    // Ignore
+                    Ok(())
+                }
+                _ => {
+                    unimplemented!()
+                }
+            }
+        })?;
+
+        Ok(())
     }
 
     fn close_internal(&mut self) -> Result<(), TlsError> {
