@@ -219,6 +219,7 @@ where
         decrypt_record_in_place::<CipherSuite, _>(
             &mut self.key_schedule,
             record,
+            (),
             |_key_schedule, record| {
                 match record {
                     ServerRecord::ApplicationData(data) => {
@@ -257,7 +258,6 @@ where
                 }
             },
         )
-        .map(|buffer| buffer.unwrap_or(()))
     }
 
     fn close_internal(&mut self) -> Result<(), TlsError> {

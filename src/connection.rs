@@ -50,23 +50,22 @@ pub(crate) fn decrypt_record<'m, CipherSuite>(
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    decrypt_record_in_place::<CipherSuite, ()>(key_schedule, record, |_key_schedule, record| {
+    decrypt_record_in_place::<CipherSuite, _>(key_schedule, record, (), |_key_schedule, record| {
         records.enqueue(record).map_err(|_| TlsError::EncodeError)?;
 
         Ok(ControlFlow::Continue(()))
-    })?;
-
-    Ok(())
+    })
 }
 
 pub(crate) fn decrypt_record_in_place<'m, CipherSuite, R>(
     key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
     record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
+    default: R,
     mut cb: impl FnMut(
         &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
         ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
     ) -> Result<ControlFlow<R>, TlsError>,
-) -> Result<Option<R>, TlsError>
+) -> Result<R, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -124,7 +123,7 @@ where
                     if let ControlFlow::Break(val) =
                         cb(key_schedule, ServerRecord::Handshake(inner))?
                     {
-                        return Ok(Some(val));
+                        return Ok(val);
                     }
                 }
                 //}
@@ -135,7 +134,7 @@ where
                 if let ControlFlow::Break(val) =
                     cb(key_schedule, ServerRecord::ApplicationData(inner))?
                 {
-                    return Ok(Some(val));
+                    return Ok(val);
                 }
             }
             ContentType::Alert => {
@@ -143,7 +142,7 @@ where
                 let mut buf = ParseBuffer::new(data);
                 let alert = Alert::parse(&mut buf)?;
                 if let ControlFlow::Break(val) = cb(key_schedule, ServerRecord::Alert(alert))? {
-                    return Ok(Some(val));
+                    return Ok(val);
                 }
             }
             _ => return Err(TlsError::Unimplemented),
@@ -153,10 +152,10 @@ where
     } else {
         debug!("Not decrypting: Not encapsulated in app data");
         if let ControlFlow::Break(val) = cb(key_schedule, record)? {
-            return Ok(Some(val));
+            return Ok(val);
         }
     }
-    Ok(None)
+    Ok(default)
 }
 
 pub(crate) fn encrypt<CipherSuite>(
@@ -568,8 +567,11 @@ where
     CipherSuite: TlsCipherSuite + 'static,
     Verifier: TlsVerifier<CipherSuite>,
 {
-    let state =
-        decrypt_record_in_place::<CipherSuite, _>(key_schedule, record, |key_schedule, record| {
+    decrypt_record_in_place::<CipherSuite, _>(
+        key_schedule,
+        record,
+        State::ServerVerify,
+        |key_schedule, record| {
             match record {
                 ServerRecord::Handshake(server_handshake) => match server_handshake {
                     ServerHandshake::EncryptedExtensions(_) => {}
@@ -618,7 +620,6 @@ where
             }
 
             Ok(ControlFlow::Continue(()))
-        })?;
-
-    Ok(state.unwrap_or(State::ServerVerify))
+        },
+    )
 }
