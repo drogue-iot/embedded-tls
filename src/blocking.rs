@@ -180,6 +180,9 @@ where
     /// losing data.
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
         if self.opened {
+            if buf.is_empty() {
+                return Ok(0);
+            }
             let mut remaining = buf.len();
             let mut consumed = self.decrypted_consumed;
             while remaining == buf.len() {
