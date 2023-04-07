@@ -175,9 +175,7 @@ where
         Ok(())
     }
 
-    /// Read and decrypt data filling the provided slice. The slice must be able to
-    /// keep the expected amount of data that can be received in one record to avoid
-    /// losing data.
+    /// Read and decrypt data filling the provided slice.
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
         if self.opened {
             let mut remaining = buf.len();
