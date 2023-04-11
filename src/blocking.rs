@@ -2,6 +2,7 @@ use crate::alert::*;
 use crate::connection::*;
 use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
+use crate::read_buffer::ReadBuffer;
 use crate::record::{ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
 use embedded_io::Error as _;
@@ -174,42 +175,35 @@ where
         Ok(())
     }
 
+    fn create_read_buffer(&mut self) -> ReadBuffer {
+        let offset = self.decrypted_offset + self.decrypted_consumed;
+        let end = self.decrypted_offset + self.decrypted_len;
+        ReadBuffer::new(
+            &mut self.record_reader.buf[offset..end],
+            &mut self.decrypted_consumed,
+        )
+    }
+
     /// Read and decrypt data filling the provided slice.
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
-        if self.opened {
-            while self.need_to_read() {
-                self.read_application_data()?;
-            }
+        let mut buffer = self.read_buffered()?;
 
-            let start = self.decrypted_offset + self.decrypted_consumed;
-            let end = self.decrypted_offset + self.decrypted_len;
-            let unread = &self.record_reader.buf[start..end];
+        let to_copy = buffer.take(buf.len());
 
-            let to_copy = core::cmp::min(unread.len(), buf.len());
-            trace!("Got {} bytes to copy", to_copy);
-            buf[..to_copy].copy_from_slice(&unread[..to_copy]);
-            self.decrypted_consumed += to_copy;
+        trace!("Got {} bytes to copy", to_copy.len());
+        buf[..to_copy.len()].copy_from_slice(to_copy);
 
-            Ok(to_copy)
-        } else {
-            Err(TlsError::MissingHandshake)
-        }
+        Ok(to_copy.len())
     }
 
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
-    pub fn read_buffered(&mut self) -> Result<&[u8], TlsError> {
+    pub fn read_buffered(&mut self) -> Result<ReadBuffer, TlsError> {
         if self.opened {
             while self.need_to_read() {
                 self.read_application_data()?;
             }
 
-            let start = self.decrypted_offset + self.decrypted_consumed;
-            let end = self.decrypted_offset + self.decrypted_len;
-            let buffer = &self.record_reader.buf[start..end];
-
-            self.decrypted_consumed = self.decrypted_len;
-
-            Ok(buffer)
+            Ok(self.create_read_buffer())
         } else {
             Err(TlsError::MissingHandshake)
         }
