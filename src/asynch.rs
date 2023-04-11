@@ -250,8 +250,6 @@ where
         while let Some(record) = records.dequeue() {
             match record {
                 ServerRecord::ApplicationData(data) => {
-                    trace!("Got application data record");
-
                     // SAFETY: Assume `decrypt_record()` to decrypt in-place
                     // We have assertions to ensure this is valid.
                     let slice = data.data.as_slice();
