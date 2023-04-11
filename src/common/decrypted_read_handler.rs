@@ -1,3 +1,5 @@
+use core::ops::Range;
+
 use generic_array::ArrayLength;
 
 use crate::{
@@ -6,8 +8,7 @@ use crate::{
 };
 
 pub struct DecryptedReadHandler<'a> {
-    pub source_buffer_ptr: *const u8,
-    pub source_buffer_len: usize,
+    pub source_buffer: Range<*const u8>,
     pub buffer_info: &'a mut DecryptedBufferInfo,
     pub is_open: &'a mut bool,
 }
@@ -19,14 +20,23 @@ impl DecryptedReadHandler<'_> {
     ) -> Result<(), TlsError> {
         match record {
             ServerRecord::ApplicationData(data) => {
-                // SAFETY: Assume `decrypt_record()` to decrypt in-place
-                // We have assertions to ensure this is valid.
                 let slice = data.data.as_slice();
-                let slice_ptr = slice.as_ptr();
-                let offset = unsafe { slice_ptr.offset_from(self.source_buffer_ptr) };
-                debug_assert!(offset >= 0);
-                let offset = offset as usize;
-                debug_assert!(offset + slice.len() <= self.source_buffer_len);
+                let slice_ptrs = slice.as_ptr_range();
+
+                debug_assert!(
+                    self.source_buffer.contains(&slice_ptrs.start)
+                        && self.source_buffer.contains(&slice_ptrs.end)
+                );
+
+                let offset = unsafe {
+                    // SAFETY: The assertion above ensures `slice` is a subslice of the read buffer.
+                    // This, in turn, ensures we don't violate safety constraints of `offset_from`.
+
+                    // TODO: We are only assuming here that the pointers are derived from the read
+                    // buffer. While this is reasonable, and we don't do any pointer magic,
+                    // it's not an invariant.
+                    slice_ptrs.start.offset_from(self.source_buffer.start) as usize
+                };
 
                 self.buffer_info.offset = offset;
                 self.buffer_info.len = slice.len();

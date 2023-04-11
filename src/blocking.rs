@@ -200,15 +200,13 @@ where
     }
 
     fn read_application_data(&mut self) -> Result<(), TlsError> {
-        let buf_ptr = self.record_reader.buf.as_ptr();
-        let buf_len = self.record_reader.buf.len();
+        let buf_ptr_range = self.record_reader.buf.as_ptr_range();
         let record = self
             .record_reader
             .read_blocking(&mut self.delegate, &mut self.key_schedule)?;
 
         let mut handler = DecryptedReadHandler {
-            source_buffer_ptr: buf_ptr,
-            source_buffer_len: buf_len,
+            source_buffer: buf_ptr_range,
             buffer_info: &mut self.decrypted,
             is_open: &mut self.opened,
         };
