@@ -186,8 +186,7 @@ where
             }
             let mut remaining = buf.len();
             while remaining == buf.len() {
-                // Read if we have to
-                if self.decrypted_consumed >= self.decrypted_len {
+                if self.need_to_read() {
                     self.read_application_data().await?;
                 }
 
@@ -210,7 +209,7 @@ where
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
     pub async fn read_buffered(&mut self) -> Result<&[u8], TlsError> {
         if self.opened {
-            if self.decrypted_consumed >= self.decrypted_len {
+            while self.need_to_read() {
                 self.read_application_data().await?;
             }
 
@@ -301,6 +300,10 @@ where
             Ok(()) => Ok(self.delegate),
             Err(e) => Err((self.delegate, e)),
         }
+    }
+
+    fn need_to_read(&self) -> bool {
+        self.decrypted_consumed >= self.decrypted_len
     }
 }
 
