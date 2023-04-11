@@ -80,6 +80,8 @@ where
         let content_type =
             ContentType::of(*app_data.as_slice().last().unwrap()).ok_or(TlsError::InvalidRecord)?;
 
+        trace!("Decrypting content type = {:?}", content_type);
+
         match content_type {
             ContentType::Handshake => {
                 // Decode potentially coaleced handshake messages
@@ -124,7 +126,7 @@ where
         //debug!("decrypted {:?} --> {:x?}", content_type, data);
         key_schedule.increment_read_counter();
     } else {
-        //info!("Not encapsulated in app data");
+        debug!("Not decrypting: Not encapsulated in app data");
         records.enqueue(record).map_err(|_| TlsError::EncodeError)?
     }
     Ok(())
