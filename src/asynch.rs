@@ -1,4 +1,5 @@
 use crate::alert::*;
+use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
 use crate::connection::*;
 use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
@@ -32,9 +33,7 @@ where
     record_reader: RecordReader<'a, CipherSuite>,
     record_write_buf: &'a mut [u8],
     write_pos: usize,
-    decrypted_offset: usize,
-    decrypted_len: usize,
-    decrypted_consumed: usize,
+    decrypted: DecryptedBufferInfo,
 }
 
 impl<'a, Socket, CipherSuite> TlsConnection<'a, Socket, CipherSuite>
@@ -69,9 +68,7 @@ where
             record_reader: RecordReader::new(record_read_buf),
             record_write_buf,
             write_pos: 0,
-            decrypted_offset: 0,
-            decrypted_len: 0,
-            decrypted_consumed: 0,
+            decrypted: DecryptedBufferInfo::default(),
         }
     }
 
@@ -178,12 +175,7 @@ where
     }
 
     fn create_read_buffer(&mut self) -> ReadBuffer {
-        let offset = self.decrypted_offset + self.decrypted_consumed;
-        let end = self.decrypted_offset + self.decrypted_len;
-        ReadBuffer::new(
-            &mut self.record_reader.buf[offset..end],
-            &mut self.decrypted_consumed,
-        )
+        self.decrypted.create_read_buffer(self.record_reader.buf)
     }
 
     /// Read and decrypt data filling the provided slice.
@@ -201,7 +193,7 @@ where
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
     pub async fn read_buffered(&mut self) -> Result<ReadBuffer, TlsError> {
         if self.opened {
-            while self.need_to_read() {
+            while self.decrypted.is_empty() {
                 self.read_application_data().await?;
             }
 
@@ -231,9 +223,9 @@ where
                     let offset = offset as usize;
                     debug_assert!(offset + slice.len() <= buf_len);
 
-                    self.decrypted_offset = offset;
-                    self.decrypted_len = slice.len();
-                    self.decrypted_consumed = 0;
+                    self.decrypted.offset = offset;
+                    self.decrypted.len = slice.len();
+                    self.decrypted.consumed = 0;
                     Ok(())
                 }
                 ServerRecord::Alert(alert) => {
@@ -284,10 +276,6 @@ where
             Ok(()) => Ok(self.delegate),
             Err(e) => Err((self.delegate, e)),
         }
-    }
-
-    fn need_to_read(&self) -> bool {
-        self.decrypted_consumed >= self.decrypted_len
     }
 }
 

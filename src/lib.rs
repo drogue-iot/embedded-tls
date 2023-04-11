@@ -66,6 +66,7 @@ mod buffer;
 mod certificate_types;
 mod change_cipher_spec;
 mod cipher_suites;
+mod common;
 mod config;
 mod connection;
 mod content_types;
