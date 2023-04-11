@@ -326,7 +326,7 @@ impl<'a> State {
                 );*/
                 let record = record_reader.read(transport, key_schedule).await?;
 
-                process_server_verify::<_, Verifier>(handshake, key_schedule, config, record)
+                process_server_verify(handshake, key_schedule, config, record)
             }
             State::ClientCert => {
                 handshake
@@ -438,7 +438,7 @@ impl<'a> State {
                 );*/
                 let record = record_reader.read_blocking(transport, key_schedule)?;
 
-                process_server_verify::<_, Verifier>(handshake, key_schedule, config, record)
+                process_server_verify(handshake, key_schedule, config, record)
             }
             State::ClientCert => {
                 handshake

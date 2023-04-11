@@ -52,7 +52,7 @@ where
 
         let content_length = header.content_length();
         let data = self.advance(transport, content_length).await?;
-        ServerRecord::decode::<CipherSuite::Hash>(header, data, key_schedule.transcript_hash())
+        ServerRecord::decode(header, data, key_schedule.transcript_hash())
     }
 
     #[cfg(feature = "async")]
@@ -100,7 +100,7 @@ where
 
         let content_length = header.content_length();
         let data = self.advance_blocking(transport, content_length)?;
-        ServerRecord::decode::<CipherSuite::Hash>(header, data, key_schedule.transcript_hash())
+        ServerRecord::decode(header, data, key_schedule.transcript_hash())
     }
 
     fn advance_blocking<'m>(
