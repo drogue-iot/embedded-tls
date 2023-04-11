@@ -574,8 +574,6 @@ where
                             .replace(key_schedule.transcript_hash().clone());
                         State::ClientFinished
                     };
-
-                    return Ok(());
                 }
                 _ => return Err(TlsError::InvalidHandshake),
             },
