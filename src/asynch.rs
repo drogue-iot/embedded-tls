@@ -1,5 +1,4 @@
 use crate::alert::*;
-use crate::buffer::CryptoBuffer;
 use crate::connection::*;
 use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
@@ -186,28 +185,22 @@ where
                 return Ok(0);
             }
             let mut remaining = buf.len();
-            let mut consumed = self.decrypted_consumed;
             while remaining == buf.len() {
-                let record_data = if consumed < self.decrypted_len {
-                    // The current record is not completely consumed
-                    CryptoBuffer::wrap(
-                        &mut self.record_reader.buf
-                            [self.decrypted_offset..self.decrypted_offset + self.decrypted_len],
-                    )
-                } else {
-                    // The current record is completely consumed, read the next...
-                    consumed = 0;
-                    self.read_application_data().await?
-                };
+                // Read if we have to
+                if self.decrypted_consumed >= self.decrypted_len {
+                    self.read_application_data().await?;
+                }
 
-                let unread = &record_data.as_slice()[consumed..];
+                let start = self.decrypted_offset + self.decrypted_consumed;
+                let end = self.decrypted_offset + self.decrypted_len;
+                let unread = &self.record_reader.buf[start..end];
+
                 let to_copy = core::cmp::min(unread.len(), buf.len());
                 trace!("Got {} bytes to copy", to_copy);
                 buf[..to_copy].copy_from_slice(&unread[..to_copy]);
-                consumed += to_copy;
+                self.decrypted_consumed += to_copy;
                 remaining -= to_copy;
             }
-            self.decrypted_consumed = consumed;
             Ok(buf.len() - remaining)
         } else {
             Err(TlsError::MissingHandshake)
@@ -217,27 +210,23 @@ where
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
     pub async fn read_buffered(&mut self) -> Result<&[u8], TlsError> {
         if self.opened {
-            let record_data = if self.decrypted_consumed < self.decrypted_len {
-                // The current record is not completely consumed
-                let buffer = CryptoBuffer::wrap(
-                    &mut self.record_reader.buf
-                        [self.decrypted_offset..self.decrypted_offset + self.decrypted_len],
-                );
+            if self.decrypted_consumed >= self.decrypted_len {
+                self.read_application_data().await?;
+            }
 
-                self.decrypted_consumed = self.decrypted_len;
-                buffer
-            } else {
-                // The current record is completely consumed, read the next...
-                self.read_application_data().await?
-            };
+            let start = self.decrypted_offset + self.decrypted_consumed;
+            let end = self.decrypted_offset + self.decrypted_len;
+            let buffer = &self.record_reader.buf[start..end];
 
-            Ok(record_data.into_slice())
+            self.decrypted_consumed = self.decrypted_len;
+
+            Ok(buffer)
         } else {
             Err(TlsError::MissingHandshake)
         }
     }
 
-    async fn read_application_data(&mut self) -> Result<CryptoBuffer, TlsError> {
+    async fn read_application_data(&mut self) -> Result<(), TlsError> {
         let buf_ptr = self.record_reader.buf.as_ptr();
         let buf_len = self.record_reader.buf.len();
         let record = self
@@ -262,7 +251,7 @@ where
                     self.decrypted_offset = offset;
                     self.decrypted_len = slice.len();
                     self.decrypted_consumed = 0;
-                    return Ok(data.data);
+                    return Ok(());
                 }
                 ServerRecord::Alert(alert) => {
                     if let AlertDescription::CloseNotify = alert.description {
@@ -283,7 +272,7 @@ where
             }?;
         }
 
-        Ok(CryptoBuffer::empty())
+        Ok(())
     }
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
