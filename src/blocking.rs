@@ -188,7 +188,7 @@ where
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
         let mut buffer = self.read_buffered()?;
 
-        let to_copy = buffer.take(buf.len());
+        let to_copy = buffer.pop(buf.len());
 
         trace!("Got {} bytes to copy", to_copy.len());
         buf[..to_copy.len()].copy_from_slice(to_copy);
