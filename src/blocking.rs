@@ -250,9 +250,9 @@ where
                     let slice = data.data.as_slice();
                     let slice_ptr = slice.as_ptr();
                     let offset = unsafe { slice_ptr.offset_from(buf_ptr) };
-                    assert!(offset >= 0);
+                    debug_assert!(offset >= 0);
                     let offset = offset as usize;
-                    assert!(offset + slice.len() <= buf_len);
+                    debug_assert!(offset + slice.len() <= buf_len);
 
                     self.decrypted_offset = offset;
                     self.decrypted_len = slice.len();
