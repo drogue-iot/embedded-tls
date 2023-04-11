@@ -137,10 +137,6 @@ async fn test_ping_nocopy() {
     write_fut.await.expect("error writing data");
     tls.flush().await.expect("error flushing data");
 
-    // TODO: solve this empty read
-    let buf = tls.read_buffered().await.expect("error reading data");
-    log::info!("Read bytes: {:?}", buf);
-
     let buf = tls.read_buffered().await.expect("error reading data");
     assert_eq!(b"ping", buf);
     log::info!("Read bytes: {:?}", buf);
@@ -226,10 +222,6 @@ fn test_blocking_ping_nocopy() {
 
     tls.write(b"ping").expect("error writing data");
     tls.flush().expect("error flushing data");
-
-    // TODO: solve this empty read
-    let buf = tls.read_buffered().expect("error reading data");
-    log::info!("Read bytes: {:?}", buf);
 
     let buf = tls.read_buffered().expect("error reading data");
     assert_eq!(b"ping", buf);
