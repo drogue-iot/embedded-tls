@@ -177,26 +177,20 @@ where
     /// Read and decrypt data filling the provided slice.
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
         if self.opened {
-            if buf.is_empty() {
-                return Ok(0);
+            while self.need_to_read() {
+                self.read_application_data()?;
             }
-            let mut remaining = buf.len();
-            while remaining == buf.len() {
-                if self.need_to_read() {
-                    self.read_application_data()?;
-                }
 
-                let start = self.decrypted_offset + self.decrypted_consumed;
-                let end = self.decrypted_offset + self.decrypted_len;
-                let unread = &self.record_reader.buf[start..end];
+            let start = self.decrypted_offset + self.decrypted_consumed;
+            let end = self.decrypted_offset + self.decrypted_len;
+            let unread = &self.record_reader.buf[start..end];
 
-                let to_copy = core::cmp::min(unread.len(), buf.len());
-                trace!("Got {} bytes to copy", to_copy);
-                buf[..to_copy].copy_from_slice(&unread[..to_copy]);
-                self.decrypted_consumed += to_copy;
-                remaining -= to_copy;
-            }
-            Ok(buf.len() - remaining)
+            let to_copy = core::cmp::min(unread.len(), buf.len());
+            trace!("Got {} bytes to copy", to_copy);
+            buf[..to_copy].copy_from_slice(&unread[..to_copy]);
+            self.decrypted_consumed += to_copy;
+
+            Ok(to_copy)
         } else {
             Err(TlsError::MissingHandshake)
         }
