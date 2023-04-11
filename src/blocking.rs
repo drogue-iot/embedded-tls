@@ -1,10 +1,10 @@
 use crate::alert::*;
 use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
+use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::*;
-use crate::handshake::ServerHandshake;
 use crate::key_schedule::KeySchedule;
 use crate::read_buffer::ReadBuffer;
-use crate::record::{ClientRecord, ServerRecord};
+use crate::record::ClientRecord;
 use crate::record_reader::RecordReader;
 use embedded_io::Error as _;
 use embedded_io::{
@@ -206,40 +206,14 @@ where
             .record_reader
             .read_blocking(&mut self.delegate, &mut self.key_schedule)?;
 
+        let mut handler = DecryptedReadHandler {
+            source_buffer_ptr: buf_ptr,
+            source_buffer_len: buf_len,
+            buffer_info: &mut self.decrypted,
+            is_open: &mut self.opened,
+        };
         decrypt_record::<CipherSuite>(&mut self.key_schedule, record, |_key_schedule, record| {
-            match record {
-                ServerRecord::ApplicationData(data) => {
-                    // SAFETY: Assume `decrypt_record()` to decrypt in-place
-                    // We have assertions to ensure this is valid.
-                    let slice = data.data.as_slice();
-                    let slice_ptr = slice.as_ptr();
-                    let offset = unsafe { slice_ptr.offset_from(buf_ptr) };
-                    debug_assert!(offset >= 0);
-                    let offset = offset as usize;
-                    debug_assert!(offset + slice.len() <= buf_len);
-
-                    self.decrypted.offset = offset;
-                    self.decrypted.len = slice.len();
-                    self.decrypted.consumed = 0;
-                    Ok(())
-                }
-                ServerRecord::Alert(alert) => {
-                    if let AlertDescription::CloseNotify = alert.description {
-                        self.opened = false;
-                        Err(TlsError::ConnectionClosed)
-                    } else {
-                        Err(TlsError::InternalError)
-                    }
-                }
-                ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
-                ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
-                    // Ignore
-                    Ok(())
-                }
-                _ => {
-                    unimplemented!()
-                }
-            }
+            handler.handle(record)
         })?;
 
         Ok(())
