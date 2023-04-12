@@ -145,6 +145,12 @@ where
         self.transcript_hash.as_mut().unwrap()
     }
 
+    pub(crate) fn transcript_hash_ref(&self) -> Result<&CipherSuite::Hash, TlsError> {
+        self.transcript_hash
+            .as_ref()
+            .ok_or(TlsError::MissingHandshake)
+    }
+
     pub(crate) fn replace_transcript_hash(&mut self, hash: CipherSuite::Hash) {
         self.transcript_hash = Some(hash);
     }
@@ -201,10 +207,7 @@ where
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
             .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(
-            &mut hmac,
-            &self.transcript_hash.as_ref().unwrap().clone().finalize(),
-        );
+        Mac::update(&mut hmac, &self.transcript_hash_ref()?.clone().finalize());
         let verify = hmac.finalize().into_bytes();
 
         Ok(Finished { verify, hash: None })
@@ -220,10 +223,7 @@ where
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
             .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(
-            &mut hmac,
-            &self.transcript_hash.as_ref().unwrap().clone().finalize(),
-        );
+        Mac::update(&mut hmac, &self.transcript_hash_ref()?.clone().finalize());
         let verify = hmac.finalize().into_bytes();
         Ok(PskBinder { verify })
     }
@@ -242,8 +242,12 @@ where
                 ContextType::None,
             )?;
         // info!("hmac sign key {:x?}", key);
-        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key).unwrap();
-        Mac::update(&mut hmac, finished.hash.as_ref().unwrap());
+        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
+            .map_err(|_| TlsError::InternalError)?;
+        Mac::update(
+            &mut hmac,
+            finished.hash.as_ref().ok_or(TlsError::InternalError)?,
+        );
         //let code = hmac.clone().finalize().into_bytes();
         Ok(hmac.verify(&finished.verify).is_ok())
         //info!("verified {:?}", verified);
@@ -310,8 +314,9 @@ where
         );
 
         let binder_key = self.derive_secret(b"ext binder", ContextType::empty_hash())?;
-        self.binder_key
-            .replace(Hkdf::<CipherSuite>::from_prk(&binder_key).unwrap());
+        self.binder_key.replace(
+            Hkdf::<CipherSuite>::from_prk(&binder_key).map_err(|_| TlsError::InternalError)?,
+        );
         self.derived()
     }
 
@@ -339,10 +344,13 @@ where
     ) -> Result<(), TlsError> {
         let client_secret = self.derive_secret(
             client_label,
-            ContextType::transcript_hash(self.transcript_hash.as_ref().unwrap()),
+            ContextType::transcript_hash(self.transcript_hash_ref()?),
         )?;
-        self.client_traffic_secret
-            .replace(Hkdf::<CipherSuite>::from_prk(&client_secret).unwrap());
+        let client_traffic_secret =
+            Hkdf::<CipherSuite>::from_prk(&client_secret).map_err(|_| TlsError::InternalError)?;
+
+        self.client_traffic_secret.replace(client_traffic_secret);
+
         /*info!(
             "\n\nTRAFFIC {} secret {:x?}",
             core::str::from_utf8(client_label).unwrap(),
@@ -350,10 +358,12 @@ where
         );*/
         let server_secret = self.derive_secret(
             server_label,
-            ContextType::transcript_hash(self.transcript_hash.as_ref().unwrap()),
+            ContextType::transcript_hash(self.transcript_hash_ref()?),
         )?;
-        self.server_traffic_secret
-            .replace(Hkdf::<CipherSuite>::from_prk(&server_secret).unwrap());
+        let server_traffic_secret =
+            Hkdf::<CipherSuite>::from_prk(&server_secret).map_err(|_| TlsError::InternalError)?;
+
+        self.server_traffic_secret.replace(server_traffic_secret);
         /*info!(
             "TRAFFIC {} secret {:x?}\n\n",
             core::str::from_utf8(server_label).unwrap(),
