@@ -96,7 +96,7 @@ where
     shared: SharedState<CipherSuite>,
     client_state: KeyScheduleState<CipherSuite>, // used for writes
     server_state: KeyScheduleState<CipherSuite>, // used for reads
-    transcript_hash: Option<CipherSuite::Hash>,  // server state
+    transcript_hash: CipherSuite::Hash,          // server state
     binder_key: Secret<CipherSuite>,             // client state
 }
 
@@ -227,22 +227,16 @@ where
             client_state: KeyScheduleState::new(),
             server_state: KeyScheduleState::new(),
             binder_key: Secret::Uninitialized,
-            transcript_hash: Some(CipherSuite::Hash::new()),
+            transcript_hash: CipherSuite::Hash::new(),
         }
     }
 
     pub(crate) fn transcript_hash(&mut self) -> &mut CipherSuite::Hash {
-        self.transcript_hash.as_mut().unwrap()
-    }
-
-    pub(crate) fn transcript_hash_ref(&self) -> Result<&CipherSuite::Hash, TlsError> {
-        self.transcript_hash
-            .as_ref()
-            .ok_or(TlsError::MissingHandshake)
+        &mut self.transcript_hash
     }
 
     pub(crate) fn replace_transcript_hash(&mut self, hash: CipherSuite::Hash) {
-        self.transcript_hash = Some(hash);
+        self.transcript_hash = hash;
     }
 
     pub(crate) fn write_state(&mut self) -> &mut KeyScheduleState<CipherSuite> {
@@ -266,7 +260,7 @@ where
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
             .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(&mut hmac, &self.transcript_hash_ref()?.clone().finalize());
+        Mac::update(&mut hmac, &self.transcript_hash.clone().finalize());
         let verify = hmac.finalize().into_bytes();
 
         Ok(Finished { verify, hash: None })
@@ -282,7 +276,7 @@ where
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
             .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(&mut hmac, &self.transcript_hash_ref()?.clone().finalize());
+        Mac::update(&mut hmac, &self.transcript_hash.clone().finalize());
         let verify = hmac.finalize().into_bytes();
         Ok(PskBinder { verify })
     }
@@ -393,21 +387,16 @@ where
         client_label: &[u8],
         server_label: &[u8],
     ) -> Result<(), TlsError> {
-        let transcript_hash = self
-            .transcript_hash
-            .as_ref()
-            .ok_or(TlsError::MissingHandshake)?;
-
         self.client_state.calculate_traffic_secret(
             client_label,
             &mut self.shared,
-            transcript_hash,
+            &self.transcript_hash,
         )?;
 
         self.server_state.calculate_traffic_secret(
             server_label,
             &mut self.shared,
-            transcript_hash,
+            &self.transcript_hash,
         )?;
 
         Ok(())
