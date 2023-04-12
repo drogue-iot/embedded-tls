@@ -89,17 +89,6 @@ where
     }
 }
 
-pub struct KeySchedule<CipherSuite>
-where
-    CipherSuite: TlsCipherSuite,
-{
-    shared: SharedState<CipherSuite>,
-    client_state: KeyScheduleState<CipherSuite>, // used for writes
-    server_state: KeyScheduleState<CipherSuite>, // used for reads
-    transcript_hash: CipherSuite::Hash,          // server state
-    binder_key: Secret<CipherSuite>,             // client state
-}
-
 struct SharedState<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
@@ -217,6 +206,15 @@ where
     }
 }
 
+pub struct KeySchedule<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    shared: SharedState<CipherSuite>,
+    client_state: WriteKeySchedule<CipherSuite>,
+    server_state: ReadKeySchedule<CipherSuite>,
+}
+
 impl<CipherSuite> KeySchedule<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
@@ -224,26 +222,39 @@ where
     pub fn new() -> Self {
         Self {
             shared: SharedState::new(),
-            client_state: KeyScheduleState::new(),
-            server_state: KeyScheduleState::new(),
-            binder_key: Secret::Uninitialized,
-            transcript_hash: CipherSuite::Hash::new(),
+            client_state: WriteKeySchedule {
+                state: KeyScheduleState::new(),
+                binder_key: Secret::Uninitialized,
+            },
+            server_state: ReadKeySchedule {
+                state: KeyScheduleState::new(),
+                transcript_hash: CipherSuite::Hash::new(),
+            },
         }
     }
 
     pub(crate) fn transcript_hash(&mut self) -> &mut CipherSuite::Hash {
-        &mut self.transcript_hash
+        &mut self.server_state.transcript_hash
     }
 
     pub(crate) fn replace_transcript_hash(&mut self, hash: CipherSuite::Hash) {
-        self.transcript_hash = hash;
+        self.server_state.transcript_hash = hash;
     }
 
-    pub(crate) fn write_state(&mut self) -> &mut KeyScheduleState<CipherSuite> {
+    pub fn as_split(
+        &mut self,
+    ) -> (
+        &mut WriteKeySchedule<CipherSuite>,
+        &mut ReadKeySchedule<CipherSuite>,
+    ) {
+        (&mut self.client_state, &mut self.server_state)
+    }
+
+    pub(crate) fn write_state(&mut self) -> &mut WriteKeySchedule<CipherSuite> {
         &mut self.client_state
     }
 
-    pub(crate) fn read_state(&mut self) -> &mut KeyScheduleState<CipherSuite> {
+    pub(crate) fn read_state(&mut self) -> &mut ReadKeySchedule<CipherSuite> {
         &mut self.server_state
     }
 
@@ -252,6 +263,7 @@ where
     ) -> Result<Finished<HashOutputSize<CipherSuite>>, TlsError> {
         let key = self
             .client_state
+            .state
             .traffic_secret
             .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
                 b"finished",
@@ -260,7 +272,10 @@ where
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
             .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(&mut hmac, &self.transcript_hash.clone().finalize());
+        Mac::update(
+            &mut hmac,
+            &self.server_state.transcript_hash.clone().finalize(),
+        );
         let verify = hmac.finalize().into_bytes();
 
         Ok(Finished { verify, hash: None })
@@ -268,6 +283,7 @@ where
 
     pub fn create_psk_binder(&self) -> Result<PskBinder<HashOutputSize<CipherSuite>>, TlsError> {
         let key = self
+            .client_state
             .binder_key
             .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
                 b"finished",
@@ -276,7 +292,10 @@ where
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
             .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(&mut hmac, &self.transcript_hash.clone().finalize());
+        Mac::update(
+            &mut hmac,
+            &self.server_state.transcript_hash.clone().finalize(),
+        );
         let verify = hmac.finalize().into_bytes();
         Ok(PskBinder { verify })
     }
@@ -290,6 +309,7 @@ where
         //info!("size ===> {}", D::OutputSize::to_u16());
         let key = self
             .server_state
+            .state
             .traffic_secret
             .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
                 b"finished",
@@ -355,7 +375,7 @@ where
         let binder_key = self
             .shared
             .derive_secret(b"ext binder", ContextType::empty_hash())?;
-        self.binder_key.replace(
+        self.client_state.binder_key.replace(
             Hkdf::<CipherSuite>::from_prk(&binder_key).map_err(|_| TlsError::InternalError)?,
         );
         self.shared.derived()
@@ -383,18 +403,16 @@ where
         client_label: &[u8],
         server_label: &[u8],
     ) -> Result<(), TlsError> {
-        let transcript_hash = &self.transcript_hash;
-
-        self.client_state.calculate_traffic_secret(
+        self.client_state.state.calculate_traffic_secret(
             client_label,
             &mut self.shared,
-            transcript_hash,
+            &self.server_state.transcript_hash,
         )?;
 
-        self.server_state.calculate_traffic_secret(
+        self.server_state.state.calculate_traffic_secret(
             server_label,
             &mut self.shared,
-            transcript_hash,
+            &self.server_state.transcript_hash,
         )?;
 
         Ok(())
@@ -407,5 +425,58 @@ where
 {
     fn default() -> Self {
         KeySchedule::new()
+    }
+}
+
+pub struct WriteKeySchedule<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    state: KeyScheduleState<CipherSuite>,
+    binder_key: Secret<CipherSuite>,
+}
+impl<CipherSuite> WriteKeySchedule<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    pub(crate) fn increment_counter(&mut self) {
+        self.state.increment_counter()
+    }
+
+    pub(crate) fn get_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
+        self.state.get_key()
+    }
+
+    pub(crate) fn get_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
+        self.state.get_nonce()
+    }
+}
+
+pub struct ReadKeySchedule<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    state: KeyScheduleState<CipherSuite>,
+    transcript_hash: CipherSuite::Hash,
+}
+
+impl<CipherSuite> ReadKeySchedule<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    pub(crate) fn increment_counter(&mut self) {
+        self.state.increment_counter()
+    }
+
+    pub(crate) fn transcript_hash(&mut self) -> &mut CipherSuite::Hash {
+        &mut self.transcript_hash
+    }
+
+    pub(crate) fn get_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
+        self.state.get_key()
+    }
+
+    pub(crate) fn get_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
+        self.state.get_nonce()
     }
 }
