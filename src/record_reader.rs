@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::key_schedule::HashOutputSize;
+use crate::key_schedule::{HashOutputSize, ReadKeySchedule};
 use embedded_io::{blocking::Read as BlockingRead, Error};
 
 #[cfg(feature = "async")]
@@ -8,7 +8,6 @@ use embedded_io::asynch::Read as AsyncRead;
 
 use crate::{
     config::TlsCipherSuite,
-    key_schedule::KeySchedule,
     record::{RecordHeader, ServerRecord},
     TlsError,
 };
@@ -42,7 +41,7 @@ where
     pub async fn read<'m>(
         &'m mut self,
         transport: &mut impl AsyncRead,
-        key_schedule: &mut KeySchedule<CipherSuite>,
+        key_schedule: &mut ReadKeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, HashOutputSize<CipherSuite>>, TlsError>
     where
         CipherSuite: TlsCipherSuite + 'static,
@@ -83,7 +82,7 @@ where
     pub fn read_blocking<'m>(
         &'m mut self,
         transport: &mut impl BlockingRead,
-        key_schedule: &mut KeySchedule<CipherSuite>,
+        key_schedule: &mut ReadKeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, HashOutputSize<CipherSuite>>, TlsError>
     where
         CipherSuite: TlsCipherSuite + 'static,
@@ -138,7 +137,7 @@ mod tests {
     use core::convert::Infallible;
 
     use super::*;
-    use crate::{content_types::ContentType, Aes128GcmSha256};
+    use crate::{content_types::ContentType, key_schedule::KeySchedule, Aes128GcmSha256};
 
     struct ChunkRead<'a>(&'a [u8], usize);
 
@@ -209,7 +208,7 @@ mod tests {
 
         {
             if let ServerRecord::ApplicationData(data) = reader
-                .read_blocking(&mut transport, &mut key_schedule)
+                .read_blocking(&mut transport, key_schedule.read_state())
                 .unwrap()
             {
                 assert_eq!([0xde, 0xad, 0xbe, 0xef], data.data.as_slice());
@@ -223,7 +222,7 @@ mod tests {
 
         {
             if let ServerRecord::ApplicationData(data) = reader
-                .read_blocking(&mut transport, &mut key_schedule)
+                .read_blocking(&mut transport, key_schedule.read_state())
                 .unwrap()
             {
                 assert_eq!([0xaa, 0xbb], data.data.as_slice());
@@ -268,7 +267,7 @@ mod tests {
 
         {
             if let ServerRecord::ApplicationData(data) = reader
-                .read_blocking(&mut transport, &mut key_schedule)
+                .read_blocking(&mut transport, key_schedule.read_state())
                 .unwrap()
             {
                 assert_eq!([0xde, 0xad, 0xbe, 0xef], data.data.as_slice());
@@ -282,7 +281,7 @@ mod tests {
 
         {
             if let ServerRecord::ApplicationData(data) = reader
-                .read_blocking(&mut transport, &mut key_schedule)
+                .read_blocking(&mut transport, key_schedule.read_state())
                 .unwrap()
             {
                 assert_eq!([0xaa, 0xbb], data.data.as_slice());
@@ -320,7 +319,7 @@ mod tests {
 
         {
             if let ServerRecord::ApplicationData(data) = reader
-                .read_blocking(&mut transport, &mut key_schedule)
+                .read_blocking(&mut transport, key_schedule.read_state())
                 .unwrap()
             {
                 assert!(data.data.is_empty());
@@ -334,7 +333,7 @@ mod tests {
 
         {
             if let ServerRecord::ApplicationData(data) = reader
-                .read_blocking(&mut transport, &mut key_schedule)
+                .read_blocking(&mut transport, key_schedule.read_state())
                 .unwrap()
             {
                 assert!(data.data.is_empty());
