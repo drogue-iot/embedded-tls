@@ -151,7 +151,7 @@ where
                 .write_all(&self.record_write_buf[..len])
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
-            self.key_schedule.increment_write_counter();
+            self.key_schedule.write_state().increment_counter();
             self.write_pos = 0;
         }
 
@@ -212,7 +212,7 @@ where
             .write_all(&self.record_write_buf[..len])
             .map_err(|e| TlsError::Io(e.kind()))?;
 
-        self.key_schedule.increment_write_counter();
+        self.key_schedule.write_state().increment_counter();
 
         Ok(())
     }
