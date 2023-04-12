@@ -300,34 +300,6 @@ where
         Ok(PskBinder { verify })
     }
 
-    pub fn verify_server_finished(
-        &self,
-        finished: &Finished<HashOutputSize<CipherSuite>>,
-    ) -> Result<bool, TlsError> {
-        //info!("verify server finished: {:x?}", finished.verify);
-        //self.client_traffic_secret.as_ref().unwrap().expand()
-        //info!("size ===> {}", D::OutputSize::to_u16());
-        let key = self
-            .server_state
-            .state
-            .traffic_secret
-            .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
-                b"finished",
-                ContextType::None,
-            )?;
-        // info!("hmac sign key {:x?}", key);
-        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
-            .map_err(|_| TlsError::InternalError)?;
-        Mac::update(
-            &mut hmac,
-            finished.hash.as_ref().ok_or(TlsError::InternalError)?,
-        );
-        //let code = hmac.clone().finalize().into_bytes();
-        Ok(hmac.verify(&finished.verify).is_ok())
-        //info!("verified {:?}", verified);
-        //unimplemented!()
-    }
-
     fn get_nonce(counter: u64, iv: &IvArray<CipherSuite>) -> IvArray<CipherSuite> {
         //info!("counter = {} {:x?}", counter, &counter.to_be_bytes(),);
         let counter = Self::pad::<CipherSuite::IvLen>(&counter.to_be_bytes());
@@ -482,5 +454,32 @@ where
 
     pub(crate) fn get_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
         self.state.get_nonce()
+    }
+
+    pub fn verify_server_finished(
+        &self,
+        finished: &Finished<HashOutputSize<CipherSuite>>,
+    ) -> Result<bool, TlsError> {
+        //info!("verify server finished: {:x?}", finished.verify);
+        //self.client_traffic_secret.as_ref().unwrap().expand()
+        //info!("size ===> {}", D::OutputSize::to_u16());
+        let key = self
+            .state
+            .traffic_secret
+            .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
+                b"finished",
+                ContextType::None,
+            )?;
+        // info!("hmac sign key {:x?}", key);
+        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
+            .map_err(|_| TlsError::InternalError)?;
+        Mac::update(
+            &mut hmac,
+            finished.hash.as_ref().ok_or(TlsError::InternalError)?,
+        );
+        //let code = hmac.clone().finalize().into_bytes();
+        Ok(hmac.verify(&finished.verify).is_ok())
+        //info!("verified {:?}", verified);
+        //unimplemented!()
     }
 }

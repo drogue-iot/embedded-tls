@@ -130,17 +130,18 @@ where
             }
 
             if self.write_pos == max_block_size {
+                let key_schedule = self.key_schedule.write_state();
                 let len = encode_application_data_record_in_place(
                     self.record_write_buf,
                     self.write_pos,
-                    &mut self.key_schedule,
+                    key_schedule,
                 )?;
 
                 self.delegate
                     .write_all(&self.record_write_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;
 
-                self.key_schedule.write_state().increment_counter();
+                key_schedule.increment_counter();
                 self.write_pos = 0;
             }
 
@@ -153,17 +154,18 @@ where
     /// Force all previously written, buffered bytes to be encoded into a tls record and written to the connection.
     pub fn flush(&mut self) -> Result<(), TlsError> {
         if self.write_pos > 0 {
+            let key_schedule = self.key_schedule.write_state();
             let len = encode_application_data_record_in_place(
                 self.record_write_buf,
                 self.write_pos,
-                &mut self.key_schedule,
+                key_schedule,
             )?;
 
             self.delegate
                 .write_all(&self.record_write_buf[..len])
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
-            self.key_schedule.write_state().increment_counter();
+            key_schedule.increment_counter();
             self.write_pos = 0;
         }
 
@@ -201,16 +203,17 @@ where
 
     fn read_application_data(&mut self) -> Result<(), TlsError> {
         let buf_ptr_range = self.record_reader.buf.as_ptr_range();
+        let key_schedule = self.key_schedule.read_state();
         let record = self
             .record_reader
-            .read_blocking(&mut self.delegate, &mut self.key_schedule)?;
+            .read_blocking(&mut self.delegate, key_schedule)?;
 
         let mut handler = DecryptedReadHandler {
             source_buffer: buf_ptr_range,
             buffer_info: &mut self.decrypted,
             is_open: &mut self.opened,
         };
-        decrypt_record(&mut self.key_schedule, record, |_key_schedule, record| {
+        decrypt_record(key_schedule, record, |_key_schedule, record| {
             handler.handle(record)
         })?;
 

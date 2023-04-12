@@ -1,6 +1,6 @@
 use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::key_schedule::{HashOutputSize, KeySchedule};
+use crate::key_schedule::{HashOutputSize, KeySchedule, ReadKeySchedule, WriteKeySchedule};
 use crate::record::{encode_application_data_in_place, ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
 use crate::TlsError;
@@ -40,10 +40,10 @@ use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 
 pub(crate) fn decrypt_record<'m, CipherSuite>(
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut ReadKeySchedule<CipherSuite>,
     record: ServerRecord<'m, HashOutputSize<CipherSuite>>,
     mut cb: impl FnMut(
-        &mut KeySchedule<CipherSuite>,
+        &mut ReadKeySchedule<CipherSuite>,
         ServerRecord<'m, HashOutputSize<CipherSuite>>,
     ) -> Result<(), TlsError>,
 ) -> Result<(), TlsError>
@@ -57,15 +57,11 @@ where
     {
         // info!("decrypting {:x?} with {}", &header, app_data.len());
         //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
-        let crypto = <CipherSuite::Cipher as KeyInit>::new(&key_schedule.read_state().get_key()?);
+        let crypto = <CipherSuite::Cipher as KeyInit>::new(&key_schedule.get_key()?);
         // let nonce = &key_schedule.get_server_nonce();
         // info!("server write nonce {:x?}", nonce);
         crypto
-            .decrypt_in_place(
-                &key_schedule.read_state().get_nonce()?,
-                header.data(),
-                &mut app_data,
-            )
+            .decrypt_in_place(&key_schedule.get_nonce()?, header.data(), &mut app_data)
             .map_err(|_| TlsError::CryptoError)?;
         // info!("decrypted with padding {:x?}", app_data.as_slice());
         let padding = app_data
@@ -119,7 +115,7 @@ where
             _ => return Err(TlsError::Unimplemented),
         }
         //debug!("decrypted {:?} --> {:x?}", content_type, data);
-        key_schedule.read_state().increment_counter();
+        key_schedule.increment_counter();
     } else {
         debug!("Not decrypting: Not encapsulated in app data");
         cb(key_schedule, record)?;
@@ -128,14 +124,14 @@ where
 }
 
 pub(crate) fn encrypt<CipherSuite>(
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut WriteKeySchedule<CipherSuite>,
     buf: &mut CryptoBuffer<'_>,
 ) -> Result<usize, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let client_key = key_schedule.write_state().get_key()?;
-    let nonce = &key_schedule.write_state().get_nonce()?;
+    let client_key = key_schedule.get_key()?;
+    let nonce = &key_schedule.get_nonce()?;
     // trace!("encrypt key {:02x?}", client_key);
     // trace!("encrypt nonce {:02x?}", nonce);
     // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
@@ -176,7 +172,9 @@ where
 {
     let mut next_hash = key_schedule.transcript_hash().clone();
 
-    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| encrypt(key_schedule, buf))?;
+    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| {
+        encrypt(key_schedule.write_state(), buf)
+    })?;
 
     if let Some(range) = range {
         if let ClientRecord::Handshake(ClientHandshake::ClientHello(hello), false) = record {
@@ -224,7 +222,7 @@ where
 pub fn encode_application_data_record_in_place<CipherSuite>(
     tx_buf: &mut [u8],
     data_len: usize,
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut WriteKeySchedule<CipherSuite>,
 ) -> Result<usize, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
@@ -355,7 +353,7 @@ impl<'a> State {
                 Ok(state)
             }
             State::ServerHello => {
-                let record = record_reader.read_blocking(transport, key_schedule)?;
+                let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
                 process_server_hello(handshake, key_schedule, record)
             }
             State::ServerVerify => {
@@ -363,7 +361,7 @@ impl<'a> State {
                     "SIZE of server record queue : {}",
                     core::mem::size_of_val(&records)
                 );*/
-                let record = record_reader.read_blocking(transport, key_schedule)?;
+                let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
 
                 process_server_verify(handshake, key_schedule, config, record)
             }
@@ -486,7 +484,7 @@ where
     Verifier: TlsVerifier<CipherSuite>,
 {
     let mut state = State::ServerVerify;
-    decrypt_record::<CipherSuite>(key_schedule, record, |key_schedule, record| {
+    decrypt_record(key_schedule.read_state(), record, |key_schedule, record| {
         match record {
             ServerRecord::Handshake(server_handshake) => match server_handshake {
                 ServerHandshake::EncryptedExtensions(_) => {}
@@ -586,7 +584,7 @@ where
     Ok(&tx_buf[..len])
 }
 
-fn client_finished_finalize<'r, CipherSuite, Verifier>(
+fn client_finished_finalize<CipherSuite, Verifier>(
     key_schedule: &mut KeySchedule<CipherSuite>,
     handshake: &mut Handshake<CipherSuite, Verifier>,
 ) -> Result<State, TlsError>

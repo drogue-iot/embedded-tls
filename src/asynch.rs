@@ -135,7 +135,7 @@ where
                 let len = encode_application_data_record_in_place(
                     self.record_write_buf,
                     self.write_pos,
-                    &mut self.key_schedule,
+                    self.key_schedule.write_state(),
                 )?;
 
                 self.delegate
@@ -159,7 +159,7 @@ where
             let len = encode_application_data_record_in_place(
                 self.record_write_buf,
                 self.write_pos,
-                &mut self.key_schedule,
+                self.key_schedule.write_state(),
             )?;
 
             self.delegate
@@ -215,9 +215,11 @@ where
             buffer_info: &mut self.decrypted,
             is_open: &mut self.opened,
         };
-        decrypt_record(&mut self.key_schedule, record, |_key_schedule, record| {
-            handler.handle(record)
-        })?;
+        decrypt_record(
+            self.key_schedule.read_state(),
+            record,
+            |_key_schedule, record| handler.handle(record),
+        )?;
 
         Ok(())
     }
