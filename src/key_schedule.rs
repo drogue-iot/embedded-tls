@@ -299,7 +299,7 @@ where
         )
     }
 
-    pub fn hkdf_expand_label<N: ArrayLength<u8>>(
+    fn hkdf_expand_label<N: ArrayLength<u8>>(
         &self,
         hkdf: &Hkdf<CipherSuite>,
         label: &[u8],
