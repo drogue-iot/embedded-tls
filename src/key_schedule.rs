@@ -1,35 +1,37 @@
 use crate::handshake::binder::PskBinder;
 use crate::handshake::finished::Finished;
-use crate::TlsError;
-use core::marker::PhantomData;
-use digest::core_api::BlockSizeUser;
+use crate::{config::TlsCipherSuite, TlsError};
 use digest::generic_array::ArrayLength;
-use digest::Reset;
 use heapless::Vec;
-use hkdf::Hkdf;
 use hmac::digest::OutputSizeUser;
 use hmac::{Mac, SimpleHmac};
 use sha2::digest::generic_array::{typenum::Unsigned, GenericArray};
 use sha2::Digest;
 
-pub struct KeySchedule<D, KeyLen, IvLen>
+pub type HashOutputSize<CipherSuite> =
+    <<CipherSuite as TlsCipherSuite>::Hash as OutputSizeUser>::OutputSize;
+
+pub type IvArray<CipherSuite> = GenericArray<u8, <CipherSuite as TlsCipherSuite>::IvLen>;
+pub type KeyArray<CipherSuite> = GenericArray<u8, <CipherSuite as TlsCipherSuite>::KeyLen>;
+pub type HashArray<CipherSuite> = GenericArray<u8, HashOutputSize<CipherSuite>>;
+
+type Hkdf<CipherSuite> = hkdf::Hkdf<
+    <CipherSuite as TlsCipherSuite>::Hash,
+    SimpleHmac<<CipherSuite as TlsCipherSuite>::Hash>,
+>;
+
+pub struct KeySchedule<CipherSuite>
 where
-    D: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser,
-    <D as BlockSizeUser>::BlockSize: ArrayLength<u8>,
-    <D as OutputSizeUser>::OutputSize: ArrayLength<u8>,
-    KeyLen: ArrayLength<u8>,
-    IvLen: ArrayLength<u8>,
+    CipherSuite: TlsCipherSuite,
 {
-    secret: GenericArray<u8, <D as OutputSizeUser>::OutputSize>,
-    transcript_hash: Option<D>,
-    hkdf: Option<Hkdf<D, SimpleHmac<D>>>,
-    client_traffic_secret: Option<Hkdf<D, SimpleHmac<D>>>,
-    server_traffic_secret: Option<Hkdf<D, SimpleHmac<D>>>,
-    binder_key: Option<Hkdf<D, SimpleHmac<D>>>,
+    secret: HashArray<CipherSuite>,
+    transcript_hash: Option<CipherSuite::Hash>,
+    hkdf: Option<Hkdf<CipherSuite>>,
+    client_traffic_secret: Option<Hkdf<CipherSuite>>,
+    server_traffic_secret: Option<Hkdf<CipherSuite>>,
+    binder_key: Option<Hkdf<CipherSuite>>,
     read_counter: u64,
     write_counter: u64,
-    _key_len: PhantomData<KeyLen>,
-    _iv_len: PhantomData<IvLen>,
 }
 
 enum ContextType {
@@ -38,34 +40,28 @@ enum ContextType {
     EmptyHash,
 }
 
-impl<D, KeyLen, IvLen> KeySchedule<D, KeyLen, IvLen>
+impl<CipherSuite> KeySchedule<CipherSuite>
 where
-    D: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser,
-    <D as BlockSizeUser>::BlockSize: ArrayLength<u8>,
-    <D as OutputSizeUser>::OutputSize: ArrayLength<u8>,
-    KeyLen: ArrayLength<u8>,
-    IvLen: ArrayLength<u8>,
+    CipherSuite: TlsCipherSuite,
 {
     pub fn new() -> Self {
         Self {
             secret: Self::zero(),
-            transcript_hash: Some(D::new()),
+            transcript_hash: Some(CipherSuite::Hash::new()),
             hkdf: None,
             client_traffic_secret: None,
             server_traffic_secret: None,
             binder_key: None,
             read_counter: 0,
             write_counter: 0,
-            _key_len: PhantomData,
-            _iv_len: PhantomData,
         }
     }
 
-    pub(crate) fn transcript_hash(&mut self) -> &mut D {
+    pub(crate) fn transcript_hash(&mut self) -> &mut CipherSuite::Hash {
         self.transcript_hash.as_mut().unwrap()
     }
 
-    pub(crate) fn replace_transcript_hash(&mut self, hash: D) {
+    pub(crate) fn replace_transcript_hash(&mut self, hash: CipherSuite::Hash) {
         self.transcript_hash.replace(hash);
     }
 
@@ -81,51 +77,56 @@ where
         self.write_counter = 0;
     }
 
-    pub(crate) fn get_server_nonce(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
+    pub(crate) fn get_server_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
         Ok(self.get_nonce(self.read_counter, &self.get_server_iv()?))
     }
 
-    pub(crate) fn get_client_nonce(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
+    pub(crate) fn get_client_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
         Ok(self.get_nonce(self.write_counter, &self.get_client_iv()?))
     }
 
-    pub(crate) fn get_server_key(&self) -> Result<GenericArray<u8, KeyLen>, TlsError> {
+    pub(crate) fn get_server_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
         self.hkdf_expand_label(
             self.server_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16())?,
+            &self.make_hkdf_label(b"key", ContextType::None, CipherSuite::KeyLen::to_u16())?,
         )
     }
 
-    pub(crate) fn get_client_key(&self) -> Result<GenericArray<u8, KeyLen>, TlsError> {
+    pub(crate) fn get_client_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
         self.hkdf_expand_label(
             self.client_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"key", ContextType::None, KeyLen::to_u16())?,
+            &self.make_hkdf_label(b"key", ContextType::None, CipherSuite::KeyLen::to_u16())?,
         )
     }
 
-    fn get_server_iv(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
+    fn get_server_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
         self.hkdf_expand_label(
             self.server_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16())?,
+            &self.make_hkdf_label(b"iv", ContextType::None, CipherSuite::IvLen::to_u16())?,
         )
     }
 
-    fn get_client_iv(&self) -> Result<GenericArray<u8, IvLen>, TlsError> {
+    fn get_client_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
         self.hkdf_expand_label(
             self.client_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"iv", ContextType::None, IvLen::to_u16())?,
+            &self.make_hkdf_label(b"iv", ContextType::None, CipherSuite::IvLen::to_u16())?,
         )
     }
 
     pub fn create_client_finished(
         &self,
-    ) -> Result<Finished<<D as OutputSizeUser>::OutputSize>, TlsError> {
-        let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
+    ) -> Result<Finished<HashOutputSize<CipherSuite>>, TlsError> {
+        let key = self.hkdf_expand_label::<HashOutputSize<CipherSuite>>(
             self.client_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16())?,
+            &self.make_hkdf_label(
+                b"finished",
+                ContextType::None,
+                HashOutputSize::<CipherSuite>::to_u16(),
+            )?,
         )?;
 
-        let mut hmac = SimpleHmac::<D>::new_from_slice(&key).map_err(|_| TlsError::CryptoError)?;
+        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
+            .map_err(|_| TlsError::CryptoError)?;
         Mac::update(
             &mut hmac,
             &self.transcript_hash.as_ref().unwrap().clone().finalize(),
@@ -135,15 +136,18 @@ where
         Ok(Finished { verify, hash: None })
     }
 
-    pub fn create_psk_binder(
-        &self,
-    ) -> Result<PskBinder<<D as OutputSizeUser>::OutputSize>, TlsError> {
-        let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
+    pub fn create_psk_binder(&self) -> Result<PskBinder<HashOutputSize<CipherSuite>>, TlsError> {
+        let key = self.hkdf_expand_label::<HashOutputSize<CipherSuite>>(
             self.binder_key.as_ref().unwrap(),
-            &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16())?,
+            &self.make_hkdf_label(
+                b"finished",
+                ContextType::None,
+                HashOutputSize::<CipherSuite>::to_u16(),
+            )?,
         )?;
 
-        let mut hmac = SimpleHmac::<D>::new_from_slice(&key).map_err(|_| TlsError::CryptoError)?;
+        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
+            .map_err(|_| TlsError::CryptoError)?;
         Mac::update(
             &mut hmac,
             &self.transcript_hash.as_ref().unwrap().clone().finalize(),
@@ -154,17 +158,21 @@ where
 
     pub fn verify_server_finished(
         &self,
-        finished: &Finished<<D as OutputSizeUser>::OutputSize>,
+        finished: &Finished<HashOutputSize<CipherSuite>>,
     ) -> Result<bool, TlsError> {
         //info!("verify server finished: {:x?}", finished.verify);
         //self.client_traffic_secret.as_ref().unwrap().expand()
         //info!("size ===> {}", D::OutputSize::to_u16());
-        let key: GenericArray<u8, D::OutputSize> = self.hkdf_expand_label(
+        let key = self.hkdf_expand_label::<HashOutputSize<CipherSuite>>(
             self.server_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"finished", ContextType::None, D::OutputSize::to_u16())?,
+            &self.make_hkdf_label(
+                b"finished",
+                ContextType::None,
+                HashOutputSize::<CipherSuite>::to_u16(),
+            )?,
         )?;
         // info!("hmac sign key {:x?}", key);
-        let mut hmac = SimpleHmac::<D>::new_from_slice(&key).unwrap();
+        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key).unwrap();
         Mac::update(&mut hmac, finished.hash.as_ref().unwrap());
         //let code = hmac.clone().finalize().into_bytes();
         Ok(hmac.verify(&finished.verify).is_ok())
@@ -172,21 +180,21 @@ where
         //unimplemented!()
     }
 
-    fn get_nonce(&self, counter: u64, iv: &GenericArray<u8, IvLen>) -> GenericArray<u8, IvLen> {
+    fn get_nonce(&self, counter: u64, iv: &IvArray<CipherSuite>) -> IvArray<CipherSuite> {
         //info!("counter = {} {:x?}", counter, &counter.to_be_bytes(),);
-        let counter = Self::pad::<IvLen>(&counter.to_be_bytes());
+        let counter = Self::pad::<CipherSuite::IvLen>(&counter.to_be_bytes());
 
         //info!("counter = {:x?}", counter);
         // info!("iv = {:x?}", iv);
 
         let mut nonce = GenericArray::default();
 
-        for (index, (l, r)) in iv[0..IvLen::to_usize()]
+        for (index, (l, r)) in iv[0..CipherSuite::IvLen::to_usize()]
             .iter()
             .zip(counter.iter())
             .enumerate()
         {
-            nonce[index] = l ^ r
+            nonce[index] = l ^ r;
         }
 
         //debug!("nonce {:x?}", nonce);
@@ -209,7 +217,7 @@ where
         padded
     }
 
-    fn zero() -> GenericArray<u8, <D as OutputSizeUser>::OutputSize> {
+    fn zero() -> HashArray<CipherSuite> {
         GenericArray::default()
     }
 
@@ -218,34 +226,34 @@ where
         Ok(())
     }
 
+    fn initialize(&mut self, ikm: &[u8]) {
+        let (secret, hkdf) = Hkdf::<CipherSuite>::extract(Some(self.secret.as_ref()), ikm);
+        self.hkdf = Some(hkdf);
+        self.secret = secret;
+    }
+
     // Initializes the early secrets with a callback for any PSK binders
     pub fn initialize_early_secret(&mut self, psk: Option<&[u8]>) -> Result<(), TlsError> {
-        let (secret, hkdf) = Hkdf::<D, SimpleHmac<D>>::extract(
-            Some(self.secret.as_ref()),
+        self.initialize(
             #[allow(clippy::or_fun_call)]
             psk.unwrap_or(Self::zero().as_slice()),
         );
-        self.hkdf.replace(hkdf);
-        self.secret = secret;
+
         let binder_key = self.derive_secret(b"ext binder", ContextType::EmptyHash)?;
         self.binder_key
-            .replace(Hkdf::from_prk(&binder_key).unwrap());
+            .replace(Hkdf::<CipherSuite>::from_prk(&binder_key).unwrap());
         self.derived()
     }
 
     pub fn initialize_handshake_secret(&mut self, ikm: &[u8]) -> Result<(), TlsError> {
-        let (secret, hkdf) = Hkdf::<D, SimpleHmac<D>>::extract(Some(self.secret.as_ref()), ikm);
-        self.secret = secret;
-        self.hkdf.replace(hkdf);
+        self.initialize(ikm);
+
         self.calculate_traffic_secrets(b"c hs traffic", b"s hs traffic")?;
         self.derived()
     }
 
     pub fn initialize_master_secret(&mut self) -> Result<(), TlsError> {
-        let (secret, hkdf) =
-            Hkdf::<D, SimpleHmac<D>>::extract(Some(self.secret.as_ref()), Self::zero().as_slice());
-        self.secret = secret;
-        self.hkdf.replace(hkdf);
+        self.initialize(Self::zero().as_slice());
 
         //let context = self.transcript_hash.as_ref().unwrap().clone().finalize();
         //info!("Derive keys, hash: {:x?}", context);
@@ -261,7 +269,7 @@ where
     ) -> Result<(), TlsError> {
         let client_secret = self.derive_secret(client_label, ContextType::TranscriptHash)?;
         self.client_traffic_secret
-            .replace(Hkdf::from_prk(&client_secret).unwrap());
+            .replace(Hkdf::<CipherSuite>::from_prk(&client_secret).unwrap());
         /*info!(
             "\n\nTRAFFIC {} secret {:x?}",
             core::str::from_utf8(client_label).unwrap(),
@@ -269,7 +277,7 @@ where
         );*/
         let server_secret = self.derive_secret(server_label, ContextType::TranscriptHash)?;
         self.server_traffic_secret
-            .replace(Hkdf::from_prk(&server_secret).unwrap());
+            .replace(Hkdf::<CipherSuite>::from_prk(&server_secret).unwrap());
         /*info!(
             "TRAFFIC {} secret {:x?}\n\n",
             core::str::from_utf8(server_label).unwrap(),
@@ -284,17 +292,19 @@ where
         &mut self,
         label: &[u8],
         context_type: ContextType,
-    ) -> Result<GenericArray<u8, <D as OutputSizeUser>::OutputSize>, TlsError> {
-        let label = self.make_hkdf_label(label, context_type, D::OutputSize::to_u16())?;
-        self.hkdf_expand_label(self.hkdf.as_ref().unwrap(), &label)
+    ) -> Result<HashArray<CipherSuite>, TlsError> {
+        self.hkdf_expand_label(
+            self.hkdf.as_ref().unwrap(),
+            &self.make_hkdf_label(label, context_type, HashOutputSize::<CipherSuite>::to_u16())?,
+        )
     }
 
     pub fn hkdf_expand_label<N: ArrayLength<u8>>(
         &self,
-        hkdf: &Hkdf<D, SimpleHmac<D>>,
+        hkdf: &Hkdf<CipherSuite>,
         label: &[u8],
     ) -> Result<GenericArray<u8, N>, TlsError> {
-        let mut okm: GenericArray<u8, N> = Default::default();
+        let mut okm = GenericArray::default();
         //info!("label {:x?}", label);
         hkdf.expand(label, &mut okm)
             .map_err(|_| TlsError::CryptoError)?;
@@ -339,7 +349,7 @@ where
                     .map_err(|_| TlsError::InternalError)?;
             }
             ContextType::EmptyHash => {
-                let context = D::new().chain_update([]).finalize();
+                let context = CipherSuite::Hash::new().chain_update([]).finalize();
                 hkdf_label
                     .extend_from_slice(&(context.len() as u8).to_be_bytes())
                     .map_err(|_| TlsError::InternalError)?;
@@ -352,13 +362,9 @@ where
     }
 }
 
-impl<D, KeyLen, IvLen> Default for KeySchedule<D, KeyLen, IvLen>
+impl<CipherSuite> Default for KeySchedule<CipherSuite>
 where
-    D: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser,
-    <D as BlockSizeUser>::BlockSize: ArrayLength<u8>,
-    <D as OutputSizeUser>::OutputSize: ArrayLength<u8>,
-    KeyLen: ArrayLength<u8>,
-    IvLen: ArrayLength<u8>,
+    CipherSuite: TlsCipherSuite,
 {
     fn default() -> Self {
         KeySchedule::new()

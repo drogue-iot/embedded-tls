@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use digest::OutputSizeUser;
+use crate::key_schedule::HashOutputSize;
 use embedded_io::{blocking::Read as BlockingRead, Error};
 
 #[cfg(feature = "async")]
@@ -42,8 +42,8 @@ where
     pub async fn read<'m>(
         &'m mut self,
         transport: &mut impl AsyncRead,
-        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    ) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
+        key_schedule: &mut KeySchedule<CipherSuite>,
+    ) -> Result<ServerRecord<'m, HashOutputSize<CipherSuite>>, TlsError>
     where
         CipherSuite: TlsCipherSuite + 'static,
     {
@@ -52,7 +52,7 @@ where
 
         let content_length = header.content_length();
         let data = self.advance(transport, content_length).await?;
-        ServerRecord::decode::<CipherSuite::Hash>(header, data, key_schedule.transcript_hash())
+        ServerRecord::decode(header, data, key_schedule.transcript_hash())
     }
 
     #[cfg(feature = "async")]
@@ -61,14 +61,7 @@ where
         transport: &mut impl AsyncRead,
         amount: usize,
     ) -> Result<&'m mut [u8], TlsError> {
-        if self.decoded + amount > self.buf.len() {
-            if amount > self.buf.len() {
-                return Err(TlsError::InsufficientSpace);
-            }
-            self.buf
-                .copy_within(self.decoded..self.decoded + self.pending, 0);
-            self.decoded = 0;
-        }
+        self.ensure_contiguous(amount)?;
 
         while self.pending < amount {
             let read = transport
@@ -90,8 +83,8 @@ where
     pub fn read_blocking<'m>(
         &'m mut self,
         transport: &mut impl BlockingRead,
-        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
-    ) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
+        key_schedule: &mut KeySchedule<CipherSuite>,
+    ) -> Result<ServerRecord<'m, HashOutputSize<CipherSuite>>, TlsError>
     where
         CipherSuite: TlsCipherSuite + 'static,
     {
@@ -100,7 +93,7 @@ where
 
         let content_length = header.content_length();
         let data = self.advance_blocking(transport, content_length)?;
-        ServerRecord::decode::<CipherSuite::Hash>(header, data, key_schedule.transcript_hash())
+        ServerRecord::decode(header, data, key_schedule.transcript_hash())
     }
 
     fn advance_blocking<'m>(
@@ -108,14 +101,7 @@ where
         transport: &mut impl BlockingRead,
         amount: usize,
     ) -> Result<&'m mut [u8], TlsError> {
-        if self.decoded + amount > self.buf.len() {
-            if amount > self.buf.len() {
-                return Err(TlsError::InsufficientSpace);
-            }
-            self.buf
-                .copy_within(self.decoded..self.decoded + self.pending, 0);
-            self.decoded = 0;
-        }
+        self.ensure_contiguous(amount)?;
 
         while self.pending < amount {
             let read = transport
@@ -132,6 +118,19 @@ where
         self.pending -= amount;
         Ok(slice)
     }
+
+    fn ensure_contiguous(&mut self, len: usize) -> Result<(), TlsError> {
+        if self.decoded + len > self.buf.len() {
+            if len > self.buf.len() {
+                return Err(TlsError::InsufficientSpace);
+            }
+            self.buf
+                .copy_within(self.decoded..self.decoded + self.pending, 0);
+            self.decoded = 0;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -139,7 +138,7 @@ mod tests {
     use core::convert::Infallible;
 
     use super::*;
-    use crate::{content_types::ContentType, Aes128GcmSha256, TlsCipherSuite};
+    use crate::{content_types::ContentType, Aes128GcmSha256};
 
     struct ChunkRead<'a>(&'a [u8], usize);
 
@@ -206,11 +205,7 @@ mod tests {
 
         let mut buf = [0; 32];
         let mut reader = RecordReader::<Aes128GcmSha256>::new(&mut buf);
-        let mut key_schedule = KeySchedule::<
-            <Aes128GcmSha256 as TlsCipherSuite>::Hash,
-            <Aes128GcmSha256 as TlsCipherSuite>::KeyLen,
-            <Aes128GcmSha256 as TlsCipherSuite>::IvLen,
-        >::new();
+        let mut key_schedule = KeySchedule::<Aes128GcmSha256>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
@@ -269,11 +264,7 @@ mod tests {
 
         let mut buf = [0; 5]; // This buffer is so small that it cannot contain both the header and data
         let mut reader = RecordReader::<Aes128GcmSha256>::new(&mut buf);
-        let mut key_schedule = KeySchedule::<
-            <Aes128GcmSha256 as TlsCipherSuite>::Hash,
-            <Aes128GcmSha256 as TlsCipherSuite>::KeyLen,
-            <Aes128GcmSha256 as TlsCipherSuite>::IvLen,
-        >::new();
+        let mut key_schedule = KeySchedule::<Aes128GcmSha256>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
@@ -325,11 +316,7 @@ mod tests {
 
         let mut buf = [0; 32];
         let mut reader = RecordReader::<Aes128GcmSha256>::new(&mut buf);
-        let mut key_schedule = KeySchedule::<
-            <Aes128GcmSha256 as TlsCipherSuite>::Hash,
-            <Aes128GcmSha256 as TlsCipherSuite>::KeyLen,
-            <Aes128GcmSha256 as TlsCipherSuite>::IvLen,
-        >::new();
+        let mut key_schedule = KeySchedule::<Aes128GcmSha256>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
