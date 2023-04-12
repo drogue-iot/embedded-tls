@@ -66,11 +66,11 @@ where
     }
 
     pub(crate) fn increment_read_counter(&mut self) {
-        self.read_counter = self.read_counter.checked_add(1).unwrap()
+        self.read_counter = self.read_counter.checked_add(1).unwrap();
     }
 
     pub(crate) fn increment_write_counter(&mut self) {
-        self.write_counter = self.write_counter.checked_add(1).unwrap()
+        self.write_counter = self.write_counter.checked_add(1).unwrap();
     }
 
     pub(crate) fn reset_write_counter(&mut self) {
@@ -78,11 +78,11 @@ where
     }
 
     pub(crate) fn get_server_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        Ok(self.get_nonce(self.read_counter, &self.get_server_iv()?))
+        Ok(Self::get_nonce(self.read_counter, &self.get_server_iv()?))
     }
 
     pub(crate) fn get_client_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        Ok(self.get_nonce(self.write_counter, &self.get_client_iv()?))
+        Ok(Self::get_nonce(self.write_counter, &self.get_client_iv()?))
     }
 
     pub(crate) fn get_server_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
@@ -175,7 +175,7 @@ where
         //unimplemented!()
     }
 
-    fn get_nonce(&self, counter: u64, iv: &IvArray<CipherSuite>) -> IvArray<CipherSuite> {
+    fn get_nonce(counter: u64, iv: &IvArray<CipherSuite>) -> IvArray<CipherSuite> {
         //info!("counter = {} {:x?}", counter, &counter.to_be_bytes(),);
         let counter = Self::pad::<CipherSuite::IvLen>(&counter.to_be_bytes());
 
