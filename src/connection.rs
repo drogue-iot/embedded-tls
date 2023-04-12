@@ -57,12 +57,12 @@ where
     {
         // info!("decrypting {:x?} with {}", &header, app_data.len());
         //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
-        let crypto = <CipherSuite::Cipher as KeyInit>::new(&key_schedule.get_server_key()?);
+        let crypto = <CipherSuite::Cipher as KeyInit>::new(&key_schedule.read_state().get_key()?);
         // let nonce = &key_schedule.get_server_nonce();
         // info!("server write nonce {:x?}", nonce);
         crypto
             .decrypt_in_place(
-                &key_schedule.get_server_nonce()?,
+                &key_schedule.read_state().get_nonce()?,
                 header.data(),
                 &mut app_data,
             )
@@ -119,7 +119,7 @@ where
             _ => return Err(TlsError::Unimplemented),
         }
         //debug!("decrypted {:?} --> {:x?}", content_type, data);
-        key_schedule.increment_read_counter();
+        key_schedule.read_state().increment_counter();
     } else {
         debug!("Not decrypting: Not encapsulated in app data");
         cb(key_schedule, record)?;
@@ -134,8 +134,8 @@ pub(crate) fn encrypt<CipherSuite>(
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let client_key = key_schedule.get_client_key()?;
-    let nonce = &key_schedule.get_client_nonce()?;
+    let client_key = key_schedule.write_state().get_key()?;
+    let nonce = &key_schedule.write_state().get_nonce()?;
     // trace!("encrypt key {:02x?}", client_key);
     // trace!("encrypt nonce {:02x?}", nonce);
     // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
@@ -303,7 +303,7 @@ impl<'a> State {
                     .await
                     .map_err(|e| TlsError::Io(e.kind()))?;
 
-                key_schedule.increment_write_counter();
+                key_schedule.write_state().increment_counter();
                 if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) =
                     client_hello
                 {
@@ -355,7 +355,7 @@ impl<'a> State {
                     .write_all(&tx_buf[..len])
                     .await
                     .map_err(|e| TlsError::Io(e.kind()))?;
-                key_schedule.increment_write_counter();
+                key_schedule.write_state().increment_counter();
                 key_schedule.replace_transcript_hash(next_hash);
                 Ok(State::ClientFinished)
             }
@@ -372,7 +372,7 @@ impl<'a> State {
                     .write_all(&tx_buf[..len])
                     .await
                     .map_err(|e| TlsError::Io(e.kind()))?;
-                key_schedule.increment_write_counter();
+                key_schedule.write_state().increment_counter();
 
                 key_schedule.replace_transcript_hash(
                     handshake
@@ -415,7 +415,7 @@ impl<'a> State {
                     .write_all(&tx_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;
 
-                key_schedule.increment_write_counter();
+                key_schedule.write_state().increment_counter();
                 if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) =
                     client_hello
                 {
@@ -461,7 +461,7 @@ impl<'a> State {
                 transport
                     .write_all(&tx_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;
-                key_schedule.increment_write_counter();
+                key_schedule.write_state().increment_counter();
                 key_schedule.replace_transcript_hash(next_hash);
                 Ok(State::ClientFinished)
             }
@@ -477,7 +477,7 @@ impl<'a> State {
                 transport
                     .write_all(&tx_buf[..len])
                     .map_err(|e| TlsError::Io(e.kind()))?;
-                key_schedule.increment_write_counter();
+                key_schedule.write_state().increment_counter();
 
                 key_schedule.replace_transcript_hash(
                     handshake

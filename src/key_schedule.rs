@@ -93,14 +93,107 @@ pub struct KeySchedule<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
+    shared: SharedState<CipherSuite>,
+    client_state: KeyScheduleState<CipherSuite>, // used for writes
+    server_state: KeyScheduleState<CipherSuite>, // used for reads
+    transcript_hash: Option<CipherSuite::Hash>,  // server state
+    binder_key: Secret<CipherSuite>,             // client state
+}
+
+struct SharedState<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
     secret: HashArray<CipherSuite>,
-    transcript_hash: Option<CipherSuite::Hash>,
     hkdf: Secret<CipherSuite>,
-    client_traffic_secret: Secret<CipherSuite>,
-    server_traffic_secret: Secret<CipherSuite>,
-    binder_key: Secret<CipherSuite>,
-    read_counter: u64,
-    write_counter: u64,
+}
+
+impl<CipherSuite> SharedState<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    fn new() -> Self {
+        Self {
+            secret: GenericArray::default(),
+            hkdf: Secret::Uninitialized,
+        }
+    }
+
+    fn initialize(&mut self, ikm: &[u8]) {
+        let (secret, hkdf) = Hkdf::<CipherSuite>::extract(Some(self.secret.as_ref()), ikm);
+        self.hkdf.replace(hkdf);
+        self.secret = secret;
+    }
+
+    fn derive_secret(
+        &mut self,
+        label: &[u8],
+        context_type: ContextType<CipherSuite>,
+    ) -> Result<HashArray<CipherSuite>, TlsError> {
+        self.hkdf
+            .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(label, context_type)
+    }
+
+    fn derived(&mut self) -> Result<(), TlsError> {
+        self.secret = self.derive_secret(b"derived", ContextType::empty_hash())?;
+        Ok(())
+    }
+}
+
+pub(crate) struct KeyScheduleState<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    traffic_secret: Secret<CipherSuite>,
+    counter: u64,
+}
+
+impl<CipherSuite> KeyScheduleState<CipherSuite>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    fn new() -> Self {
+        Self {
+            traffic_secret: Secret::Uninitialized,
+            counter: 0,
+        }
+    }
+
+    pub fn get_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
+        self.traffic_secret
+            .make_expanded_hkdf_label(b"key", ContextType::None)
+    }
+
+    pub fn get_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
+        self.traffic_secret
+            .make_expanded_hkdf_label(b"iv", ContextType::None)
+    }
+
+    pub fn get_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
+        Ok(KeySchedule::<CipherSuite>::get_nonce(
+            self.counter,
+            &self.get_iv()?,
+        ))
+    }
+
+    fn calculate_traffic_secret(
+        &mut self,
+        label: &[u8],
+        shared: &mut SharedState<CipherSuite>,
+        transcript_hash: &CipherSuite::Hash,
+    ) -> Result<(), TlsError> {
+        let secret = shared.derive_secret(label, ContextType::transcript_hash(transcript_hash))?;
+        let traffic_secret =
+            Hkdf::<CipherSuite>::from_prk(&secret).map_err(|_| TlsError::InternalError)?;
+
+        self.traffic_secret.replace(traffic_secret);
+        self.counter = 0;
+        Ok(())
+    }
+
+    pub fn increment_counter(&mut self) {
+        self.counter = self.counter.checked_add(1).unwrap();
+    }
 }
 
 enum ContextType<CipherSuite>
@@ -130,14 +223,11 @@ where
 {
     pub fn new() -> Self {
         Self {
-            secret: Self::zero(),
-            transcript_hash: Some(CipherSuite::Hash::new()),
-            hkdf: Secret::Uninitialized,
-            client_traffic_secret: Secret::Uninitialized,
-            server_traffic_secret: Secret::Uninitialized,
+            shared: SharedState::new(),
+            client_state: KeyScheduleState::new(),
+            server_state: KeyScheduleState::new(),
             binder_key: Secret::Uninitialized,
-            read_counter: 0,
-            write_counter: 0,
+            transcript_hash: Some(CipherSuite::Hash::new()),
         }
     }
 
@@ -155,51 +245,20 @@ where
         self.transcript_hash = Some(hash);
     }
 
-    pub(crate) fn increment_read_counter(&mut self) {
-        self.read_counter = self.read_counter.checked_add(1).unwrap();
+    pub(crate) fn write_state(&mut self) -> &mut KeyScheduleState<CipherSuite> {
+        &mut self.client_state
     }
 
-    pub(crate) fn increment_write_counter(&mut self) {
-        self.write_counter = self.write_counter.checked_add(1).unwrap();
-    }
-
-    pub(crate) fn reset_write_counter(&mut self) {
-        self.write_counter = 0;
-    }
-
-    pub(crate) fn get_server_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        Ok(Self::get_nonce(self.read_counter, &self.get_server_iv()?))
-    }
-
-    pub(crate) fn get_client_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        Ok(Self::get_nonce(self.write_counter, &self.get_client_iv()?))
-    }
-
-    pub(crate) fn get_server_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
-        self.server_traffic_secret
-            .make_expanded_hkdf_label(b"key", ContextType::None)
-    }
-
-    pub(crate) fn get_client_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
-        self.client_traffic_secret
-            .make_expanded_hkdf_label(b"key", ContextType::None)
-    }
-
-    fn get_server_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        self.server_traffic_secret
-            .make_expanded_hkdf_label(b"iv", ContextType::None)
-    }
-
-    fn get_client_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        self.client_traffic_secret
-            .make_expanded_hkdf_label(b"iv", ContextType::None)
+    pub(crate) fn read_state(&mut self) -> &mut KeyScheduleState<CipherSuite> {
+        &mut self.server_state
     }
 
     pub fn create_client_finished(
         &self,
     ) -> Result<Finished<HashOutputSize<CipherSuite>>, TlsError> {
         let key = self
-            .client_traffic_secret
+            .client_state
+            .traffic_secret
             .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
                 b"finished",
                 ContextType::None,
@@ -236,7 +295,8 @@ where
         //self.client_traffic_secret.as_ref().unwrap().expand()
         //info!("size ===> {}", D::OutputSize::to_u16());
         let key = self
-            .server_traffic_secret
+            .server_state
+            .traffic_secret
             .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
                 b"finished",
                 ContextType::None,
@@ -295,46 +355,37 @@ where
         GenericArray::default()
     }
 
-    fn derived(&mut self) -> Result<(), TlsError> {
-        self.secret = self.derive_secret(b"derived", ContextType::empty_hash())?;
-        Ok(())
-    }
-
-    fn initialize(&mut self, ikm: &[u8]) {
-        let (secret, hkdf) = Hkdf::<CipherSuite>::extract(Some(self.secret.as_ref()), ikm);
-        self.hkdf.replace(hkdf);
-        self.secret = secret;
-    }
-
     // Initializes the early secrets with a callback for any PSK binders
     pub fn initialize_early_secret(&mut self, psk: Option<&[u8]>) -> Result<(), TlsError> {
-        self.initialize(
+        self.shared.initialize(
             #[allow(clippy::or_fun_call)]
             psk.unwrap_or(Self::zero().as_slice()),
         );
 
-        let binder_key = self.derive_secret(b"ext binder", ContextType::empty_hash())?;
+        let binder_key = self
+            .shared
+            .derive_secret(b"ext binder", ContextType::empty_hash())?;
         self.binder_key.replace(
             Hkdf::<CipherSuite>::from_prk(&binder_key).map_err(|_| TlsError::InternalError)?,
         );
-        self.derived()
+        self.shared.derived()
     }
 
     pub fn initialize_handshake_secret(&mut self, ikm: &[u8]) -> Result<(), TlsError> {
-        self.initialize(ikm);
+        self.shared.initialize(ikm);
 
         self.calculate_traffic_secrets(b"c hs traffic", b"s hs traffic")?;
-        self.derived()
+        self.shared.derived()
     }
 
     pub fn initialize_master_secret(&mut self) -> Result<(), TlsError> {
-        self.initialize(Self::zero().as_slice());
+        self.shared.initialize(Self::zero().as_slice());
 
         //let context = self.transcript_hash.as_ref().unwrap().clone().finalize();
         //info!("Derive keys, hash: {:x?}", context);
 
         self.calculate_traffic_secrets(b"c ap traffic", b"s ap traffic")?;
-        self.derived()
+        self.shared.derived()
     }
 
     fn calculate_traffic_secrets(
@@ -342,45 +393,24 @@ where
         client_label: &[u8],
         server_label: &[u8],
     ) -> Result<(), TlsError> {
-        let client_secret = self.derive_secret(
+        let transcript_hash = self
+            .transcript_hash
+            .as_ref()
+            .ok_or(TlsError::MissingHandshake)?;
+
+        self.client_state.calculate_traffic_secret(
             client_label,
-            ContextType::transcript_hash(self.transcript_hash_ref()?),
+            &mut self.shared,
+            transcript_hash,
         )?;
-        let client_traffic_secret =
-            Hkdf::<CipherSuite>::from_prk(&client_secret).map_err(|_| TlsError::InternalError)?;
 
-        self.client_traffic_secret.replace(client_traffic_secret);
-
-        /*info!(
-            "\n\nTRAFFIC {} secret {:x?}",
-            core::str::from_utf8(client_label).unwrap(),
-            client_secret
-        );*/
-        let server_secret = self.derive_secret(
+        self.server_state.calculate_traffic_secret(
             server_label,
-            ContextType::transcript_hash(self.transcript_hash_ref()?),
+            &mut self.shared,
+            transcript_hash,
         )?;
-        let server_traffic_secret =
-            Hkdf::<CipherSuite>::from_prk(&server_secret).map_err(|_| TlsError::InternalError)?;
 
-        self.server_traffic_secret.replace(server_traffic_secret);
-        /*info!(
-            "TRAFFIC {} secret {:x?}\n\n",
-            core::str::from_utf8(server_label).unwrap(),
-            server_secret
-        );*/
-        self.read_counter = 0;
-        self.write_counter = 0;
         Ok(())
-    }
-
-    fn derive_secret(
-        &mut self,
-        label: &[u8],
-        context_type: ContextType<CipherSuite>,
-    ) -> Result<HashArray<CipherSuite>, TlsError> {
-        self.hkdf
-            .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(label, context_type)
     }
 }
 
