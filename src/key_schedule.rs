@@ -1,6 +1,6 @@
 use crate::handshake::binder::PskBinder;
 use crate::handshake::finished::Finished;
-use crate::{TlsCipherSuite, TlsError};
+use crate::{config::TlsCipherSuite, TlsError};
 use digest::generic_array::ArrayLength;
 use heapless::Vec;
 use hmac::digest::OutputSizeUser;
