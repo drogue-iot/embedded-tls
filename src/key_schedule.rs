@@ -86,43 +86,44 @@ where
     }
 
     pub(crate) fn get_server_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
-        self.hkdf_expand_label(
+        self.make_expanded_hkdf_label(
+            b"key",
+            ContextType::None,
             self.server_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"key", ContextType::None, CipherSuite::KeyLen::to_u16())?,
         )
     }
 
     pub(crate) fn get_client_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
-        self.hkdf_expand_label(
+        self.make_expanded_hkdf_label(
+            b"key",
+            ContextType::None,
             self.client_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"key", ContextType::None, CipherSuite::KeyLen::to_u16())?,
         )
     }
 
     fn get_server_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        self.hkdf_expand_label(
+        self.make_expanded_hkdf_label(
+            b"iv",
+            ContextType::None,
             self.server_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"iv", ContextType::None, CipherSuite::IvLen::to_u16())?,
         )
     }
 
     fn get_client_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        self.hkdf_expand_label(
+        self.make_expanded_hkdf_label(
+            b"iv",
+            ContextType::None,
             self.client_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(b"iv", ContextType::None, CipherSuite::IvLen::to_u16())?,
         )
     }
 
     pub fn create_client_finished(
         &self,
     ) -> Result<Finished<HashOutputSize<CipherSuite>>, TlsError> {
-        let key = self.hkdf_expand_label::<HashOutputSize<CipherSuite>>(
+        let key = self.make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
+            b"finished",
+            ContextType::None,
             self.client_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(
-                b"finished",
-                ContextType::None,
-                HashOutputSize::<CipherSuite>::to_u16(),
-            )?,
         )?;
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
@@ -134,13 +135,10 @@ where
     }
 
     pub fn create_psk_binder(&self) -> Result<PskBinder<HashOutputSize<CipherSuite>>, TlsError> {
-        let key = self.hkdf_expand_label::<HashOutputSize<CipherSuite>>(
+        let key = self.make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
+            b"finished",
+            ContextType::None,
             self.binder_key.as_ref().unwrap(),
-            &self.make_hkdf_label(
-                b"finished",
-                ContextType::None,
-                HashOutputSize::<CipherSuite>::to_u16(),
-            )?,
         )?;
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
@@ -157,13 +155,10 @@ where
         //info!("verify server finished: {:x?}", finished.verify);
         //self.client_traffic_secret.as_ref().unwrap().expand()
         //info!("size ===> {}", D::OutputSize::to_u16());
-        let key = self.hkdf_expand_label::<HashOutputSize<CipherSuite>>(
+        let key = self.make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
+            b"finished",
+            ContextType::None,
             self.server_traffic_secret.as_ref().unwrap(),
-            &self.make_hkdf_label(
-                b"finished",
-                ContextType::None,
-                HashOutputSize::<CipherSuite>::to_u16(),
-            )?,
         )?;
         // info!("hmac sign key {:x?}", key);
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key).unwrap();
@@ -287,35 +282,23 @@ where
         label: &[u8],
         context_type: ContextType,
     ) -> Result<HashArray<CipherSuite>, TlsError> {
-        self.hkdf_expand_label(
+        self.make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
+            label,
+            context_type,
             self.hkdf.as_ref().unwrap(),
-            &self.make_hkdf_label(label, context_type, HashOutputSize::<CipherSuite>::to_u16())?,
         )
     }
 
-    fn hkdf_expand_label<N: ArrayLength<u8>>(
-        &self,
-        hkdf: &Hkdf<CipherSuite>,
-        label: &[u8],
-    ) -> Result<GenericArray<u8, N>, TlsError> {
-        let mut okm = GenericArray::default();
-        //info!("label {:x?}", label);
-        hkdf.expand(label, &mut okm)
-            .map_err(|_| TlsError::CryptoError)?;
-        //info!("expand {:x?}", okm);
-        Ok(okm)
-    }
-
-    fn make_hkdf_label(
+    fn make_expanded_hkdf_label<N: ArrayLength<u8>>(
         &self,
         label: &[u8],
         context_type: ContextType,
-        len: u16,
-    ) -> Result<Vec<u8, 512>, TlsError> {
+        hkdf: &Hkdf<CipherSuite>,
+    ) -> Result<GenericArray<u8, N>, TlsError> {
         //info!("make label {:?} {}", label, len);
-        let mut hkdf_label = Vec::new();
+        let mut hkdf_label = Vec::<u8, 512>::new();
         hkdf_label
-            .extend_from_slice(&len.to_be_bytes())
+            .extend_from_slice(&N::to_u16().to_be_bytes())
             .map_err(|_| TlsError::InternalError)?;
 
         let label_len = 6 + label.len() as u8;
@@ -352,7 +335,13 @@ where
                     .map_err(|_| TlsError::InternalError)?;
             }
         }
-        Ok(hkdf_label)
+
+        let mut okm = GenericArray::default();
+        //info!("label {:x?}", label);
+        hkdf.expand(&hkdf_label, &mut okm)
+            .map_err(|_| TlsError::CryptoError)?;
+        //info!("expand {:x?}", okm);
+        Ok(okm)
     }
 }
 
