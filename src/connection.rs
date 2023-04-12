@@ -176,9 +176,7 @@ where
 {
     let mut next_hash = key_schedule.transcript_hash().clone();
 
-    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| {
-        encrypt::<CipherSuite>(key_schedule, buf)
-    })?;
+    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| encrypt(key_schedule, buf))?;
 
     if let Some(range) = range {
         if let ClientRecord::Handshake(ClientHandshake::ClientHello(hello), false) = record {
@@ -294,29 +292,15 @@ impl<'a> State {
     {
         match self {
             State::ClientHello => {
-                key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
-                let client_hello = ClientRecord::client_hello(config, rng);
-                let (_, len) = encode_record(tx_buf, key_schedule, &client_hello)?;
+                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
 
-                transport
-                    .write_all(&tx_buf[..len])
-                    .await
-                    .map_err(|e| TlsError::Io(e.kind()))?;
+                respond(tx, transport, key_schedule).await?;
 
-                key_schedule.write_state().increment_counter();
-                if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) =
-                    client_hello
-                {
-                    handshake.secret.replace(client_hello.secret);
-                    Ok(State::ServerHello)
-                } else {
-                    Err(TlsError::EncodeError)
-                }
+                Ok(state)
             }
             State::ServerHello => {
                 let record = record_reader.read(transport, key_schedule).await?;
-                process_server_hello(handshake, key_schedule, record)?;
-                Ok(State::ServerVerify)
+                process_server_hello(handshake, key_schedule, record)
             }
             State::ServerVerify => {
                 /*info!(
@@ -328,61 +312,18 @@ impl<'a> State {
                 process_server_verify(handshake, key_schedule, config, record)
             }
             State::ClientCert => {
-                handshake
-                    .traffic_hash
-                    .replace(key_schedule.transcript_hash().clone());
+                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
 
-                let request_context = &handshake
-                    .certificate_request
-                    .as_ref()
-                    .ok_or(TlsError::InvalidHandshake)?
-                    .request_context;
+                respond(tx, transport, key_schedule).await?;
 
-                let certificate = if let Some(cert) = &config.cert {
-                    let mut certificate = CertificateRef::with_context(request_context);
-                    certificate.add(cert.into())?;
-                    certificate
-                } else {
-                    CertificateRef::with_context(&[])
-                };
-
-                let client_handshake = ClientHandshake::ClientCert(certificate);
-                let client_cert: ClientRecord<'a, '_, CipherSuite> =
-                    ClientRecord::Handshake(client_handshake, true);
-
-                let (next_hash, len) = encode_record(tx_buf, key_schedule, &client_cert)?;
-                transport
-                    .write_all(&tx_buf[..len])
-                    .await
-                    .map_err(|e| TlsError::Io(e.kind()))?;
-                key_schedule.write_state().increment_counter();
-                key_schedule.replace_transcript_hash(next_hash);
-                Ok(State::ClientFinished)
+                Ok(state)
             }
             State::ClientFinished => {
-                let client_finished = key_schedule
-                    .create_client_finished()
-                    .map_err(|_| TlsError::InvalidHandshake)?;
+                let tx = client_finished(key_schedule, tx_buf)?;
 
-                let client_finished = ClientHandshake::<CipherSuite>::Finished(client_finished);
-                let client_finished = ClientRecord::Handshake(client_finished, true);
+                respond(tx, transport, key_schedule).await?;
 
-                let (_, len) = encode_record(tx_buf, key_schedule, &client_finished)?;
-                transport
-                    .write_all(&tx_buf[..len])
-                    .await
-                    .map_err(|e| TlsError::Io(e.kind()))?;
-                key_schedule.write_state().increment_counter();
-
-                key_schedule.replace_transcript_hash(
-                    handshake
-                        .traffic_hash
-                        .take()
-                        .ok_or(TlsError::InvalidHandshake)?,
-                );
-                key_schedule.initialize_master_secret()?;
-
-                Ok(State::ApplicationData)
+                client_finished_finalize(key_schedule, handshake)
             }
             State::ApplicationData => Ok(State::ApplicationData),
         }
@@ -407,28 +348,15 @@ impl<'a> State {
     {
         match self {
             State::ClientHello => {
-                key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
-                let client_hello = ClientRecord::client_hello(config, rng);
-                let (_, len) = encode_record(tx_buf, key_schedule, &client_hello)?;
+                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
 
-                transport
-                    .write_all(&tx_buf[..len])
-                    .map_err(|e| TlsError::Io(e.kind()))?;
+                respond_blocking(tx, transport, key_schedule)?;
 
-                key_schedule.write_state().increment_counter();
-                if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) =
-                    client_hello
-                {
-                    handshake.secret.replace(client_hello.secret);
-                    Ok(State::ServerHello)
-                } else {
-                    Err(TlsError::EncodeError)
-                }
+                Ok(state)
             }
             State::ServerHello => {
                 let record = record_reader.read_blocking(transport, key_schedule)?;
-                process_server_hello(handshake, key_schedule, record)?;
-                Ok(State::ServerVerify)
+                process_server_hello(handshake, key_schedule, record)
             }
             State::ServerVerify => {
                 /*info!(
@@ -440,57 +368,81 @@ impl<'a> State {
                 process_server_verify(handshake, key_schedule, config, record)
             }
             State::ClientCert => {
-                handshake
-                    .traffic_hash
-                    .replace(key_schedule.transcript_hash().clone());
+                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
 
-                let request_context = &handshake
-                    .certificate_request
-                    .as_ref()
-                    .ok_or(TlsError::InvalidHandshake)?
-                    .request_context;
+                respond_blocking(tx, transport, key_schedule)?;
 
-                let mut certificate = CertificateRef::with_context(request_context);
-                if let Some(cert) = &config.cert {
-                    certificate.add(cert.into())?;
-                }
-                let client_handshake = ClientHandshake::ClientCert(certificate);
-                let client_cert = ClientRecord::<CipherSuite>::Handshake(client_handshake, true);
-
-                let (next_hash, len) = encode_record(tx_buf, key_schedule, &client_cert)?;
-                transport
-                    .write_all(&tx_buf[..len])
-                    .map_err(|e| TlsError::Io(e.kind()))?;
-                key_schedule.write_state().increment_counter();
-                key_schedule.replace_transcript_hash(next_hash);
-                Ok(State::ClientFinished)
+                Ok(state)
             }
             State::ClientFinished => {
-                let client_finished = key_schedule
-                    .create_client_finished()
-                    .map_err(|_| TlsError::InvalidHandshake)?;
+                let tx = client_finished(key_schedule, tx_buf)?;
 
-                let client_finished = ClientHandshake::<CipherSuite>::Finished(client_finished);
-                let client_finished = ClientRecord::Handshake(client_finished, true);
+                respond_blocking(tx, transport, key_schedule)?;
 
-                let (_, len) = encode_record(tx_buf, key_schedule, &client_finished)?;
-                transport
-                    .write_all(&tx_buf[..len])
-                    .map_err(|e| TlsError::Io(e.kind()))?;
-                key_schedule.write_state().increment_counter();
-
-                key_schedule.replace_transcript_hash(
-                    handshake
-                        .traffic_hash
-                        .take()
-                        .ok_or(TlsError::InvalidHandshake)?,
-                );
-                key_schedule.initialize_master_secret()?;
-
-                Ok(State::ApplicationData)
+                client_finished_finalize(key_schedule, handshake)
             }
             State::ApplicationData => Ok(State::ApplicationData),
         }
+    }
+}
+
+fn respond_blocking<CipherSuite>(
+    tx: &[u8],
+    transport: &mut impl BlockingWrite,
+    key_schedule: &mut KeySchedule<CipherSuite>,
+) -> Result<(), TlsError>
+where
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    transport
+        .write_all(tx)
+        .map_err(|e| TlsError::Io(e.kind()))?;
+
+    key_schedule.write_state().increment_counter();
+
+    Ok(())
+}
+
+#[cfg(feature = "async")]
+async fn respond<CipherSuite>(
+    tx: &[u8],
+    transport: &mut impl AsyncWrite,
+    key_schedule: &mut KeySchedule<CipherSuite>,
+) -> Result<(), TlsError>
+where
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    transport
+        .write_all(tx)
+        .await
+        .map_err(|e| TlsError::Io(e.kind()))?;
+
+    key_schedule.write_state().increment_counter();
+
+    Ok(())
+}
+
+fn client_hello<'r, CipherSuite, RNG, Verifier>(
+    key_schedule: &mut KeySchedule<CipherSuite>,
+    config: &TlsConfig<CipherSuite>,
+    rng: &mut RNG,
+    tx_buf: &'r mut [u8],
+    handshake: &mut Handshake<CipherSuite, Verifier>,
+) -> Result<(State, &'r [u8]), TlsError>
+where
+    RNG: CryptoRng + RngCore,
+    CipherSuite: TlsCipherSuite + 'static,
+    Verifier: TlsVerifier<CipherSuite>,
+{
+    key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
+    let client_hello = ClientRecord::client_hello(config, rng);
+    let (_, len) = encode_record(tx_buf, key_schedule, &client_hello)?;
+
+    if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) = client_hello {
+        handshake.secret.replace(client_hello.secret);
+        Ok((State::ServerHello, &tx_buf[..len]))
+    } else {
+        Err(TlsError::EncodeError)
     }
 }
 
@@ -498,30 +450,28 @@ fn process_server_hello<CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
     record: ServerRecord<'_, HashOutputSize<CipherSuite>>,
-) -> Result<(), TlsError>
+) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
     Verifier: TlsVerifier<CipherSuite>,
 {
-    {
-        match record {
-            ServerRecord::Handshake(server_handshake) => match server_handshake {
-                ServerHandshake::ServerHello(server_hello) => {
-                    trace!("********* ServerHello");
-                    let secret = handshake.secret.take().ok_or(TlsError::InvalidHandshake)?;
-                    let shared = server_hello
-                        .calculate_shared_secret(&secret)
-                        .ok_or(TlsError::InvalidKeyShare)?;
-                    key_schedule.initialize_handshake_secret(shared.raw_secret_bytes())?;
-                    Ok(())
-                }
-                _ => Err(TlsError::InvalidHandshake),
-            },
-            ServerRecord::Alert(alert) => {
-                Err(TlsError::HandshakeAborted(alert.level, alert.description))
+    match record {
+        ServerRecord::Handshake(server_handshake) => match server_handshake {
+            ServerHandshake::ServerHello(server_hello) => {
+                trace!("********* ServerHello");
+                let secret = handshake.secret.take().ok_or(TlsError::InvalidHandshake)?;
+                let shared = server_hello
+                    .calculate_shared_secret(&secret)
+                    .ok_or(TlsError::InvalidKeyShare)?;
+                key_schedule.initialize_handshake_secret(shared.raw_secret_bytes())?;
+                Ok(State::ServerVerify)
             }
-            _ => Err(TlsError::InvalidRecord),
+            _ => Err(TlsError::InvalidHandshake),
+        },
+        ServerRecord::Alert(alert) => {
+            Err(TlsError::HandshakeAborted(alert.level, alert.description))
         }
+        _ => Err(TlsError::InvalidRecord),
     }
 }
 
@@ -582,4 +532,75 @@ where
         Ok(())
     })?;
     Ok(state)
+}
+
+fn client_cert<'r, CipherSuite, Verifier>(
+    handshake: &mut Handshake<CipherSuite, Verifier>,
+    key_schedule: &mut KeySchedule<CipherSuite>,
+    config: &TlsConfig<CipherSuite>,
+    tx_buf: &'r mut [u8],
+) -> Result<(State, &'r [u8]), TlsError>
+where
+    CipherSuite: TlsCipherSuite + 'static,
+    Verifier: TlsVerifier<CipherSuite>,
+{
+    handshake
+        .traffic_hash
+        .replace(key_schedule.transcript_hash().clone());
+
+    let request_context = &handshake
+        .certificate_request
+        .as_ref()
+        .ok_or(TlsError::InvalidHandshake)?
+        .request_context;
+
+    let mut certificate = CertificateRef::with_context(request_context);
+    if let Some(cert) = &config.cert {
+        certificate.add(cert.into())?;
+    }
+    let client_handshake = ClientHandshake::ClientCert(certificate);
+    let client_cert = ClientRecord::Handshake(client_handshake, true);
+
+    let (next_hash, len) = encode_record(tx_buf, key_schedule, &client_cert)?;
+
+    key_schedule.replace_transcript_hash(next_hash);
+    Ok((State::ClientFinished, &tx_buf[..len]))
+}
+
+fn client_finished<'r, CipherSuite>(
+    key_schedule: &mut KeySchedule<CipherSuite>,
+    tx_buf: &'r mut [u8],
+) -> Result<&'r [u8], TlsError>
+where
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    let client_finished = key_schedule
+        .create_client_finished()
+        .map_err(|_| TlsError::InvalidHandshake)?;
+
+    let client_finished = ClientHandshake::Finished(client_finished);
+    let client_finished = ClientRecord::Handshake(client_finished, true);
+
+    let (_, len) = encode_record(tx_buf, key_schedule, &client_finished)?;
+
+    Ok(&tx_buf[..len])
+}
+
+fn client_finished_finalize<'r, CipherSuite, Verifier>(
+    key_schedule: &mut KeySchedule<CipherSuite>,
+    handshake: &mut Handshake<CipherSuite, Verifier>,
+) -> Result<State, TlsError>
+where
+    CipherSuite: TlsCipherSuite + 'static,
+    Verifier: TlsVerifier<CipherSuite>,
+{
+    key_schedule.replace_transcript_hash(
+        handshake
+            .traffic_hash
+            .take()
+            .ok_or(TlsError::InvalidHandshake)?,
+    );
+    key_schedule.initialize_master_secret()?;
+
+    Ok(State::ApplicationData)
 }

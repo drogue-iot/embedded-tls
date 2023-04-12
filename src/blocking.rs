@@ -130,7 +130,7 @@ where
             }
 
             if self.write_pos == max_block_size {
-                let len = encode_application_data_record_in_place::<CipherSuite>(
+                let len = encode_application_data_record_in_place(
                     self.record_write_buf,
                     self.write_pos,
                     &mut self.key_schedule,
@@ -153,7 +153,7 @@ where
     /// Force all previously written, buffered bytes to be encoded into a tls record and written to the connection.
     pub fn flush(&mut self) -> Result<(), TlsError> {
         if self.write_pos > 0 {
-            let len = encode_application_data_record_in_place::<CipherSuite>(
+            let len = encode_application_data_record_in_place(
                 self.record_write_buf,
                 self.write_pos,
                 &mut self.key_schedule,
@@ -210,7 +210,7 @@ where
             buffer_info: &mut self.decrypted,
             is_open: &mut self.opened,
         };
-        decrypt_record::<CipherSuite>(&mut self.key_schedule, record, |_key_schedule, record| {
+        decrypt_record(&mut self.key_schedule, record, |_key_schedule, record| {
             handler.handle(record)
         })?;
 
@@ -223,8 +223,7 @@ where
             self.opened,
         );
 
-        let (_, len) =
-            encode_record::<CipherSuite>(self.record_write_buf, &mut self.key_schedule, &record)?;
+        let (_, len) = encode_record(self.record_write_buf, &mut self.key_schedule, &record)?;
 
         self.delegate
             .write_all(&self.record_write_buf[..len])
