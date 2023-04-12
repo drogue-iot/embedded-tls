@@ -176,9 +176,7 @@ where
 {
     let mut next_hash = key_schedule.transcript_hash().clone();
 
-    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| {
-        encrypt::<CipherSuite>(key_schedule, buf)
-    })?;
+    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| encrypt(key_schedule, buf))?;
 
     if let Some(range) = range {
         if let ClientRecord::Handshake(ClientHandshake::ClientHello(hello), false) = record {
