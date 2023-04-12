@@ -146,7 +146,7 @@ where
     }
 
     pub(crate) fn replace_transcript_hash(&mut self, hash: CipherSuite::Hash) {
-        self.transcript_hash.replace(hash);
+        self.transcript_hash = Some(hash);
     }
 
     pub(crate) fn increment_read_counter(&mut self) {
