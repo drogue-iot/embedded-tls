@@ -1,6 +1,6 @@
 use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::key_schedule::KeySchedule;
+use crate::key_schedule::{HashOutputSize, KeySchedule};
 use crate::record::{encode_application_data_in_place, ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
 use crate::TlsError;
@@ -38,14 +38,13 @@ use crate::content_types::ContentType;
 // use crate::handshake::server_hello::ServerHello;
 use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
-use digest::OutputSizeUser;
 
 pub(crate) fn decrypt_record<'m, CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite>,
-    record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
+    record: ServerRecord<'m, HashOutputSize<CipherSuite>>,
     mut cb: impl FnMut(
         &mut KeySchedule<CipherSuite>,
-        ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
+        ServerRecord<'m, HashOutputSize<CipherSuite>>,
     ) -> Result<(), TlsError>,
 ) -> Result<(), TlsError>
 where
@@ -193,7 +192,7 @@ where
             // but won't actually be added to the record buffer until the end.
             if let Some((_, identities)) = &hello.config.psk {
                 let binders_len =
-                    identities.len() * (1 + <CipherSuite::Hash as OutputSizeUser>::output_size());
+                    identities.len() * (1 + HashOutputSize::<CipherSuite>::to_usize());
 
                 // NOTE: Exclude the binders_len itself from the digest
                 Digest::update(
@@ -456,8 +455,7 @@ impl<'a> State {
                     certificate.add(cert.into())?;
                 }
                 let client_handshake = ClientHandshake::ClientCert(certificate);
-                let client_cert: ClientRecord<'a, '_, CipherSuite> =
-                    ClientRecord::Handshake(client_handshake, true);
+                let client_cert = ClientRecord::<CipherSuite>::Handshake(client_handshake, true);
 
                 let (next_hash, len) = encode_record(tx_buf, key_schedule, &client_cert)?;
                 transport
@@ -499,7 +497,7 @@ impl<'a> State {
 fn process_server_hello<CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
-    record: ServerRecord<'_, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
+    record: ServerRecord<'_, HashOutputSize<CipherSuite>>,
 ) -> Result<(), TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
@@ -531,7 +529,7 @@ fn process_server_verify<'a, CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
     config: &TlsConfig<'a, CipherSuite>,
-    record: ServerRecord<'_, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
+    record: ServerRecord<'_, HashOutputSize<CipherSuite>>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,

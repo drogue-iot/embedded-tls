@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use digest::OutputSizeUser;
+use crate::key_schedule::HashOutputSize;
 use embedded_io::{blocking::Read as BlockingRead, Error};
 
 #[cfg(feature = "async")]
@@ -43,7 +43,7 @@ where
         &'m mut self,
         transport: &mut impl AsyncRead,
         key_schedule: &mut KeySchedule<CipherSuite>,
-    ) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
+    ) -> Result<ServerRecord<'m, HashOutputSize<CipherSuite>>, TlsError>
     where
         CipherSuite: TlsCipherSuite + 'static,
     {
@@ -84,7 +84,7 @@ where
         &'m mut self,
         transport: &mut impl BlockingRead,
         key_schedule: &mut KeySchedule<CipherSuite>,
-    ) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
+    ) -> Result<ServerRecord<'m, HashOutputSize<CipherSuite>>, TlsError>
     where
         CipherSuite: TlsCipherSuite + 'static,
     {

@@ -67,7 +67,7 @@ where
         let handshake_hash = self.certificate_transcript.take().unwrap();
         let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
         let mut msg: Vec<u8, 130> = Vec::new();
-        msg.resize(64, 0x20u8).map_err(|_| TlsError::EncodeError)?;
+        msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
         msg.extend_from_slice(ctx_str)
             .map_err(|_| TlsError::EncodeError)?;
         msg.extend_from_slice(&handshake_hash.finalize())
