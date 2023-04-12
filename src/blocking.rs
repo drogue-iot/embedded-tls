@@ -130,19 +130,7 @@ where
             }
 
             if self.write_pos == max_block_size {
-                let key_schedule = self.key_schedule.write_state();
-                let len = encode_application_data_record_in_place(
-                    self.record_write_buf,
-                    self.write_pos,
-                    key_schedule,
-                )?;
-
-                self.delegate
-                    .write_all(&self.record_write_buf[..len])
-                    .map_err(|e| TlsError::Io(e.kind()))?;
-
-                key_schedule.increment_counter();
-                self.write_pos = 0;
+                self.flush()?;
             }
 
             Ok(buffered)
