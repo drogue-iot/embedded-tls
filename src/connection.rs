@@ -41,10 +41,10 @@ use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 use digest::OutputSizeUser;
 
 pub(crate) fn decrypt_record<'m, CipherSuite>(
-    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    key_schedule: &mut KeySchedule<CipherSuite>,
     record: ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
     mut cb: impl FnMut(
-        &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+        &mut KeySchedule<CipherSuite>,
         ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
     ) -> Result<(), TlsError>,
 ) -> Result<(), TlsError>
@@ -129,7 +129,7 @@ where
 }
 
 pub(crate) fn encrypt<CipherSuite>(
-    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    key_schedule: &mut KeySchedule<CipherSuite>,
     buf: &mut CryptoBuffer<'_>,
 ) -> Result<usize, TlsError>
 where
@@ -169,7 +169,7 @@ where
 
 pub fn encode_record<'m, CipherSuite>(
     tx_buf: &mut [u8],
-    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    key_schedule: &mut KeySchedule<CipherSuite>,
     record: &ClientRecord<'_, 'm, CipherSuite>,
 ) -> Result<(CipherSuite::Hash, usize), TlsError>
 where
@@ -227,7 +227,7 @@ where
 pub fn encode_application_data_record_in_place<CipherSuite>(
     tx_buf: &mut [u8],
     data_len: usize,
-    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    key_schedule: &mut KeySchedule<CipherSuite>,
 ) -> Result<usize, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
@@ -283,7 +283,7 @@ impl<'a> State {
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
         tx_buf: &mut [u8],
-        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+        key_schedule: &mut KeySchedule<CipherSuite>,
         config: &TlsConfig<'a, CipherSuite>,
         rng: &mut RNG,
     ) -> Result<State, TlsError>
@@ -396,7 +396,7 @@ impl<'a> State {
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
         tx_buf: &mut [u8],
-        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+        key_schedule: &mut KeySchedule<CipherSuite>,
         config: &TlsConfig<'a, CipherSuite>,
         rng: &mut RNG,
     ) -> Result<State, TlsError>
@@ -498,7 +498,7 @@ impl<'a> State {
 
 fn process_server_hello<CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
-    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    key_schedule: &mut KeySchedule<CipherSuite>,
     record: ServerRecord<'_, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
 ) -> Result<(), TlsError>
 where
@@ -529,7 +529,7 @@ where
 
 fn process_server_verify<'a, CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
-    key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    key_schedule: &mut KeySchedule<CipherSuite>,
     config: &TlsConfig<'a, CipherSuite>,
     record: ServerRecord<'_, <CipherSuite::Hash as OutputSizeUser>::OutputSize>,
 ) -> Result<State, TlsError>

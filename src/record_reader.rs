@@ -42,7 +42,7 @@ where
     pub async fn read<'m>(
         &'m mut self,
         transport: &mut impl AsyncRead,
-        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+        key_schedule: &mut KeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
     where
         CipherSuite: TlsCipherSuite + 'static,
@@ -83,7 +83,7 @@ where
     pub fn read_blocking<'m>(
         &'m mut self,
         transport: &mut impl BlockingRead,
-        key_schedule: &mut KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+        key_schedule: &mut KeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, <CipherSuite::Hash as OutputSizeUser>::OutputSize>, TlsError>
     where
         CipherSuite: TlsCipherSuite + 'static,
@@ -138,7 +138,7 @@ mod tests {
     use core::convert::Infallible;
 
     use super::*;
-    use crate::{content_types::ContentType, Aes128GcmSha256, TlsCipherSuite};
+    use crate::{content_types::ContentType, Aes128GcmSha256};
 
     struct ChunkRead<'a>(&'a [u8], usize);
 
@@ -205,11 +205,7 @@ mod tests {
 
         let mut buf = [0; 32];
         let mut reader = RecordReader::<Aes128GcmSha256>::new(&mut buf);
-        let mut key_schedule = KeySchedule::<
-            <Aes128GcmSha256 as TlsCipherSuite>::Hash,
-            <Aes128GcmSha256 as TlsCipherSuite>::KeyLen,
-            <Aes128GcmSha256 as TlsCipherSuite>::IvLen,
-        >::new();
+        let mut key_schedule = KeySchedule::<Aes128GcmSha256>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
@@ -268,11 +264,7 @@ mod tests {
 
         let mut buf = [0; 5]; // This buffer is so small that it cannot contain both the header and data
         let mut reader = RecordReader::<Aes128GcmSha256>::new(&mut buf);
-        let mut key_schedule = KeySchedule::<
-            <Aes128GcmSha256 as TlsCipherSuite>::Hash,
-            <Aes128GcmSha256 as TlsCipherSuite>::KeyLen,
-            <Aes128GcmSha256 as TlsCipherSuite>::IvLen,
-        >::new();
+        let mut key_schedule = KeySchedule::<Aes128GcmSha256>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
@@ -324,11 +316,7 @@ mod tests {
 
         let mut buf = [0; 32];
         let mut reader = RecordReader::<Aes128GcmSha256>::new(&mut buf);
-        let mut key_schedule = KeySchedule::<
-            <Aes128GcmSha256 as TlsCipherSuite>::Hash,
-            <Aes128GcmSha256 as TlsCipherSuite>::KeyLen,
-            <Aes128GcmSha256 as TlsCipherSuite>::IvLen,
-        >::new();
+        let mut key_schedule = KeySchedule::<Aes128GcmSha256>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader

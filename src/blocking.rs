@@ -29,7 +29,7 @@ where
 {
     delegate: Socket,
     opened: bool,
-    key_schedule: KeySchedule<CipherSuite::Hash, CipherSuite::KeyLen, CipherSuite::IvLen>,
+    key_schedule: KeySchedule<CipherSuite>,
     record_reader: RecordReader<'a, CipherSuite>,
     record_write_buf: &'a mut [u8],
     write_pos: usize,
