@@ -229,9 +229,7 @@ pub fn encode_application_data_record_in_place<CipherSuite>(
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    encode_application_data_in_place(tx_buf, data_len, |buf| {
-        encrypt::<CipherSuite>(key_schedule, buf)
-    })
+    encode_application_data_in_place(tx_buf, data_len, |buf| encrypt(key_schedule, buf))
 }
 
 pub struct Handshake<CipherSuite, Verifier>
