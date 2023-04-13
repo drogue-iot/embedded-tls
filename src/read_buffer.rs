@@ -69,6 +69,16 @@ impl<'a> ReadBuffer<'a> {
     pub fn revert(self) {
         core::mem::forget(self);
     }
+
+    /// Tries to fills the buffer by consuming and copying bytes into it.
+    #[inline]
+    pub fn pop_into(&mut self, buf: &mut [u8]) -> usize {
+        let to_copy = self.pop(buf.len());
+
+        buf[..to_copy.len()].copy_from_slice(to_copy);
+
+        to_copy.len()
+    }
 }
 
 impl Drop for ReadBuffer<'_> {
