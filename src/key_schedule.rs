@@ -241,7 +241,7 @@ where
         self.server_state.transcript_hash = hash;
     }
 
-    pub fn split(
+    pub fn as_split(
         &mut self,
     ) -> (
         &mut WriteKeySchedule<CipherSuite>,
