@@ -281,25 +281,6 @@ where
         Ok(Finished { verify, hash: None })
     }
 
-    pub fn create_psk_binder(&self) -> Result<PskBinder<HashOutputSize<CipherSuite>>, TlsError> {
-        let key = self
-            .client_state
-            .binder_key
-            .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
-                b"finished",
-                ContextType::None,
-            )?;
-
-        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
-            .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(
-            &mut hmac,
-            &self.server_state.transcript_hash.clone().finalize(),
-        );
-        let verify = hmac.finalize().into_bytes();
-        Ok(PskBinder { verify })
-    }
-
     fn get_nonce(counter: u64, iv: &IvArray<CipherSuite>) -> IvArray<CipherSuite> {
         //info!("counter = {} {:x?}", counter, &counter.to_be_bytes(),);
         let counter = Self::pad::<CipherSuite::IvLen>(&counter.to_be_bytes());
@@ -425,6 +406,24 @@ where
 
     pub(crate) fn get_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
         self.state.get_nonce()
+    }
+
+    pub fn create_psk_binder(
+        &self,
+        transcript_hash: &CipherSuite::Hash,
+    ) -> Result<PskBinder<HashOutputSize<CipherSuite>>, TlsError> {
+        let key = self
+            .binder_key
+            .make_expanded_hkdf_label::<HashOutputSize<CipherSuite>>(
+                b"finished",
+                ContextType::None,
+            )?;
+
+        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
+            .map_err(|_| TlsError::CryptoError)?;
+        Mac::update(&mut hmac, &transcript_hash.clone().finalize());
+        let verify = hmac.finalize().into_bytes();
+        Ok(PskBinder { verify })
     }
 }
 

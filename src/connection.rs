@@ -164,16 +164,17 @@ where
 
 pub fn encode_record<'m, CipherSuite>(
     tx_buf: &mut [u8],
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    read_key_schedule: &mut ReadKeySchedule<CipherSuite>,
+    write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
     record: &ClientRecord<'_, 'm, CipherSuite>,
 ) -> Result<(CipherSuite::Hash, usize), TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let mut next_hash = key_schedule.transcript_hash().clone();
+    let mut next_hash = read_key_schedule.transcript_hash().clone();
 
     let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| {
-        encrypt(key_schedule.write_state(), buf)
+        encrypt(write_key_schedule, buf)
     })?;
 
     if let Some(range) = range {
@@ -192,7 +193,7 @@ where
 
                 // NOTE: Exclude the binders_len itself from the digest
                 Digest::update(
-                    key_schedule.transcript_hash(),
+                    read_key_schedule.transcript_hash(),
                     &tx_buf[range.start..range.end - binders_len - 2],
                 );
 
@@ -200,19 +201,20 @@ where
                 let mut buf = CryptoBuffer::wrap(&mut tx_buf[range.end - binders_len..]);
                 // Create a binder and encode for each identity
                 for _id in identities {
-                    let binder = key_schedule.create_psk_binder()?;
+                    let binder = write_key_schedule
+                        .create_psk_binder(read_key_schedule.transcript_hash())?;
                     binder.encode(&mut buf)?;
                 }
 
                 Digest::update(
-                    key_schedule.transcript_hash(),
+                    read_key_schedule.transcript_hash(),
                     &tx_buf[range.end - binders_len - 2..range.end],
                 );
             } else {
-                Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
+                Digest::update(read_key_schedule.transcript_hash(), &tx_buf[range]);
             }
         } else {
-            Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
+            Digest::update(read_key_schedule.transcript_hash(), &tx_buf[range]);
         }
     }
 
@@ -434,7 +436,8 @@ where
 {
     key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
     let client_hello = ClientRecord::client_hello(config, rng);
-    let (_, len) = encode_record(tx_buf, key_schedule, &client_hello)?;
+    let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
+    let (_, len) = encode_record(tx_buf, read_key_schedule, write_key_schedule, &client_hello)?;
 
     if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) = client_hello {
         handshake.secret.replace(client_hello.secret);
@@ -559,7 +562,9 @@ where
     let client_handshake = ClientHandshake::ClientCert(certificate);
     let client_cert = ClientRecord::Handshake(client_handshake, true);
 
-    let (next_hash, len) = encode_record(tx_buf, key_schedule, &client_cert)?;
+    let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
+    let (next_hash, len) =
+        encode_record(tx_buf, read_key_schedule, write_key_schedule, &client_cert)?;
 
     key_schedule.replace_transcript_hash(next_hash);
     Ok((State::ClientFinished, &tx_buf[..len]))
@@ -579,7 +584,13 @@ where
     let client_finished = ClientHandshake::Finished(client_finished);
     let client_finished = ClientRecord::Handshake(client_finished, true);
 
-    let (_, len) = encode_record(tx_buf, key_schedule, &client_finished)?;
+    let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
+    let (_, len) = encode_record(
+        tx_buf,
+        read_key_schedule,
+        write_key_schedule,
+        &client_finished,
+    )?;
 
     Ok(&tx_buf[..len])
 }

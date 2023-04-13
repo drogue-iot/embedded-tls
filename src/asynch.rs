@@ -219,7 +219,13 @@ where
             self.opened,
         );
 
-        let (_, len) = encode_record(self.record_write_buf, &mut self.key_schedule, &record)?;
+        let (write_key_schedule, read_key_schedule) = self.key_schedule.as_split();
+        let (_, len) = encode_record(
+            self.record_write_buf,
+            read_key_schedule,
+            write_key_schedule,
+            &record,
+        )?;
 
         self.delegate
             .write_all(&self.record_write_buf[..len])
