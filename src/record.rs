@@ -57,6 +57,13 @@ where
         )
     }
 
+    pub fn close_notify(opened: bool) -> Self {
+        ClientRecord::Alert(
+            Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
+            opened,
+        )
+    }
+
     pub(crate) fn encode<
         N: Digest + Clone,
         F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>,
