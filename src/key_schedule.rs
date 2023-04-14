@@ -2,14 +2,14 @@ use crate::handshake::binder::PskBinder;
 use crate::handshake::finished::Finished;
 use crate::{config::TlsCipherSuite, TlsError};
 use digest::generic_array::ArrayLength;
-use heapless::Vec;
-use hmac::digest::OutputSizeUser;
+use digest::OutputSizeUser;
 use hmac::{Mac, SimpleHmac};
 use sha2::digest::generic_array::{typenum::Unsigned, GenericArray};
 use sha2::Digest;
 
 pub type HashOutputSize<CipherSuite> =
     <<CipherSuite as TlsCipherSuite>::Hash as OutputSizeUser>::OutputSize;
+pub type LabelBufferSize<CipherSuite> = <CipherSuite as TlsCipherSuite>::LabelBufferSize;
 
 pub type IvArray<CipherSuite> = GenericArray<u8, <CipherSuite as TlsCipherSuite>::IvLen>;
 pub type KeyArray<CipherSuite> = GenericArray<u8, <CipherSuite as TlsCipherSuite>::KeyLen>;
@@ -296,7 +296,7 @@ where
         hkdf: &Hkdf<CipherSuite>,
     ) -> Result<GenericArray<u8, N>, TlsError> {
         //info!("make label {:?} {}", label, len);
-        let mut hkdf_label = Vec::<u8, 512>::new();
+        let mut hkdf_label = heapless_typenum::Vec::<u8, LabelBufferSize<CipherSuite>>::new();
         hkdf_label
             .extend_from_slice(&N::to_u16().to_be_bytes())
             .map_err(|_| TlsError::InternalError)?;

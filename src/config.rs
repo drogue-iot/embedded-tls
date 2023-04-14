@@ -14,9 +14,17 @@ use heapless::Vec;
 use rand_core::{CryptoRng, RngCore};
 pub use sha2::Sha256;
 pub use sha2::Sha384;
-use typenum::{U12, U16, U32};
+use typenum::{Sum, U10, U12, U16, U32};
 
 const TLS_RECORD_MAX: usize = 16384;
+
+// longest label is 12b -> buf <= 2 + 1 + 6 + longest + 1 + hash_out = hash_out + 22
+type LongestLabel = U12;
+type LabelOverhead = U10;
+type LabelBuffer<CipherSuite> = Sum<
+    <<CipherSuite as TlsCipherSuite>::Hash as OutputSizeUser>::OutputSize,
+    Sum<LongestLabel, LabelOverhead>,
+>;
 
 /// Represents a TLS 1.3 cipher suite
 pub trait TlsCipherSuite {
@@ -26,6 +34,7 @@ pub trait TlsCipherSuite {
     type IvLen: ArrayLength<u8>;
 
     type Hash: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser + FixedOutput;
+    type LabelBufferSize: ArrayLength<u8>;
 }
 
 pub struct Aes128GcmSha256;
@@ -36,6 +45,7 @@ impl TlsCipherSuite for Aes128GcmSha256 {
     type IvLen = U12;
 
     type Hash = Sha256;
+    type LabelBufferSize = LabelBuffer<Self>;
 }
 
 pub struct Aes256GcmSha384;
@@ -46,6 +56,7 @@ impl TlsCipherSuite for Aes256GcmSha384 {
     type IvLen = U12;
 
     type Hash = Sha384;
+    type LabelBufferSize = LabelBuffer<Self>;
 }
 
 /// A TLS 1.3 verifier.
