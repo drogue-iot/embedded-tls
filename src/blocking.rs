@@ -177,12 +177,10 @@ where
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
         let mut buffer = self.read_buffered()?;
 
-        let to_copy = buffer.pop(buf.len());
+        let len = buffer.pop_into(buf);
+        trace!("Copied {} bytes", len);
 
-        trace!("Got {} bytes to copy", to_copy.len());
-        buf[..to_copy.len()].copy_from_slice(to_copy);
-
-        Ok(to_copy.len())
+        Ok(len)
     }
 
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
