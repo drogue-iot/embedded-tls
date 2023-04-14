@@ -45,10 +45,9 @@ pem-parser = "0.1.1"
 openssl = "0.10.44"
 
 [features]
-default = ["std", "async", "log", "tokio", "split"]
+default = ["std", "async", "log", "tokio"]
 defmt = ["dep:defmt", "embedded-io/defmt", "heapless/defmt-impl"]
 std = ["embedded-io/std"]
 tokio = ["embedded-io/tokio"]
 async = ["embedded-io/async"]
 alloc = []
-split = ["std"]

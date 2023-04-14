@@ -81,6 +81,7 @@ pub mod read_buffer;
 mod record;
 mod record_reader;
 mod signature_schemes;
+mod split;
 mod supported_versions;
 mod write_buffer;
 
