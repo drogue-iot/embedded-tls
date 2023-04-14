@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicBool, Ordering};
+use atomic_polyfill::{AtomicBool, Ordering};
 
 pub trait SplitState: Clone {
     fn same(&self, other: &Self) -> bool;

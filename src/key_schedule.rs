@@ -200,7 +200,11 @@ where
     }
 
     fn empty_hash() -> Self {
-        Self::Hash(CipherSuite::Hash::new().chain_update([]).finalize())
+        Self::Hash(
+            <CipherSuite::Hash as Digest>::new()
+                .chain_update([])
+                .finalize(),
+        )
     }
 }
 
@@ -226,7 +230,7 @@ where
             },
             server_state: ReadKeySchedule {
                 state: KeyScheduleState::new(),
-                transcript_hash: CipherSuite::Hash::new(),
+                transcript_hash: <CipherSuite::Hash as Digest>::new(),
             },
         }
     }
