@@ -1,4 +1,3 @@
-use crate::alert::*;
 use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
 use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::*;
@@ -224,10 +223,7 @@ where
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
     async fn close_internal(&mut self) -> Result<(), TlsError> {
-        let record = ClientRecord::Alert(
-            Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
-            self.opened,
-        );
+        let record = ClientRecord::close_notify(self.opened);
 
         let (_, len) = encode_record(self.record_write_buf, &mut self.key_schedule, &record)?;
 
