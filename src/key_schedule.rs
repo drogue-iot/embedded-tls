@@ -25,7 +25,7 @@ where
     CipherSuite: TlsCipherSuite,
 {
     secret: HashArray<CipherSuite>,
-    transcript_hash: Option<CipherSuite::Hash>,
+    transcript_hash: CipherSuite::Hash,
     hkdf: Option<Hkdf<CipherSuite>>,
     client_traffic_secret: Option<Hkdf<CipherSuite>>,
     server_traffic_secret: Option<Hkdf<CipherSuite>>,
@@ -47,7 +47,7 @@ where
     pub fn new() -> Self {
         Self {
             secret: Self::zero(),
-            transcript_hash: Some(CipherSuite::Hash::new()),
+            transcript_hash: CipherSuite::Hash::new(),
             hkdf: None,
             client_traffic_secret: None,
             server_traffic_secret: None,
@@ -58,11 +58,11 @@ where
     }
 
     pub(crate) fn transcript_hash(&mut self) -> &mut CipherSuite::Hash {
-        self.transcript_hash.as_mut().unwrap()
+        &mut self.transcript_hash
     }
 
     pub(crate) fn replace_transcript_hash(&mut self, hash: CipherSuite::Hash) {
-        self.transcript_hash.replace(hash);
+        self.transcript_hash = hash;
     }
 
     pub(crate) fn increment_read_counter(&mut self) {
@@ -127,10 +127,7 @@ where
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
             .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(
-            &mut hmac,
-            &self.transcript_hash.as_ref().unwrap().clone().finalize(),
-        );
+        Mac::update(&mut hmac, &self.transcript_hash.clone().finalize());
         let verify = hmac.finalize().into_bytes();
 
         Ok(Finished { verify, hash: None })
@@ -148,10 +145,7 @@ where
 
         let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
             .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(
-            &mut hmac,
-            &self.transcript_hash.as_ref().unwrap().clone().finalize(),
-        );
+        Mac::update(&mut hmac, &self.transcript_hash.clone().finalize());
         let verify = hmac.finalize().into_bytes();
         Ok(PskBinder { verify })
     }
@@ -340,7 +334,7 @@ where
                 hkdf_label.push(0).map_err(|_| TlsError::InternalError)?;
             }
             ContextType::TranscriptHash => {
-                let context = self.transcript_hash.as_ref().unwrap().clone().finalize();
+                let context = self.transcript_hash.clone().finalize();
                 hkdf_label
                     .extend_from_slice(&(context.len() as u8).to_be_bytes())
                     .map_err(|_| TlsError::InternalError)?;
