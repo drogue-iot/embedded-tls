@@ -229,6 +229,30 @@ where
             Err(e) => Err((self.delegate, e)),
         }
     }
+
+    #[cfg(feature = "split")]
+    pub fn split(
+        self,
+    ) -> (
+        TlsReader<'a, Socket, CipherSuite>,
+        TlsWriter<'a, Socket, CipherSuite>,
+    )
+    where
+        Socket: Clone,
+    {
+        split::split(self)
+    }
+
+    #[cfg(feature = "split")]
+    pub fn unsplit(
+        reader: TlsReader<'a, Socket, CipherSuite>,
+        writer: TlsWriter<'a, Socket, CipherSuite>,
+    ) -> Self
+    where
+        Socket: Clone,
+    {
+        split::unsplit(reader, writer)
+    }
 }
 
 impl<'a, Socket, CipherSuite> Io for TlsConnection<'a, Socket, CipherSuite>
@@ -276,3 +300,241 @@ where
         TlsConnection::flush(self).await
     }
 }
+
+#[cfg(feature = "split")]
+mod split {
+    use super::*;
+
+    use crate::key_schedule::{ReadKeySchedule, SharedState, WriteKeySchedule};
+    use core::sync::atomic::Ordering;
+    use std::{sync::atomic::AtomicBool, sync::Arc};
+
+    pub struct TlsReader<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncRead + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        opened: Arc<AtomicBool>,
+        delegate: Socket,
+        key_schedule: ReadKeySchedule<CipherSuite>,
+        record_reader: RecordReader<'a, CipherSuite>,
+        decrypted: DecryptedBufferInfo,
+    }
+
+    impl<'a, Socket, CipherSuite> AsRef<Socket> for TlsReader<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncRead + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        fn as_ref(&self) -> &Socket {
+            &self.delegate
+        }
+    }
+
+    impl<'a, Socket, CipherSuite> TlsReader<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncRead + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        fn create_read_buffer(&mut self) -> ReadBuffer {
+            self.decrypted.create_read_buffer(self.record_reader.buf)
+        }
+
+        /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
+        pub async fn read_buffered(&mut self) -> Result<ReadBuffer, TlsError> {
+            if self.opened.load(Ordering::Acquire) {
+                while self.decrypted.is_empty() {
+                    self.read_application_data().await?;
+                }
+
+                Ok(self.create_read_buffer())
+            } else {
+                Err(TlsError::MissingHandshake)
+            }
+        }
+
+        async fn read_application_data(&mut self) -> Result<(), TlsError> {
+            let buf_ptr_range = self.record_reader.buf.as_ptr_range();
+            let record = self
+                .record_reader
+                .read(&mut self.delegate, &mut self.key_schedule)
+                .await?;
+
+            let mut opened = self.opened.load(Ordering::Acquire);
+            let mut handler = DecryptedReadHandler {
+                source_buffer: buf_ptr_range,
+                buffer_info: &mut self.decrypted,
+                is_open: &mut opened,
+            };
+            let result = decrypt_record(&mut self.key_schedule, record, |_key_schedule, record| {
+                handler.handle(record)
+            });
+
+            if !opened {
+                self.opened.store(false, Ordering::Release);
+            }
+            result
+        }
+    }
+
+    pub struct TlsWriter<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncWrite + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        opened: Arc<AtomicBool>,
+        delegate: Socket,
+        key_schedule_shared: SharedState<CipherSuite>,
+        key_schedule: WriteKeySchedule<CipherSuite>,
+        record_write_buf: &'a mut [u8],
+        write_pos: usize,
+    }
+
+    impl<'a, Socket, CipherSuite> AsRef<Socket> for TlsWriter<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncWrite + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        fn as_ref(&self) -> &Socket {
+            &self.delegate
+        }
+    }
+
+    impl<'a, Socket, CipherSuite> Io for TlsWriter<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncWrite + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        type Error = TlsError;
+    }
+
+    impl<'a, Socket, CipherSuite> Io for TlsReader<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncRead + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        type Error = TlsError;
+    }
+
+    impl<'a, Socket, CipherSuite> AsyncRead for TlsReader<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncRead + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+            let mut buffer = self.read_buffered().await?;
+
+            let len = buffer.pop_into(buf);
+            trace!("Copied {} bytes", len);
+
+            Ok(len)
+        }
+    }
+
+    impl<'a, Socket, CipherSuite> AsyncWrite for TlsWriter<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncWrite + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+            if self.opened.load(Ordering::Acquire) {
+                let max_block_size = self.record_write_buf.len() - TLS_RECORD_OVERHEAD;
+                let buffered = usize::min(buf.len(), max_block_size - self.write_pos);
+                if buffered > 0 {
+                    self.record_write_buf[self.write_pos..self.write_pos + buffered]
+                        .copy_from_slice(&buf[..buffered]);
+                    self.write_pos += buffered;
+                }
+
+                if self.write_pos == max_block_size {
+                    self.flush().await?;
+                }
+
+                Ok(buffered)
+            } else {
+                Err(TlsError::MissingHandshake)
+            }
+        }
+
+        async fn flush(&mut self) -> Result<(), Self::Error> {
+            if self.write_pos > 0 {
+                let len = encode_application_data_record_in_place(
+                    self.record_write_buf,
+                    self.write_pos,
+                    &mut self.key_schedule,
+                )?;
+
+                self.delegate
+                    .write_all(&self.record_write_buf[..len])
+                    .await
+                    .map_err(|e| TlsError::Io(e.kind()))?;
+
+                self.key_schedule.increment_counter();
+                self.write_pos = 0;
+            }
+
+            Ok(())
+        }
+    }
+
+    pub(super) fn split<'a, Socket, CipherSuite>(
+        connection: TlsConnection<'a, Socket, CipherSuite>,
+    ) -> (
+        TlsReader<'a, Socket, CipherSuite>,
+        TlsWriter<'a, Socket, CipherSuite>,
+    )
+    where
+        Socket: AsyncRead + AsyncWrite + 'a,
+        Socket: Clone,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        let opened = Arc::new(AtomicBool::new(connection.opened));
+        let (shared, wks, rks) = connection.key_schedule.split();
+
+        let reader = TlsReader {
+            opened: opened.clone(),
+            delegate: connection.delegate.clone(),
+            key_schedule: rks,
+            record_reader: connection.record_reader,
+            decrypted: connection.decrypted,
+        };
+        let writer = TlsWriter {
+            opened,
+            delegate: connection.delegate,
+            key_schedule_shared: shared,
+            key_schedule: wks,
+            record_write_buf: connection.record_write_buf,
+            write_pos: connection.write_pos,
+        };
+
+        (reader, writer)
+    }
+
+    pub(super) fn unsplit<'a, Socket, CipherSuite>(
+        reader: TlsReader<'a, Socket, CipherSuite>,
+        writer: TlsWriter<'a, Socket, CipherSuite>,
+    ) -> TlsConnection<'a, Socket, CipherSuite>
+    where
+        Socket: AsyncRead + AsyncWrite + 'a,
+        CipherSuite: TlsCipherSuite + 'static,
+    {
+        debug_assert!(Arc::ptr_eq(&reader.opened, &writer.opened));
+
+        TlsConnection {
+            delegate: writer.delegate,
+            opened: writer.opened.load(Ordering::Relaxed),
+            key_schedule: KeySchedule::unsplit(
+                writer.key_schedule_shared,
+                writer.key_schedule,
+                reader.key_schedule,
+            ),
+            record_reader: reader.record_reader,
+            record_write_buf: writer.record_write_buf,
+            write_pos: writer.write_pos,
+            decrypted: reader.decrypted,
+        }
+    }
+}
+
+#[cfg(feature = "split")]
+pub use split::{TlsReader, TlsWriter};
