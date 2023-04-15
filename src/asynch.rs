@@ -124,7 +124,7 @@ where
                 self.record_write_buf.pos += buffered;
             }
 
-            if self.record_write_buf.pos == max_block_size {
+            if self.record_write_buf.is_full() {
                 self.flush().await?;
             }
 

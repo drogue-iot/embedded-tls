@@ -14,4 +14,9 @@ impl<'a> WriteBuffer<'a> {
         );
         Self { buffer, pos: 0 }
     }
+
+    pub fn is_full(&self) -> bool {
+        let max_block_size = self.buffer.len() - TLS_RECORD_OVERHEAD;
+        self.pos == max_block_size
+    }
 }
