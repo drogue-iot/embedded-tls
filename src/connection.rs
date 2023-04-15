@@ -45,7 +45,7 @@ pub(crate) fn decrypt_record<'m, CipherSuite>(
     record: ServerRecord<'m, HashOutputSize<CipherSuite>>,
     mut cb: impl FnMut(
         &mut ReadKeySchedule<CipherSuite>,
-        ServerRecord<'m, HashOutputSize<CipherSuite>>,
+        ServerRecord<'_, HashOutputSize<CipherSuite>>,
     ) -> Result<(), TlsError>,
 ) -> Result<(), TlsError>
 where
@@ -56,13 +56,16 @@ where
         data: mut app_data,
     }) = record
     {
+        let server_key = key_schedule.get_key()?;
+        let nonce = key_schedule.get_nonce()?;
+
         // info!("decrypting {:x?} with {}", &header, app_data.len());
         //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
-        let crypto = <CipherSuite::Cipher as KeyInit>::new(&key_schedule.get_key()?);
+        let crypto = <CipherSuite::Cipher as KeyInit>::new(&server_key);
         // let nonce = &key_schedule.get_server_nonce();
         // info!("server write nonce {:x?}", nonce);
         crypto
-            .decrypt_in_place(&key_schedule.get_nonce()?, header.data(), &mut app_data)
+            .decrypt_in_place(&nonce, header.data(), &mut app_data)
             .map_err(|_| TlsError::CryptoError)?;
         // info!("decrypted with padding {:x?}", app_data.as_slice());
         let padding = app_data
@@ -80,12 +83,14 @@ where
 
         trace!("Decrypting content type = {:?}", content_type);
 
+        // Remove the content type
+        app_data.truncate(app_data.len() - 1);
+
         match content_type {
             ContentType::Handshake => {
                 // Decode potentially coaleced handshake messages
-                let (data, offset, len) = app_data.release();
-                let data = &data[offset..offset + len - 1];
-                let mut buf: ParseBuffer<'m> = ParseBuffer::new(data);
+                let data = app_data.as_slice();
+                let mut buf = ParseBuffer::new(data);
                 while buf.remaining() > 1 {
                     let mut inner = ServerHandshake::parse(&mut buf)?;
                     if let ServerHandshake::Finished(ref mut finished) = inner {
@@ -96,20 +101,18 @@ where
                     }
                     //info!("===> inner ==> {:?}", inner);
                     //if hash_later {
-                    Digest::update(key_schedule.transcript_hash(), &data[..data.len()]);
+                    key_schedule.transcript_hash().update(data);
                     // info!("hash {:02x?}", &data[..data.len()]);
                     cb(key_schedule, ServerRecord::Handshake(inner))?;
                 }
                 //}
             }
             ContentType::ApplicationData => {
-                app_data.truncate(app_data.len() - 1);
                 let inner = ApplicationData::new(app_data, header);
                 cb(key_schedule, ServerRecord::ApplicationData(inner))?;
             }
             ContentType::Alert => {
-                let data = &app_data.as_slice()[..app_data.len() - 1];
-                let mut buf = ParseBuffer::new(data);
+                let mut buf = ParseBuffer::new(app_data.as_slice());
                 let alert = Alert::parse(&mut buf)?;
                 cb(key_schedule, ServerRecord::Alert(alert))?;
             }
