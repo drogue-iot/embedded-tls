@@ -422,6 +422,7 @@ where
 {
     let mut state = State::ServerVerify;
     decrypt_record(key_schedule.read_state(), record, |key_schedule, record| {
+        debug!("record = {:?}", record.content_type());
         match record {
             ServerRecord::Handshake(server_handshake) => match server_handshake {
                 ServerHandshake::EncryptedExtensions(_) => {}

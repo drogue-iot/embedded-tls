@@ -312,6 +312,15 @@ impl RecordHeader {
 }
 
 impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
+    pub fn content_type(&self) -> ContentType {
+        match self {
+            ServerRecord::Handshake(_) => ContentType::Handshake,
+            ServerRecord::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
+            ServerRecord::Alert(_) => ContentType::Alert,
+            ServerRecord::ApplicationData(_) => ContentType::ApplicationData,
+        }
+    }
+
     pub fn decode<D>(
         header: RecordHeader,
         data: &'a mut [u8],
