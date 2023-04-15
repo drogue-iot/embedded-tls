@@ -160,6 +160,36 @@ impl<'b> CryptoBuffer<'b> {
             offset,
         }
     }
+
+    pub fn with_u8_length<R>(
+        &mut self,
+        op: impl FnOnce(&mut Self) -> Result<R, TlsError>,
+    ) -> Result<R, TlsError> {
+        let len_pos = self.len;
+        self.push(0)?;
+
+        let r = op(self)?;
+
+        let len = (self.len() - len_pos) as u8 - 1;
+        self.set(len_pos, len)?;
+
+        Ok(r)
+    }
+
+    pub fn with_u16_length<R>(
+        &mut self,
+        op: impl FnOnce(&mut Self) -> Result<R, TlsError>,
+    ) -> Result<R, TlsError> {
+        let len_pos = self.len;
+        self.push_u16(0)?;
+
+        let r = op(self)?;
+
+        let len = (self.len() - len_pos) as u16 - 2;
+        self.set_u16(len_pos, len)?;
+
+        Ok(r)
+    }
 }
 
 impl<'b> AsRef<[u8]> for CryptoBuffer<'b> {
