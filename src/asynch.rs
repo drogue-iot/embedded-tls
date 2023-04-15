@@ -109,7 +109,7 @@ where
     /// must be opened before writing.
     ///
     /// The slice may be buffered internally and not written to the connection immediately.
-    /// In this case [`flush()`] should be called to force the currently buffered writes
+    /// In this case [`Self::flush()`] should be called to force the currently buffered writes
     /// to be written to the connection.
     ///
     /// Returns the number of bytes buffered/written.

@@ -1,14 +1,11 @@
 use crate::{
     buffer::CryptoBuffer,
-    config::TlsCipherSuite,
+    config::{TlsCipherSuite, TLS_RECORD_OVERHEAD},
     connection::encrypt,
     key_schedule::{ReadKeySchedule, WriteKeySchedule},
     record::{ClientRecord, ClientRecordHeader},
     TlsError,
 };
-
-// Some space needed by TLS record
-pub const TLS_RECORD_OVERHEAD: usize = 128;
 
 pub struct WriteBuffer<'a> {
     buffer: &'a mut [u8],
