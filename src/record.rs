@@ -199,12 +199,13 @@ where
     }
 }
 
-pub(crate) fn encode_application_data_in_place<
-    F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>,
->(
+pub(crate) fn encode_application_data_in_place<CipherSuite>(
     write_buffer: &mut WriteBuffer,
-    mut encrypt_fn: F,
-) -> Result<usize, TlsError> {
+    key_schedule: &mut WriteKeySchedule<CipherSuite>,
+) -> Result<usize, TlsError>
+where
+    CipherSuite: TlsCipherSuite,
+{
     if write_buffer.space() < 5 {
         return Err(TlsError::EncodeError);
     }
@@ -233,7 +234,7 @@ pub(crate) fn encode_application_data_in_place<
     wrapped
         .push(ContentType::ApplicationData as u8)
         .map_err(|_| TlsError::EncodeError)?;
-    let _ = encrypt_fn(&mut wrapped)?;
+    let _ = encrypt(key_schedule, &mut wrapped)?;
 
     let mut buf = wrapped.rewind();
     let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
