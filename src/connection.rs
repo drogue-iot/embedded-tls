@@ -144,10 +144,7 @@ where
         return Err(TlsError::InsufficientSpace);
     }
 
-    trace!(
-        "output size {}",
-        <CipherSuite::Cipher as AeadCore>::TagSize::to_usize()
-    );
+    trace!("output size {}", len);
     let len_bytes = (len as u16).to_be_bytes();
     let additional_data = [
         ContentType::ApplicationData as u8,
@@ -208,7 +205,7 @@ impl<'a> State {
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
-        tx_buf: &mut [u8],
+        tx_buf: &mut WriteBuffer<'_>,
         key_schedule: &mut KeySchedule<CipherSuite>,
         config: &TlsConfig<'a, CipherSuite>,
         rng: &mut RNG,
@@ -281,8 +278,7 @@ impl<'a> State {
     {
         match self {
             State::ClientHello => {
-                let (state, tx) =
-                    client_hello(key_schedule, config, rng, tx_buf.buffer, handshake)?;
+                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -302,14 +298,14 @@ impl<'a> State {
                 process_server_verify(handshake, key_schedule, config, record)
             }
             State::ClientCert => {
-                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf.buffer)?;
+                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
                 Ok(state)
             }
             State::ClientFinished => {
-                let tx = client_finished(key_schedule, tx_buf.buffer)?;
+                let tx = client_finished(key_schedule, tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -360,7 +356,7 @@ fn client_hello<'r, CipherSuite, RNG, Verifier>(
     key_schedule: &mut KeySchedule<CipherSuite>,
     config: &TlsConfig<CipherSuite>,
     rng: &mut RNG,
-    tx_buf: &'r mut [u8],
+    tx_buf: &'r mut WriteBuffer,
     handshake: &mut Handshake<CipherSuite, Verifier>,
 ) -> Result<(State, &'r [u8]), TlsError>
 where
@@ -371,11 +367,11 @@ where
     key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
     let client_hello = ClientRecord::client_hello(config, rng);
-    let len = client_hello.encode(tx_buf, Some(read_key_schedule), write_key_schedule)?;
+    let slice = tx_buf.write_record(&client_hello, write_key_schedule, Some(read_key_schedule))?;
 
     if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) = client_hello {
         handshake.secret.replace(client_hello.secret);
-        Ok((State::ServerHello, &tx_buf[..len]))
+        Ok((State::ServerHello, slice))
     } else {
         Err(TlsError::EncodeError)
     }
@@ -474,7 +470,7 @@ fn client_cert<'r, CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
     config: &TlsConfig<CipherSuite>,
-    tx_buf: &'r mut [u8],
+    buffer: &'r mut WriteBuffer,
 ) -> Result<(State, &'r [u8]), TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
@@ -495,18 +491,19 @@ where
         certificate.add(cert.into())?;
     }
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
-    let len = ClientRecord::Handshake(ClientHandshake::ClientCert(certificate), true).encode(
-        tx_buf,
-        Some(read_key_schedule),
-        write_key_schedule,
-    )?;
 
-    Ok((State::ClientFinished, &tx_buf[..len]))
+    buffer
+        .write_record(
+            &ClientRecord::Handshake(ClientHandshake::ClientCert(certificate), true),
+            write_key_schedule,
+            Some(read_key_schedule),
+        )
+        .map(|slice| (State::ClientFinished, slice))
 }
 
 fn client_finished<'r, CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite>,
-    tx_buf: &'r mut [u8],
+    buffer: &'r mut WriteBuffer,
 ) -> Result<&'r [u8], TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
@@ -516,13 +513,12 @@ where
         .map_err(|_| TlsError::InvalidHandshake)?;
 
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
-    let len = ClientRecord::Handshake(ClientHandshake::Finished(client_finished), true).encode(
-        tx_buf,
-        Some(read_key_schedule),
-        write_key_schedule,
-    )?;
 
-    Ok(&tx_buf[..len])
+    buffer.write_record(
+        &ClientRecord::Handshake(ClientHandshake::Finished(client_finished), true),
+        write_key_schedule,
+        Some(read_key_schedule),
+    )
 }
 
 fn client_finished_finalize<CipherSuite, Verifier>(

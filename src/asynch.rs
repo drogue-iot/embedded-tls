@@ -3,7 +3,7 @@ use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::*;
 use crate::key_schedule::KeySchedule;
 use crate::read_buffer::ReadBuffer;
-use crate::record::{encode_application_data_in_place, ClientRecord};
+use crate::record::{ClientRecord, ClientRecordHeader};
 use crate::record_reader::RecordReader;
 use crate::write_buffer::WriteBuffer;
 use crate::TlsError;
@@ -88,7 +88,7 @@ where
                     &mut self.delegate,
                     &mut handshake,
                     &mut self.record_reader,
-                    self.record_write_buf.buffer,
+                    &mut self.record_write_buf,
                     &mut self.key_schedule,
                     context.config,
                     context.rng,
@@ -115,6 +115,15 @@ where
     /// Returns the number of bytes buffered/written.
     pub async fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
         if self.opened {
+            if !self
+                .record_write_buf
+                .contains(ClientRecordHeader::ApplicationData)
+            {
+                self.flush().await?;
+                self.record_write_buf
+                    .start_record(ClientRecordHeader::ApplicationData)?;
+            }
+
             let buffered = self.record_write_buf.append(buf);
 
             if self.record_write_buf.is_full() {
@@ -131,16 +140,14 @@ where
     pub async fn flush(&mut self) -> Result<(), TlsError> {
         if !self.record_write_buf.is_empty() {
             let key_schedule = self.key_schedule.write_state();
-
-            let len = encode_application_data_in_place(&mut self.record_write_buf, key_schedule)?;
+            let slice = self.record_write_buf.close_record(key_schedule)?;
 
             self.delegate
-                .write_all(&self.record_write_buf.buffer[..len])
+                .write_all(slice)
                 .await
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
             key_schedule.increment_counter();
-            self.record_write_buf.pos = 0;
         }
 
         Ok(())
@@ -196,15 +203,17 @@ where
 
     /// Close a connection instance, returning the ownership of the config, random generator and the async I/O provider.
     async fn close_internal(&mut self) -> Result<(), TlsError> {
+        self.flush().await?;
+
         let (write_key_schedule, read_key_schedule) = self.key_schedule.as_split();
-        let len = ClientRecord::close_notify(self.opened).encode(
-            self.record_write_buf.buffer,
-            Some(read_key_schedule),
+        let slice = self.record_write_buf.write_record(
+            &ClientRecord::close_notify(self.opened),
             write_key_schedule,
+            Some(read_key_schedule),
         )?;
 
         self.delegate
-            .write_all(&self.record_write_buf.buffer[..len])
+            .write_all(slice)
             .await
             .map_err(|e| TlsError::Io(e.kind()))?;
 

@@ -3,7 +3,7 @@ use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::*;
 use crate::key_schedule::KeySchedule;
 use crate::read_buffer::ReadBuffer;
-use crate::record::{encode_application_data_in_place, ClientRecord};
+use crate::record::{ClientRecord, ClientRecordHeader};
 use crate::record_reader::RecordReader;
 use crate::write_buffer::WriteBuffer;
 use embedded_io::blocking::BufRead;
@@ -113,6 +113,15 @@ where
     /// Returns the number of bytes buffered/written.
     pub fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
         if self.opened {
+            if !self
+                .record_write_buf
+                .contains(ClientRecordHeader::ApplicationData)
+            {
+                self.flush()?;
+                self.record_write_buf
+                    .start_record(ClientRecordHeader::ApplicationData)?;
+            }
+
             let buffered = self.record_write_buf.append(buf);
 
             if self.record_write_buf.is_full() {
@@ -129,15 +138,13 @@ where
     pub fn flush(&mut self) -> Result<(), TlsError> {
         if !self.record_write_buf.is_empty() {
             let key_schedule = self.key_schedule.write_state();
-
-            let len = encode_application_data_in_place(&mut self.record_write_buf, key_schedule)?;
+            let slice = self.record_write_buf.close_record(key_schedule)?;
 
             self.delegate
-                .write_all(&self.record_write_buf.buffer[..len])
+                .write_all(slice)
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
             key_schedule.increment_counter();
-            self.record_write_buf.pos = 0;
         }
 
         Ok(())
@@ -190,15 +197,17 @@ where
     }
 
     fn close_internal(&mut self) -> Result<(), TlsError> {
+        self.flush()?;
+
         let (write_key_schedule, read_key_schedule) = self.key_schedule.as_split();
-        let len = ClientRecord::close_notify(self.opened).encode(
-            self.record_write_buf.buffer,
-            Some(read_key_schedule),
+        let slice = self.record_write_buf.write_record(
+            &ClientRecord::close_notify(self.opened),
             write_key_schedule,
+            Some(read_key_schedule),
         )?;
 
         self.delegate
-            .write_all(&self.record_write_buf.buffer[..len])
+            .write_all(slice)
             .map_err(|e| TlsError::Io(e.kind()))?;
 
         self.key_schedule.write_state().increment_counter();
