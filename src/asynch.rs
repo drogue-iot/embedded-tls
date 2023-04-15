@@ -214,7 +214,7 @@ where
         let (write_key_schedule, read_key_schedule) = self.key_schedule.as_split();
         let len = ClientRecord::close_notify(self.opened).encode(
             self.record_write_buf,
-            read_key_schedule,
+            Some(read_key_schedule),
             write_key_schedule,
         )?;
 

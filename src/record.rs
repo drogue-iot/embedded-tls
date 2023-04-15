@@ -69,7 +69,7 @@ where
     pub(crate) fn encode(
         &self,
         enc_buf: &mut [u8],
-        read_key_schedule: &mut ReadKeySchedule<CipherSuite>, // TODO: make transcript optional
+        read_key_schedule: Option<&mut ReadKeySchedule<CipherSuite>>,
         write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
     ) -> Result<usize, TlsError> {
         let mut buf = CryptoBuffer::wrap(enc_buf);
@@ -97,7 +97,9 @@ where
                 let range = handshake.encode(&mut wrapped)?;
 
                 let enc_buf = &mut wrapped.as_mut_slice()[range];
-                let transcript = read_key_schedule.transcript_hash();
+                let transcript = read_key_schedule
+                    .ok_or(TlsError::InternalError)?
+                    .transcript_hash();
 
                 if let ClientHandshake::ClientHello(hello) = handshake {
                     // Special case for PSK which needs to:
@@ -134,7 +136,9 @@ where
                 }
             }
             ClientRecord::Handshake(handshake, true) => {
-                let transcript = read_key_schedule.transcript_hash();
+                let transcript = read_key_schedule
+                    .ok_or(TlsError::InternalError)?
+                    .transcript_hash();
                 let range = handshake.encode(&mut wrapped)?;
                 transcript.update(&wrapped.as_slice()[range]);
                 wrapped

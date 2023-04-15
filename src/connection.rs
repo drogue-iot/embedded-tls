@@ -380,7 +380,7 @@ where
     key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
     let client_hello = ClientRecord::client_hello(config, rng);
-    let len = client_hello.encode(tx_buf, read_key_schedule, write_key_schedule)?;
+    let len = client_hello.encode(tx_buf, Some(read_key_schedule), write_key_schedule)?;
 
     if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) = client_hello {
         handshake.secret.replace(client_hello.secret);
@@ -505,7 +505,7 @@ where
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
     let len = ClientRecord::Handshake(ClientHandshake::ClientCert(certificate), true).encode(
         tx_buf,
-        read_key_schedule,
+        Some(read_key_schedule),
         write_key_schedule,
     )?;
 
@@ -526,7 +526,7 @@ where
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
     let len = ClientRecord::Handshake(ClientHandshake::Finished(client_finished), true).encode(
         tx_buf,
-        read_key_schedule,
+        Some(read_key_schedule),
         write_key_schedule,
     )?;
 
