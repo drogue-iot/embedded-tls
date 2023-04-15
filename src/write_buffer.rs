@@ -31,4 +31,12 @@ impl<'a> WriteBuffer<'a> {
         }
         buffered
     }
+
+    pub fn len(&self) -> usize {
+        self.pos
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }

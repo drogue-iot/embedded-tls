@@ -132,7 +132,7 @@ where
     CipherSuite: TlsCipherSuite,
 {
     let client_key = key_schedule.get_key()?;
-    let nonce = &key_schedule.get_nonce()?;
+    let nonce = key_schedule.get_nonce()?;
     // trace!("encrypt key {:02x?}", client_key);
     // trace!("encrypt nonce {:02x?}", nonce);
     // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
@@ -158,7 +158,7 @@ where
     ];
 
     crypto
-        .encrypt_in_place(nonce, &additional_data, buf)
+        .encrypt_in_place(&nonce, &additional_data, buf)
         .map_err(|_| TlsError::InvalidApplicationData)?;
     Ok(buf.len())
 }
@@ -292,7 +292,8 @@ impl<'a> State {
     {
         match self {
             State::ClientHello => {
-                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf.buffer, handshake)?;
+                let (state, tx) =
+                    client_hello(key_schedule, config, rng, tx_buf.buffer, handshake)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
