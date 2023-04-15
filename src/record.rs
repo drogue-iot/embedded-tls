@@ -30,20 +30,61 @@ where
     ApplicationData(&'a [u8]),
 }
 
+pub enum ClientRecordHeader {
+    Handshake(Encrypted),
+    ChangeCipherSpec(Encrypted),
+    Alert(Encrypted),
+    ApplicationData,
+}
+
+impl ClientRecordHeader {
+    pub fn content_type(&self) -> ContentType {
+        match self {
+            Self::Handshake(false) => ContentType::Handshake,
+            Self::Alert(false) => ContentType::ChangeCipherSpec,
+            Self::ChangeCipherSpec(false) => ContentType::ChangeCipherSpec,
+            Self::Handshake(true) => ContentType::ApplicationData,
+            Self::Alert(true) => ContentType::ApplicationData,
+            Self::ChangeCipherSpec(true) => ContentType::ApplicationData,
+            Self::ApplicationData => ContentType::ApplicationData,
+        }
+    }
+
+    pub fn version(&self) -> [u8; 2] {
+        match self {
+            Self::Handshake(true) => [0x03, 0x03],
+            Self::Handshake(false) => [0x03, 0x01],
+            Self::ChangeCipherSpec(true) => [0x03, 0x03],
+            Self::ChangeCipherSpec(false) => [0x03, 0x01],
+            Self::Alert(true) => [0x03, 0x03],
+            Self::Alert(false) => [0x03, 0x01],
+            Self::ApplicationData => [0x03, 0x03],
+        }
+    }
+
+    fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        buf.push(self.content_type() as u8)
+            .map_err(|_| TlsError::EncodeError)?;
+        buf.extend_from_slice(&self.version())
+            .map_err(|_| TlsError::EncodeError)?;
+
+        Ok(())
+    }
+}
+
 impl<'config, 'a, CipherSuite> ClientRecord<'config, 'a, CipherSuite>
 where
     //N: ArrayLength<u8>,
     CipherSuite: TlsCipherSuite,
 {
-    pub fn content_type(&self) -> ContentType {
+    pub fn header(&self) -> ClientRecordHeader {
         match self {
-            ClientRecord::Handshake(_, false) => ContentType::Handshake,
-            ClientRecord::Alert(_, false) => ContentType::ChangeCipherSpec,
-            ClientRecord::ChangeCipherSpec(_, false) => ContentType::ChangeCipherSpec,
-            ClientRecord::Handshake(_, true) => ContentType::ApplicationData,
-            ClientRecord::Alert(_, true) => ContentType::ApplicationData,
-            ClientRecord::ChangeCipherSpec(_, true) => ContentType::ApplicationData,
-            ClientRecord::ApplicationData(_) => ContentType::ApplicationData,
+            ClientRecord::Handshake(_, encrypted) => ClientRecordHeader::Handshake(*encrypted),
+            ClientRecord::ChangeCipherSpec(_, encrypted) => {
+                ClientRecordHeader::ChangeCipherSpec(*encrypted)
+            }
+            ClientRecord::Alert(_, encrypted) => ClientRecordHeader::Alert(*encrypted),
+            ClientRecord::ApplicationData(_) => ClientRecordHeader::ApplicationData,
         }
     }
 
@@ -74,20 +115,8 @@ where
         write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
     ) -> Result<usize, TlsError> {
         let mut buf = CryptoBuffer::wrap(enc_buf);
-        buf.push(self.content_type() as u8)
-            .map_err(|_| TlsError::EncodeError)?;
-        let version = match self {
-            ClientRecord::Handshake(_, true) => &[0x03, 0x03],
-            ClientRecord::Handshake(_, false) => &[0x03, 0x01],
-            ClientRecord::ChangeCipherSpec(_, true) => &[0x03, 0x03],
-            ClientRecord::ChangeCipherSpec(_, false) => &[0x03, 0x01],
-            ClientRecord::Alert(_, true) => &[0x03, 0x03],
-            ClientRecord::Alert(_, false) => &[0x03, 0x01],
-            ClientRecord::ApplicationData(_) => &[0x03, 0x03],
-        };
 
-        buf.extend_from_slice(version)
-            .map_err(|_| TlsError::EncodeError)?;
+        self.header().encode(&mut buf)?;
 
         let record_length_marker = buf.len();
         buf.push_u16(0).map_err(|_| TlsError::EncodeError)?;
@@ -217,11 +246,9 @@ where
     enc_buf.copy_within(..data_len, 5);
 
     let mut buf = CryptoBuffer::wrap(enc_buf);
-    buf.push(ContentType::ApplicationData as u8)
-        .map_err(|_| TlsError::EncodeError)?;
-    let version = &[0x03, 0x03];
-    buf.extend_from_slice(version)
-        .map_err(|_| TlsError::EncodeError)?;
+
+    let header = ClientRecordHeader::ApplicationData;
+    header.encode(&mut buf)?;
 
     let record_length_marker = buf.len();
     buf.push(0).map_err(|_| TlsError::EncodeError)?;
