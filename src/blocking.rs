@@ -209,7 +209,7 @@ where
         let record = ClientRecord::close_notify(self.opened);
 
         let (write_key_schedule, read_key_schedule) = self.key_schedule.as_split();
-        let (_, len) = encode_record(
+        let len = encode_record(
             self.record_write_buf,
             read_key_schedule,
             write_key_schedule,

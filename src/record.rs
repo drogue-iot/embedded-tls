@@ -2,16 +2,18 @@ use crate::application_data::ApplicationData;
 use crate::buffer::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::config::{TlsCipherSuite, TlsConfig};
+use crate::connection::encrypt;
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
+use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
 use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
-use core::ops::Range;
 use generic_array::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
+use typenum::Unsigned;
 
 pub type Encrypted = bool;
 
@@ -64,15 +66,12 @@ where
         )
     }
 
-    pub(crate) fn encode<
-        N: Digest + Clone,
-        F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>,
-    >(
+    pub(crate) fn encode(
         &self,
         enc_buf: &mut [u8],
-        transcript: &mut N,
-        mut encrypt_fn: F,
-    ) -> Result<(usize, Option<Range<usize>>), TlsError> {
+        transcript: &mut CipherSuite::Hash, // TODO: make transcript optional
+        write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
+    ) -> Result<usize, TlsError> {
         let mut buf = CryptoBuffer::wrap(enc_buf);
         buf.push(self.content_type() as u8)
             .map_err(|_| TlsError::EncodeError)?;
@@ -92,56 +91,82 @@ where
         let record_length_marker = buf.len();
         buf.push_u16(0).map_err(|_| TlsError::EncodeError)?;
 
-        let (range, mut buf) = match self {
+        let mut wrapped = buf.forward();
+        match self {
             ClientRecord::Handshake(handshake, false) => {
-                let range = handshake.encode(&mut buf)?;
-                (Some(range), buf)
+                let range = handshake.encode(&mut wrapped)?;
+
+                let enc_buf = &mut wrapped.as_mut_slice()[range];
+
+                if let ClientHandshake::ClientHello(hello) = handshake {
+                    // Special case for PSK which needs to:
+                    //
+                    // 1. Add the client hello without the binders to the transcript
+                    // 2. Create the binders for each identity using the transcript
+                    // 3. Add the rest of the client hello.
+                    //
+                    // This causes a few issues since lengths must be correctly inside the payload,
+                    // but won't actually be added to the record buffer until the end.
+                    if let Some((_, identities)) = &hello.config.psk {
+                        let binders_len =
+                            identities.len() * (1 + HashOutputSize::<CipherSuite>::to_usize());
+
+                        let binders_pos = enc_buf.len() - binders_len;
+
+                        // NOTE: Exclude the binders_len itself from the digest
+                        transcript.update(&enc_buf[0..binders_pos - 2]);
+
+                        // Append after the client hello data. Sizes have already been set.
+                        let mut buf = CryptoBuffer::wrap(&mut enc_buf[binders_pos..]);
+                        // Create a binder and encode for each identity
+                        for _id in identities {
+                            let binder = write_key_schedule.create_psk_binder(transcript)?;
+                            binder.encode(&mut buf)?;
+                        }
+
+                        transcript.update(&enc_buf[binders_pos - 2..]);
+                    } else {
+                        transcript.update(enc_buf);
+                    }
+                } else {
+                    transcript.update(enc_buf);
+                }
             }
             ClientRecord::Handshake(handshake, true) => {
-                let mut wrapped = buf.forward();
-
                 let range = handshake.encode(&mut wrapped)?;
-                N::update(transcript, &wrapped.as_slice()[range]);
+                transcript.update(&wrapped.as_slice()[range]);
                 wrapped
                     .push(ContentType::Handshake as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
-                let _ = encrypt_fn(&mut wrapped)?;
-                (None, wrapped.rewind())
+                // TODO: write buffer should track written range and encrypt if the record type
+                // requires it. The API should contain start_record, append and end_record fns.
+                let _ = encrypt(write_key_schedule, &mut wrapped)?;
             }
             ClientRecord::ChangeCipherSpec(spec, false) => {
-                spec.encode(&mut buf)?;
-                (None, buf)
+                spec.encode(&mut wrapped)?;
             }
             ClientRecord::ChangeCipherSpec(spec, true) => {
-                let mut wrapped = buf.forward();
-
                 spec.encode(&mut wrapped)?;
                 wrapped
                     .push(ContentType::ChangeCipherSpec as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
-                let _ = encrypt_fn(&mut wrapped)?;
-                (None, wrapped.rewind())
+                let _ = encrypt(write_key_schedule, &mut wrapped)?;
             }
             ClientRecord::Alert(alert, false) => {
-                alert.encode(&mut buf)?;
-                (None, buf)
+                alert.encode(&mut wrapped)?;
             }
             ClientRecord::Alert(alert, true) => {
-                let mut wrapped = buf.forward();
-
                 alert.encode(&mut wrapped)?;
                 wrapped
                     .push(ContentType::Alert as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
-                let _ = encrypt_fn(&mut wrapped)?;
-                (None, wrapped.rewind())
+                let _ = encrypt(write_key_schedule, &mut wrapped)?;
             }
 
             ClientRecord::ApplicationData(data) => {
-                let mut wrapped = buf.forward();
                 wrapped
                     .extend_from_slice(data)
                     .map_err(|_| TlsError::EncodeError)?;
@@ -149,10 +174,10 @@ where
                     .push(ContentType::ApplicationData as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
-                let _ = encrypt_fn(&mut wrapped)?;
-                (None, wrapped.rewind())
+                let _ = encrypt(write_key_schedule, &mut wrapped)?;
             }
         };
+        let mut buf = wrapped.rewind();
 
         let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
 
@@ -163,7 +188,7 @@ where
         buf.set(record_length_marker + 1, record_length.to_be_bytes()[1])
             .map_err(|_| TlsError::EncodeError)?;
 
-        Ok((buf.len(), range))
+        Ok(buf.len())
     }
 }
 

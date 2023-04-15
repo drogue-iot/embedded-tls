@@ -128,7 +128,7 @@ pub(crate) fn encrypt<CipherSuite>(
     buf: &mut CryptoBuffer<'_>,
 ) -> Result<usize, TlsError>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    CipherSuite: TlsCipherSuite,
 {
     let client_key = key_schedule.get_key()?;
     let nonce = &key_schedule.get_nonce()?;
@@ -167,60 +167,15 @@ pub fn encode_record<'m, CipherSuite>(
     read_key_schedule: &mut ReadKeySchedule<CipherSuite>,
     write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
     record: &ClientRecord<'_, 'm, CipherSuite>,
-) -> Result<(CipherSuite::Hash, usize), TlsError>
+) -> Result<usize, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let mut next_hash = read_key_schedule.transcript_hash().clone();
+    let next_hash = read_key_schedule.transcript_hash();
 
-    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| {
-        encrypt(write_key_schedule, buf)
-    })?;
+    let len = record.encode(tx_buf, next_hash, write_key_schedule)?;
 
-    if let Some(range) = range {
-        if let ClientRecord::Handshake(ClientHandshake::ClientHello(hello), false) = record {
-            // Special case for PSK which needs to:
-            //
-            // 1. Add the client hello without the binders to the transcript
-            // 2. Create the binders for each identity using the transcript
-            // 3. Add the rest of the client hello.
-            //
-            // This causes a few issues since lengths must be correctly inside the payload,
-            // but won't actually be added to the record buffer until the end.
-            if let Some((_, identities)) = &hello.config.psk {
-                let binders_len =
-                    identities.len() * (1 + HashOutputSize::<CipherSuite>::to_usize());
-
-                let binders_pos = range.end - binders_len;
-
-                // NOTE: Exclude the binders_len itself from the digest
-                Digest::update(
-                    read_key_schedule.transcript_hash(),
-                    &tx_buf[range.start..binders_pos - 2],
-                );
-
-                // Append after the client hello data. Sizes have already been set.
-                let mut buf = CryptoBuffer::wrap(&mut tx_buf[binders_pos..]);
-                // Create a binder and encode for each identity
-                for _id in identities {
-                    let binder = write_key_schedule
-                        .create_psk_binder(read_key_schedule.transcript_hash())?;
-                    binder.encode(&mut buf)?;
-                }
-
-                Digest::update(
-                    read_key_schedule.transcript_hash(),
-                    &tx_buf[binders_pos - 2..range.end],
-                );
-            } else {
-                Digest::update(read_key_schedule.transcript_hash(), &tx_buf[range]);
-            }
-        } else {
-            Digest::update(read_key_schedule.transcript_hash(), &tx_buf[range]);
-        }
-    }
-
-    Ok((next_hash, len))
+    Ok(len)
 }
 
 pub fn encode_application_data_record_in_place<CipherSuite>(
@@ -441,7 +396,7 @@ where
     key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
     let client_hello = ClientRecord::client_hello(config, rng);
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
-    let (_, len) = encode_record(tx_buf, read_key_schedule, write_key_schedule, &client_hello)?;
+    let len = encode_record(tx_buf, read_key_schedule, write_key_schedule, &client_hello)?;
 
     if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) = client_hello {
         handshake.secret.replace(client_hello.secret);
@@ -567,10 +522,8 @@ where
     let client_cert = ClientRecord::Handshake(client_handshake, true);
 
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
-    let (next_hash, len) =
-        encode_record(tx_buf, read_key_schedule, write_key_schedule, &client_cert)?;
+    let len = encode_record(tx_buf, read_key_schedule, write_key_schedule, &client_cert)?;
 
-    key_schedule.replace_transcript_hash(next_hash);
     Ok((State::ClientFinished, &tx_buf[..len]))
 }
 
@@ -589,7 +542,7 @@ where
     let client_finished = ClientRecord::Handshake(client_finished, true);
 
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
-    let (_, len) = encode_record(
+    let len = encode_record(
         tx_buf,
         read_key_schedule,
         write_key_schedule,
