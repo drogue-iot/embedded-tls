@@ -11,11 +11,11 @@ use crate::handshake::encrypted_extensions::EncryptedExtensions;
 use crate::handshake::finished::Finished;
 use crate::handshake::new_session_ticket::NewSessionTicket;
 use crate::handshake::server_hello::ServerHello;
+use crate::key_schedule::HashOutputSize;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use core::fmt::{Debug, Formatter};
 use core::ops::Range;
-use digest::OutputSizeUser;
 use sha2::Digest;
 
 pub mod binder;
@@ -79,7 +79,7 @@ where
 {
     ClientCert(CertificateRef<'a>),
     ClientHello(ClientHello<'config, CipherSuite>),
-    Finished(Finished<<CipherSuite::Hash as OutputSizeUser>::OutputSize>),
+    Finished(Finished<HashOutputSize<CipherSuite>>),
 }
 
 impl<'config, 'a, CipherSuite> ClientHandshake<'config, 'a, CipherSuite>
