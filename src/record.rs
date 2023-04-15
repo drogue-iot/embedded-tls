@@ -124,9 +124,11 @@ where
         let mut wrapped = buf.forward();
         match self {
             ClientRecord::Handshake(handshake, false) => {
-                let range = handshake.encode(&mut wrapped)?;
+                let start = wrapped.len();
+                handshake.encode(&mut wrapped)?;
+                let end = wrapped.len();
 
-                let enc_buf = &mut wrapped.as_mut_slice()[range];
+                let enc_buf = &mut wrapped.as_mut_slice()[start..end];
                 let transcript = read_key_schedule
                     .ok_or(TlsError::InternalError)?
                     .transcript_hash();
@@ -169,8 +171,11 @@ where
                 let transcript = read_key_schedule
                     .ok_or(TlsError::InternalError)?
                     .transcript_hash();
-                let range = handshake.encode(&mut wrapped)?;
-                transcript.update(&wrapped.as_slice()[range]);
+
+                let start = wrapped.len();
+                handshake.encode(&mut wrapped)?;
+                let end = wrapped.len();
+                transcript.update(&wrapped.as_slice()[start..end]);
                 wrapped
                     .push(ContentType::Handshake as u8)
                     .map_err(|_| TlsError::EncodeError)?;

@@ -15,7 +15,6 @@ use crate::key_schedule::HashOutputSize;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use core::fmt::{Debug, Formatter};
-use core::ops::Range;
 use sha2::Digest;
 
 pub mod binder;
@@ -31,11 +30,6 @@ pub mod server_hello;
 const LEGACY_VERSION: u16 = 0x0303;
 
 type Random = [u8; 32];
-
-const HELLO_RETRY_REQUEST_RANDOM: [u8; 32] = [
-    0xCF, 0x21, 0xAD, 0x74, 0xE5, 0x9A, 0x61, 0x11, 0xBE, 0x1D, 0x8C, 0x02, 0x1E, 0x65, 0xB8, 0x91,
-    0xC2, 0xA2, 0x11, 0x16, 0x7A, 0xBB, 0x8C, 0x5E, 0x07, 0x9E, 0x09, 0xE2, 0xC8, 0xA8, 0x33, 0x9C,
-];
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -86,23 +80,30 @@ impl<'config, 'a, CipherSuite> ClientHandshake<'config, 'a, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
-    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<Range<usize>, TlsError> {
-        let content_marker = buf.len();
-        let handshake_type = match self {
-            ClientHandshake::ClientHello(_) => HandshakeType::ClientHello as u8,
-            ClientHandshake::Finished(_) => HandshakeType::Finished as u8,
-            ClientHandshake::ClientCert(_) => HandshakeType::Certificate as u8,
-        };
-        buf.push(handshake_type)
+    fn handshake_type(&self) -> HandshakeType {
+        match self {
+            ClientHandshake::ClientHello(_) => HandshakeType::ClientHello,
+            ClientHandshake::Finished(_) => HandshakeType::Finished,
+            ClientHandshake::ClientCert(_) => HandshakeType::Certificate,
+        }
+    }
+
+    fn encode_inner(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+        match self {
+            ClientHandshake::ClientHello(inner) => inner.encode(buf),
+            ClientHandshake::Finished(inner) => inner.encode(buf),
+            ClientHandshake::ClientCert(inner) => inner.encode(buf),
+        }
+    }
+
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+        buf.push(self.handshake_type() as u8)
             .map_err(|_| TlsError::EncodeError)?;
 
         let content_length_marker = buf.len();
         buf.push_u24(0).map_err(|_| TlsError::EncodeError)?;
-        match self {
-            ClientHandshake::ClientHello(inner) => inner.encode(buf)?,
-            ClientHandshake::Finished(inner) => inner.encode(buf)?,
-            ClientHandshake::ClientCert(inner) => inner.encode(buf)?,
-        }
+
+        self.encode_inner(buf)?;
 
         let content_length = (buf.len() - content_length_marker) as u32 - 3;
         buf.set_u24(content_length_marker, content_length)
@@ -111,7 +112,7 @@ where
         //info!("hash [{:x?}]", &buf[content_marker..]);
         //digest.update(&buf[content_marker..]);
 
-        Ok(content_marker..buf.len())
+        Ok(())
     }
 }
 
@@ -159,7 +160,7 @@ impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
         rx_buf: &'a mut [u8],
         digest: &mut D,
     ) -> Result<ServerHandshake<'a, N>, TlsError> {
-        let header = &rx_buf.get(0..4).ok_or(TlsError::InvalidHandshake)?;
+        let header = rx_buf.get(0..4).ok_or(TlsError::InvalidHandshake)?;
         match HandshakeType::of(header[0]) {
             None => Err(TlsError::InvalidHandshake),
             Some(handshake_type) => {
