@@ -1,10 +1,11 @@
 use crate::{
     buffer::CryptoBuffer,
+    config::TlsCipherSuite,
     connection::encrypt,
     content_types::ContentType,
     key_schedule::{ReadKeySchedule, WriteKeySchedule},
     record::{ClientRecord, ClientRecordHeader},
-    TlsCipherSuite, TlsError,
+    TlsError,
 };
 
 // Some space needed by TLS record
