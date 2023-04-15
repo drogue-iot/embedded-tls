@@ -38,7 +38,7 @@ impl<'a> WriteBuffer<'a> {
     }
 
     pub fn append(&mut self, buf: &[u8]) -> usize {
-        let buffered = usize::min(buf.len(), self.max_block_size() - self.pos);
+        let buffered = usize::min(buf.len(), self.space());
         if buffered > 0 {
             self.buffer[self.pos..self.pos + buffered].copy_from_slice(&buf[..buffered]);
             self.pos += buffered;
