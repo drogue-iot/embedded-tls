@@ -97,20 +97,21 @@ impl<'a> WriteBuffer<'a> {
     where
         CipherSuite: TlsCipherSuite,
     {
+        const HEADER_SIZE: usize = 5;
+
         let header = self.current_header.take().unwrap();
         self.with_buffer(|mut buf| {
             if header.is_encrypted() {
                 buf.push(header.trailer_content_type() as u8)
                     .map_err(|_| TlsError::EncodeError)?;
 
-                let mut buf = buf.offset(5);
+                let mut buf = buf.offset(HEADER_SIZE);
                 encrypt(write_key_schedule, &mut buf)?;
                 return Ok(buf.rewind());
             }
             Ok(buf)
         })?;
-        const HEADER_SIZE: u16 = 5;
-        let [upper, lower] = (self.pos as u16 - HEADER_SIZE).to_be_bytes();
+        let [upper, lower] = ((self.pos - HEADER_SIZE) as u16).to_be_bytes();
 
         self.buffer[3] = upper;
         self.buffer[4] = lower;
