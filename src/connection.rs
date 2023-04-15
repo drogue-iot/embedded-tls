@@ -191,14 +191,16 @@ where
                 let binders_len =
                     identities.len() * (1 + HashOutputSize::<CipherSuite>::to_usize());
 
+                let binders_pos = range.end - binders_len;
+
                 // NOTE: Exclude the binders_len itself from the digest
                 Digest::update(
                     read_key_schedule.transcript_hash(),
-                    &tx_buf[range.start..range.end - binders_len - 2],
+                    &tx_buf[range.start..binders_pos - 2],
                 );
 
                 // Append after the client hello data. Sizes have already been set.
-                let mut buf = CryptoBuffer::wrap(&mut tx_buf[range.end - binders_len..]);
+                let mut buf = CryptoBuffer::wrap(&mut tx_buf[binders_pos..]);
                 // Create a binder and encode for each identity
                 for _id in identities {
                     let binder = write_key_schedule
@@ -208,7 +210,7 @@ where
 
                 Digest::update(
                     read_key_schedule.transcript_hash(),
-                    &tx_buf[range.end - binders_len - 2..range.end],
+                    &tx_buf[binders_pos - 2..range.end],
                 );
             } else {
                 Digest::update(read_key_schedule.transcript_hash(), &tx_buf[range]);
