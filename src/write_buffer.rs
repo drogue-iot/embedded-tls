@@ -15,8 +15,20 @@ impl<'a> WriteBuffer<'a> {
         Self { buffer, pos: 0 }
     }
 
+    fn max_block_size(&self) -> usize {
+        self.buffer.len() - TLS_RECORD_OVERHEAD
+    }
+
     pub fn is_full(&self) -> bool {
-        let max_block_size = self.buffer.len() - TLS_RECORD_OVERHEAD;
-        self.pos == max_block_size
+        self.pos == self.max_block_size()
+    }
+
+    pub fn append(&mut self, buf: &[u8]) -> usize {
+        let buffered = usize::min(buf.len(), self.max_block_size() - self.pos);
+        if buffered > 0 {
+            self.buffer[self.pos..self.pos + buffered].copy_from_slice(&buf[..buffered]);
+            self.pos += buffered;
+        }
+        buffered
     }
 }

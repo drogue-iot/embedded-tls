@@ -5,7 +5,7 @@ use crate::key_schedule::KeySchedule;
 use crate::read_buffer::ReadBuffer;
 use crate::record::ClientRecord;
 use crate::record_reader::RecordReader;
-use crate::write_buffer::{WriteBuffer, TLS_RECORD_OVERHEAD};
+use crate::write_buffer::WriteBuffer;
 use crate::TlsError;
 use embedded_io::asynch::BufRead;
 use embedded_io::Error as _;
@@ -115,14 +115,7 @@ where
     /// Returns the number of bytes buffered/written.
     pub async fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
         if self.opened {
-            let max_block_size = self.record_write_buf.buffer.len() - TLS_RECORD_OVERHEAD;
-            let buffered = usize::min(buf.len(), max_block_size - self.record_write_buf.pos);
-            if buffered > 0 {
-                self.record_write_buf.buffer
-                    [self.record_write_buf.pos..self.record_write_buf.pos + buffered]
-                    .copy_from_slice(&buf[..buffered]);
-                self.record_write_buf.pos += buffered;
-            }
+            let buffered = self.record_write_buf.append(buf);
 
             if self.record_write_buf.is_full() {
                 self.flush().await?;
