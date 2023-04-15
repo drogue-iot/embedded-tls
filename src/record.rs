@@ -7,6 +7,7 @@ use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::{HashOutputSize, ReadKeySchedule, WriteKeySchedule};
+use crate::write_buffer::WriteBuffer;
 use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
@@ -201,13 +202,15 @@ where
 pub(crate) fn encode_application_data_in_place<
     F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>,
 >(
-    enc_buf: &mut [u8],
-    data_len: usize,
+    write_buffer: &mut WriteBuffer,
     mut encrypt_fn: F,
 ) -> Result<usize, TlsError> {
-    if 5 + data_len > enc_buf.len() {
+    if write_buffer.space() < 5 {
         return Err(TlsError::EncodeError);
     }
+
+    let enc_buf = &mut write_buffer.buffer;
+    let data_len = write_buffer.pos;
 
     // Make room for the header
     enc_buf.copy_within(..data_len, 5);

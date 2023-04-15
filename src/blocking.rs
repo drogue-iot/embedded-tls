@@ -130,11 +130,9 @@ where
         if !self.record_write_buf.is_empty() {
             let key_schedule = self.key_schedule.write_state();
 
-            let len = encode_application_data_in_place(
-                self.record_write_buf.buffer,
-                self.record_write_buf.pos,
-                |buf| encrypt(key_schedule, buf),
-            )?;
+            let len = encode_application_data_in_place(&mut self.record_write_buf, |buf| {
+                encrypt(key_schedule, buf)
+            })?;
 
             self.delegate
                 .write_all(&self.record_write_buf.buffer[..len])

@@ -39,4 +39,8 @@ impl<'a> WriteBuffer<'a> {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    pub fn space(&self) -> usize {
+        self.max_block_size() - self.pos
+    }
 }
