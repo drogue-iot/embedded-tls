@@ -50,7 +50,7 @@ impl<'b> CryptoBuffer<'b> {
 
     pub fn push_u24(&mut self, num: u32) -> Result<(), TlsError> {
         let data = num.to_be_bytes();
-        self.extend_from_slice(&[data[0], data[1], data[2]])
+        self.extend_from_slice(&[data[1], data[2], data[3]])
     }
 
     pub fn push_u32(&mut self, num: u32) -> Result<(), TlsError> {
@@ -190,11 +190,19 @@ mod test {
 
     #[test]
     fn encode() {
-        let mut buf = [0; 4];
-        let mut c = CryptoBuffer::wrap(&mut buf);
-        c.push_u24(1024).unwrap();
-        let decoded = u32::from_be_bytes(buf);
-        assert_eq!(1024, decoded);
+        let mut buf1 = [0; 4];
+        let mut c = CryptoBuffer::wrap(&mut buf1);
+        c.push_u24(1027).unwrap();
+
+        let mut buf2 = [0; 4];
+        let mut c = CryptoBuffer::wrap(&mut buf2);
+        c.push_u24(0).unwrap();
+        c.set_u24(0, 1027).unwrap();
+
+        assert_eq!(buf1, buf2);
+
+        let decoded = u32::from_be_bytes([0, buf1[0], buf1[1], buf1[2]]);
+        assert_eq!(1027, decoded);
     }
 
     #[test]
