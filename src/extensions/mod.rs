@@ -218,7 +218,7 @@ impl ClientExtension<'_> {
                         .map_err(|_| TlsError::EncodeError)?;
 
                     // NOTE: No support for ticket age, set to 0 as recommended by RFC
-                    buf.push_u32(0u32).map_err(|_| TlsError::EncodeError)?;
+                    buf.push_u32(0).map_err(|_| TlsError::EncodeError)?;
                 }
 
                 // NOTE: We encode binders later after computing the transcript.
