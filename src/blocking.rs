@@ -3,7 +3,7 @@ use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::*;
 use crate::key_schedule::KeySchedule;
 use crate::read_buffer::ReadBuffer;
-use crate::record::ClientRecord;
+use crate::record::{encode_application_data_in_place, ClientRecord};
 use crate::record_reader::RecordReader;
 use crate::write_buffer::WriteBuffer;
 use embedded_io::blocking::BufRead;
@@ -129,10 +129,11 @@ where
     pub fn flush(&mut self) -> Result<(), TlsError> {
         if !self.record_write_buf.is_empty() {
             let key_schedule = self.key_schedule.write_state();
-            let len = encode_application_data_record_in_place(
+
+            let len = encode_application_data_in_place(
                 self.record_write_buf.buffer,
                 self.record_write_buf.pos,
-                key_schedule,
+                |buf| encrypt(key_schedule, buf),
             )?;
 
             self.delegate

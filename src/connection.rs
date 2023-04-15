@@ -1,7 +1,7 @@
 use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::{HashOutputSize, KeySchedule, ReadKeySchedule, WriteKeySchedule};
-use crate::record::{encode_application_data_in_place, ClientRecord, ServerRecord};
+use crate::record::{ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
 use crate::write_buffer::WriteBuffer;
 use crate::TlsError;
@@ -161,17 +161,6 @@ where
         .encrypt_in_place(&nonce, &additional_data, buf)
         .map_err(|_| TlsError::InvalidApplicationData)?;
     Ok(buf.len())
-}
-
-pub fn encode_application_data_record_in_place<CipherSuite>(
-    tx_buf: &mut [u8],
-    data_len: usize,
-    key_schedule: &mut WriteKeySchedule<CipherSuite>,
-) -> Result<usize, TlsError>
-where
-    CipherSuite: TlsCipherSuite + 'static,
-{
-    encode_application_data_in_place(tx_buf, data_len, |buf| encrypt(key_schedule, buf))
 }
 
 pub struct Handshake<CipherSuite, Verifier>

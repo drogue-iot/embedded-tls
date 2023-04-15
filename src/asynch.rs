@@ -3,7 +3,7 @@ use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::*;
 use crate::key_schedule::KeySchedule;
 use crate::read_buffer::ReadBuffer;
-use crate::record::ClientRecord;
+use crate::record::{encode_application_data_in_place, ClientRecord};
 use crate::record_reader::RecordReader;
 use crate::write_buffer::WriteBuffer;
 use crate::TlsError;
@@ -130,10 +130,12 @@ where
     /// Force all previously written, buffered bytes to be encoded into a tls record and written to the connection.
     pub async fn flush(&mut self) -> Result<(), TlsError> {
         if !self.record_write_buf.is_empty() {
-            let len = encode_application_data_record_in_place(
+            let key_schedule = self.key_schedule.write_state();
+
+            let len = encode_application_data_in_place(
                 self.record_write_buf.buffer,
                 self.record_write_buf.pos,
-                self.key_schedule.write_state(),
+                |buf| encrypt(key_schedule, buf),
             )?;
 
             self.delegate
@@ -141,7 +143,7 @@ where
                 .await
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
-            self.key_schedule.write_state().increment_counter();
+            key_schedule.increment_counter();
             self.record_write_buf.pos = 0;
         }
 
