@@ -1,6 +1,6 @@
 use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::key_schedule::{HashOutputSize, KeySchedule};
+use crate::key_schedule::{HashOutputSize, KeySchedule, ReadKeySchedule, WriteKeySchedule};
 use crate::record::{encode_application_data_in_place, ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
 use crate::TlsError;
@@ -40,10 +40,10 @@ use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 
 pub(crate) fn decrypt_record<'m, CipherSuite>(
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut ReadKeySchedule<CipherSuite>,
     record: ServerRecord<'m, HashOutputSize<CipherSuite>>,
     mut cb: impl FnMut(
-        &mut KeySchedule<CipherSuite>,
+        &mut ReadKeySchedule<CipherSuite>,
         ServerRecord<'m, HashOutputSize<CipherSuite>>,
     ) -> Result<(), TlsError>,
 ) -> Result<(), TlsError>
@@ -57,15 +57,11 @@ where
     {
         // info!("decrypting {:x?} with {}", &header, app_data.len());
         //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
-        let crypto = <CipherSuite::Cipher as KeyInit>::new(&key_schedule.get_server_key()?);
+        let crypto = <CipherSuite::Cipher as KeyInit>::new(&key_schedule.get_key()?);
         // let nonce = &key_schedule.get_server_nonce();
         // info!("server write nonce {:x?}", nonce);
         crypto
-            .decrypt_in_place(
-                &key_schedule.get_server_nonce()?,
-                header.data(),
-                &mut app_data,
-            )
+            .decrypt_in_place(&key_schedule.get_nonce()?, header.data(), &mut app_data)
             .map_err(|_| TlsError::CryptoError)?;
         // info!("decrypted with padding {:x?}", app_data.as_slice());
         let padding = app_data
@@ -119,7 +115,7 @@ where
             _ => return Err(TlsError::Unimplemented),
         }
         //debug!("decrypted {:?} --> {:x?}", content_type, data);
-        key_schedule.increment_read_counter();
+        key_schedule.increment_counter();
     } else {
         debug!("Not decrypting: Not encapsulated in app data");
         cb(key_schedule, record)?;
@@ -128,14 +124,14 @@ where
 }
 
 pub(crate) fn encrypt<CipherSuite>(
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut WriteKeySchedule<CipherSuite>,
     buf: &mut CryptoBuffer<'_>,
 ) -> Result<usize, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let client_key = key_schedule.get_client_key()?;
-    let nonce = &key_schedule.get_client_nonce()?;
+    let client_key = key_schedule.get_key()?;
+    let nonce = &key_schedule.get_nonce()?;
     // trace!("encrypt key {:02x?}", client_key);
     // trace!("encrypt nonce {:02x?}", nonce);
     // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
@@ -168,15 +164,18 @@ where
 
 pub fn encode_record<'m, CipherSuite>(
     tx_buf: &mut [u8],
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    read_key_schedule: &mut ReadKeySchedule<CipherSuite>,
+    write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
     record: &ClientRecord<'_, 'm, CipherSuite>,
 ) -> Result<(CipherSuite::Hash, usize), TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    let mut next_hash = key_schedule.transcript_hash().clone();
+    let mut next_hash = read_key_schedule.transcript_hash().clone();
 
-    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| encrypt(key_schedule, buf))?;
+    let (len, range) = record.encode(tx_buf, &mut next_hash, |buf| {
+        encrypt(write_key_schedule, buf)
+    })?;
 
     if let Some(range) = range {
         if let ClientRecord::Handshake(ClientHandshake::ClientHello(hello), false) = record {
@@ -194,7 +193,7 @@ where
 
                 // NOTE: Exclude the binders_len itself from the digest
                 Digest::update(
-                    key_schedule.transcript_hash(),
+                    read_key_schedule.transcript_hash(),
                     &tx_buf[range.start..range.end - binders_len - 2],
                 );
 
@@ -202,19 +201,20 @@ where
                 let mut buf = CryptoBuffer::wrap(&mut tx_buf[range.end - binders_len..]);
                 // Create a binder and encode for each identity
                 for _id in identities {
-                    let binder = key_schedule.create_psk_binder()?;
+                    let binder = write_key_schedule
+                        .create_psk_binder(read_key_schedule.transcript_hash())?;
                     binder.encode(&mut buf)?;
                 }
 
                 Digest::update(
-                    key_schedule.transcript_hash(),
+                    read_key_schedule.transcript_hash(),
                     &tx_buf[range.end - binders_len - 2..range.end],
                 );
             } else {
-                Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
+                Digest::update(read_key_schedule.transcript_hash(), &tx_buf[range]);
             }
         } else {
-            Digest::update(key_schedule.transcript_hash(), &tx_buf[range]);
+            Digest::update(read_key_schedule.transcript_hash(), &tx_buf[range]);
         }
     }
 
@@ -224,14 +224,12 @@ where
 pub fn encode_application_data_record_in_place<CipherSuite>(
     tx_buf: &mut [u8],
     data_len: usize,
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut WriteKeySchedule<CipherSuite>,
 ) -> Result<usize, TlsError>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    encode_application_data_in_place(tx_buf, data_len, |buf| {
-        encrypt::<CipherSuite>(key_schedule, buf)
-    })
+    encode_application_data_in_place(tx_buf, data_len, |buf| encrypt(key_schedule, buf))
 }
 
 pub struct Handshake<CipherSuite, Verifier>
@@ -299,7 +297,9 @@ impl<'a> State {
                 Ok(state)
             }
             State::ServerHello => {
-                let record = record_reader.read(transport, key_schedule).await?;
+                let record = record_reader
+                    .read(transport, key_schedule.read_state())
+                    .await?;
                 process_server_hello(handshake, key_schedule, record)
             }
             State::ServerVerify => {
@@ -307,7 +307,9 @@ impl<'a> State {
                     "SIZE of server record queue : {}",
                     core::mem::size_of_val(&records)
                 );*/
-                let record = record_reader.read(transport, key_schedule).await?;
+                let record = record_reader
+                    .read(transport, key_schedule.read_state())
+                    .await?;
 
                 process_server_verify(handshake, key_schedule, config, record)
             }
@@ -355,7 +357,7 @@ impl<'a> State {
                 Ok(state)
             }
             State::ServerHello => {
-                let record = record_reader.read_blocking(transport, key_schedule)?;
+                let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
                 process_server_hello(handshake, key_schedule, record)
             }
             State::ServerVerify => {
@@ -363,7 +365,7 @@ impl<'a> State {
                     "SIZE of server record queue : {}",
                     core::mem::size_of_val(&records)
                 );*/
-                let record = record_reader.read_blocking(transport, key_schedule)?;
+                let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
 
                 process_server_verify(handshake, key_schedule, config, record)
             }
@@ -398,7 +400,7 @@ where
         .write_all(tx)
         .map_err(|e| TlsError::Io(e.kind()))?;
 
-    key_schedule.increment_write_counter();
+    key_schedule.write_state().increment_counter();
 
     Ok(())
 }
@@ -417,7 +419,7 @@ where
         .await
         .map_err(|e| TlsError::Io(e.kind()))?;
 
-    key_schedule.increment_write_counter();
+    key_schedule.write_state().increment_counter();
 
     Ok(())
 }
@@ -436,7 +438,8 @@ where
 {
     key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
     let client_hello = ClientRecord::client_hello(config, rng);
-    let (_, len) = encode_record(tx_buf, key_schedule, &client_hello)?;
+    let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
+    let (_, len) = encode_record(tx_buf, read_key_schedule, write_key_schedule, &client_hello)?;
 
     if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) = client_hello {
         handshake.secret.replace(client_hello.secret);
@@ -486,7 +489,7 @@ where
     Verifier: TlsVerifier<CipherSuite>,
 {
     let mut state = State::ServerVerify;
-    decrypt_record::<CipherSuite>(key_schedule, record, |key_schedule, record| {
+    decrypt_record(key_schedule.read_state(), record, |key_schedule, record| {
         match record {
             ServerRecord::Handshake(server_handshake) => match server_handshake {
                 ServerHandshake::EncryptedExtensions(_) => {}
@@ -561,7 +564,9 @@ where
     let client_handshake = ClientHandshake::ClientCert(certificate);
     let client_cert = ClientRecord::Handshake(client_handshake, true);
 
-    let (next_hash, len) = encode_record(tx_buf, key_schedule, &client_cert)?;
+    let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
+    let (next_hash, len) =
+        encode_record(tx_buf, read_key_schedule, write_key_schedule, &client_cert)?;
 
     key_schedule.replace_transcript_hash(next_hash);
     Ok((State::ClientFinished, &tx_buf[..len]))
@@ -581,12 +586,18 @@ where
     let client_finished = ClientHandshake::Finished(client_finished);
     let client_finished = ClientRecord::Handshake(client_finished, true);
 
-    let (_, len) = encode_record(tx_buf, key_schedule, &client_finished)?;
+    let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
+    let (_, len) = encode_record(
+        tx_buf,
+        read_key_schedule,
+        write_key_schedule,
+        &client_finished,
+    )?;
 
     Ok(&tx_buf[..len])
 }
 
-fn client_finished_finalize<'r, CipherSuite, Verifier>(
+fn client_finished_finalize<CipherSuite, Verifier>(
     key_schedule: &mut KeySchedule<CipherSuite>,
     handshake: &mut Handshake<CipherSuite, Verifier>,
 ) -> Result<State, TlsError>

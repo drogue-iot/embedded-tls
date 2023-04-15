@@ -146,7 +146,7 @@ where
             let len = encode_application_data_record_in_place(
                 self.record_write_buf,
                 self.write_pos,
-                &mut self.key_schedule,
+                self.key_schedule.write_state(),
             )?;
 
             self.delegate
@@ -154,7 +154,7 @@ where
                 .await
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
-            self.key_schedule.increment_write_counter();
+            self.key_schedule.write_state().increment_counter();
             self.write_pos = 0;
         }
 
@@ -192,7 +192,7 @@ where
         let buf_ptr_range = self.record_reader.buf.as_ptr_range();
         let record = self
             .record_reader
-            .read(&mut self.delegate, &mut self.key_schedule)
+            .read(&mut self.delegate, self.key_schedule.read_state())
             .await?;
 
         let mut handler = DecryptedReadHandler {
@@ -200,9 +200,11 @@ where
             buffer_info: &mut self.decrypted,
             is_open: &mut self.opened,
         };
-        decrypt_record(&mut self.key_schedule, record, |_key_schedule, record| {
-            handler.handle(record)
-        })?;
+        decrypt_record(
+            self.key_schedule.read_state(),
+            record,
+            |_key_schedule, record| handler.handle(record),
+        )?;
 
         Ok(())
     }
@@ -211,14 +213,20 @@ where
     async fn close_internal(&mut self) -> Result<(), TlsError> {
         let record = ClientRecord::close_notify(self.opened);
 
-        let (_, len) = encode_record(self.record_write_buf, &mut self.key_schedule, &record)?;
+        let (write_key_schedule, read_key_schedule) = self.key_schedule.as_split();
+        let (_, len) = encode_record(
+            self.record_write_buf,
+            read_key_schedule,
+            write_key_schedule,
+            &record,
+        )?;
 
         self.delegate
             .write_all(&self.record_write_buf[..len])
             .await
             .map_err(|e| TlsError::Io(e.kind()))?;
 
-        self.key_schedule.increment_write_counter();
+        self.key_schedule.write_state().increment_counter();
 
         Ok(())
     }
