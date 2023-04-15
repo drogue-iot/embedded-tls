@@ -2,7 +2,6 @@ use crate::{
     buffer::CryptoBuffer,
     config::TlsCipherSuite,
     connection::encrypt,
-    content_types::ContentType,
     key_schedule::{ReadKeySchedule, WriteKeySchedule},
     record::{ClientRecord, ClientRecordHeader},
     TlsError,
@@ -100,12 +99,10 @@ impl<'a> WriteBuffer<'a> {
     {
         let header = self.current_header.take().unwrap();
         self.with_buffer(|mut buf| {
-            if header == ClientRecordHeader::ApplicationData {
-                buf.push(ContentType::ApplicationData as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-
             if header.is_encrypted() {
+                buf.push(header.trailer_content_type() as u8)
+                    .map_err(|_| TlsError::EncodeError)?;
+
                 let mut buf = buf.offset(5);
                 encrypt(write_key_schedule, &mut buf)?;
                 return Ok(buf.rewind());

@@ -47,7 +47,7 @@ impl ClientRecordHeader {
         }
     }
 
-    pub fn content_type(&self) -> ContentType {
+    pub fn header_content_type(&self) -> ContentType {
         match self {
             Self::Handshake(false) => ContentType::Handshake,
             Self::Alert(false) => ContentType::ChangeCipherSpec,
@@ -55,6 +55,15 @@ impl ClientRecordHeader {
             Self::Handshake(true) => ContentType::ApplicationData,
             Self::Alert(true) => ContentType::ApplicationData,
             Self::ChangeCipherSpec(true) => ContentType::ApplicationData,
+            Self::ApplicationData => ContentType::ApplicationData,
+        }
+    }
+
+    pub fn trailer_content_type(&self) -> ContentType {
+        match self {
+            Self::Handshake(_) => ContentType::Handshake,
+            Self::Alert(_) => ContentType::ChangeCipherSpec,
+            Self::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
             Self::ApplicationData => ContentType::ApplicationData,
         }
     }
@@ -72,7 +81,7 @@ impl ClientRecordHeader {
     }
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
-        buf.push(self.content_type() as u8)
+        buf.push(self.header_content_type() as u8)
             .map_err(|_| TlsError::EncodeError)?;
         buf.extend_from_slice(&self.version())
             .map_err(|_| TlsError::EncodeError)?;
@@ -121,36 +130,13 @@ where
         let record_length_marker = buf.len();
 
         match self {
-            // Unencrypted
-            ClientRecord::Handshake(handshake, false) => handshake.encode(buf)?,
-            ClientRecord::ChangeCipherSpec(spec, false) => spec.encode(buf)?,
-            ClientRecord::Alert(alert, false) => alert.encode(buf)?,
+            ClientRecord::Handshake(handshake, _) => handshake.encode(buf)?,
+            ClientRecord::ChangeCipherSpec(spec, _) => spec.encode(buf)?,
+            ClientRecord::Alert(alert, _) => alert.encode(buf)?,
 
-            // Encrypted
-            ClientRecord::Handshake(handshake, true) => {
-                handshake.encode(buf)?;
-                buf.push(ContentType::Handshake as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-            ClientRecord::ChangeCipherSpec(spec, true) => {
-                spec.encode(buf)?;
-                buf.push(ContentType::ChangeCipherSpec as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-            ClientRecord::Alert(alert, true) => {
-                alert.encode(buf)?;
-                buf.push(ContentType::Alert as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-
-            ClientRecord::ApplicationData(data) => {
-                buf.extend_from_slice(data)
-                    .map_err(|_| TlsError::EncodeError)?;
-                // We're not appending the content type as WriteBuffer does this for us when
-                // finalizing ApplicationData records.
-                //buf.push(ContentType::ApplicationData as u8)
-                //    .map_err(|_| TlsError::EncodeError)?;
-            }
+            ClientRecord::ApplicationData(data) => buf
+                .extend_from_slice(data)
+                .map_err(|_| TlsError::EncodeError)?,
         };
 
         Ok(buf.len() - record_length_marker)
