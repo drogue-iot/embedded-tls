@@ -215,13 +215,11 @@ where
         };
         let mut buf = wrapped.rewind();
 
-        let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
+        let record_length = (buf.len() - record_length_marker) as u16 - 2;
 
         // trace!("record len {}", record_length);
 
-        buf.set(record_length_marker, record_length.to_be_bytes()[0])
-            .map_err(|_| TlsError::EncodeError)?;
-        buf.set(record_length_marker + 1, record_length.to_be_bytes()[1])
+        buf.set_u16(record_length_marker, record_length)
             .map_err(|_| TlsError::EncodeError)?;
 
         Ok(buf.len())
@@ -251,8 +249,7 @@ where
     header.encode(&mut buf)?;
 
     let record_length_marker = buf.len();
-    buf.push(0).map_err(|_| TlsError::EncodeError)?;
-    buf.push(0).map_err(|_| TlsError::EncodeError)?;
+    buf.push_u16(0).map_err(|_| TlsError::EncodeError)?;
 
     assert_eq!(5, buf.len());
 
@@ -264,11 +261,9 @@ where
     let _ = encrypt(key_schedule, &mut wrapped)?;
 
     let mut buf = wrapped.rewind();
-    let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
+    let record_length = (buf.len() - record_length_marker) as u16 - 2;
 
-    buf.set(record_length_marker, record_length.to_be_bytes()[0])
-        .map_err(|_| TlsError::EncodeError)?;
-    buf.set(record_length_marker + 1, record_length.to_be_bytes()[1])
+    buf.set_u16(record_length_marker, record_length)
         .map_err(|_| TlsError::EncodeError)?;
 
     Ok(buf.len())
