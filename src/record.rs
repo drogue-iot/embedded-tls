@@ -6,7 +6,7 @@ use crate::connection::encrypt;
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
+use crate::key_schedule::{HashOutputSize, ReadKeySchedule, WriteKeySchedule};
 use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
@@ -69,7 +69,7 @@ where
     pub(crate) fn encode(
         &self,
         enc_buf: &mut [u8],
-        transcript: &mut CipherSuite::Hash, // TODO: make transcript optional
+        read_key_schedule: &mut ReadKeySchedule<CipherSuite>, // TODO: make transcript optional
         write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
     ) -> Result<usize, TlsError> {
         let mut buf = CryptoBuffer::wrap(enc_buf);
@@ -97,6 +97,7 @@ where
                 let range = handshake.encode(&mut wrapped)?;
 
                 let enc_buf = &mut wrapped.as_mut_slice()[range];
+                let transcript = read_key_schedule.transcript_hash();
 
                 if let ClientHandshake::ClientHello(hello) = handshake {
                     // Special case for PSK which needs to:
@@ -133,6 +134,7 @@ where
                 }
             }
             ClientRecord::Handshake(handshake, true) => {
+                let transcript = read_key_schedule.transcript_hash();
                 let range = handshake.encode(&mut wrapped)?;
                 transcript.update(&wrapped.as_slice()[range]);
                 wrapped
