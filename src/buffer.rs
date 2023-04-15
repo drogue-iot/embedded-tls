@@ -4,7 +4,6 @@ use aes_gcm::Error;
 
 pub struct CryptoBuffer<'b> {
     buf: &'b mut [u8],
-    capacity: usize,
     offset: usize,
     len: usize,
 }
@@ -12,7 +11,6 @@ pub struct CryptoBuffer<'b> {
 impl<'b> CryptoBuffer<'b> {
     pub(crate) fn empty() -> Self {
         Self {
-            capacity: 0,
             buf: &mut [],
             offset: 0,
             len: 0,
@@ -21,7 +19,6 @@ impl<'b> CryptoBuffer<'b> {
 
     pub(crate) fn wrap(buf: &'b mut [u8]) -> Self {
         Self {
-            capacity: buf.len(),
             buf,
             offset: 0,
             len: 0,
@@ -30,7 +27,6 @@ impl<'b> CryptoBuffer<'b> {
 
     pub(crate) fn wrap_with_pos(buf: &'b mut [u8], pos: usize) -> Self {
         Self {
-            capacity: buf.len(),
             buf,
             offset: 0,
             len: pos,
@@ -38,7 +34,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     pub fn push(&mut self, b: u8) -> Result<(), TlsError> {
-        if self.capacity - (self.len + self.offset) > 0 {
+        if self.capacity() - (self.len + self.offset) > 0 {
             self.buf[self.offset + self.len] = b;
             self.len += 1;
             Ok(())
@@ -48,7 +44,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     pub fn push_u24(&mut self, num: u32) -> Result<(), TlsError> {
-        if self.capacity - (self.len + self.offset) > 2 {
+        if self.capacity() - (self.len + self.offset) > 2 {
             let data = num.to_be_bytes();
             self.extend_from_slice(&[data[0], data[1], data[2]])
         } else {
@@ -75,7 +71,7 @@ impl<'b> CryptoBuffer<'b> {
 
     fn extend_internal(&mut self, other: &[u8]) -> Result<(), TlsError> {
         let start = self.offset + self.len;
-        if self.capacity - start < other.len() {
+        if self.capacity() - start < other.len() {
             Err(TlsError::InsufficientSpace)
         } else {
             self.buf[start..start + other.len()].clone_from_slice(&other[..other.len()]);
@@ -89,7 +85,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     fn truncate_internal(&mut self, len: usize) {
-        if len <= self.capacity - self.offset {
+        if len <= self.capacity() - self.offset {
             self.len = len;
         }
     }
@@ -111,7 +107,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     pub fn capacity(&self) -> usize {
-        self.capacity
+        self.buf.len()
     }
 
     pub fn forward(self) -> CryptoBuffer<'b> {
@@ -136,7 +132,6 @@ impl<'b> CryptoBuffer<'b> {
         CryptoBuffer {
             buf: self.buf,
             len: new_len,
-            capacity: self.capacity,
             offset,
         }
     }
