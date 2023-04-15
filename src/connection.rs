@@ -3,6 +3,7 @@ use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::{HashOutputSize, KeySchedule, ReadKeySchedule, WriteKeySchedule};
 use crate::record::{encode_application_data_in_place, ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
+use crate::write_buffer::WriteBuffer;
 use crate::TlsError;
 use crate::{
     alert::*,
@@ -278,7 +279,7 @@ impl<'a> State {
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
-        tx_buf: &mut [u8],
+        tx_buf: &mut WriteBuffer,
         key_schedule: &mut KeySchedule<CipherSuite>,
         config: &TlsConfig<'a, CipherSuite>,
         rng: &mut RNG,
@@ -291,7 +292,7 @@ impl<'a> State {
     {
         match self {
             State::ClientHello => {
-                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
+                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf.buffer, handshake)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -311,14 +312,14 @@ impl<'a> State {
                 process_server_verify(handshake, key_schedule, config, record)
             }
             State::ClientCert => {
-                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
+                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf.buffer)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
                 Ok(state)
             }
             State::ClientFinished => {
-                let tx = client_finished(key_schedule, tx_buf)?;
+                let tx = client_finished(key_schedule, tx_buf.buffer)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
