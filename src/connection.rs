@@ -127,7 +127,7 @@ where
 pub(crate) fn encrypt<CipherSuite>(
     key_schedule: &mut WriteKeySchedule<CipherSuite>,
     buf: &mut CryptoBuffer<'_>,
-) -> Result<usize, TlsError>
+) -> Result<(), TlsError>
 where
     CipherSuite: TlsCipherSuite,
 {
@@ -156,8 +156,7 @@ where
 
     crypto
         .encrypt_in_place(&nonce, &additional_data, buf)
-        .map_err(|_| TlsError::InvalidApplicationData)?;
-    Ok(buf.len())
+        .map_err(|_| TlsError::InvalidApplicationData)
 }
 
 pub struct Handshake<CipherSuite, Verifier>
