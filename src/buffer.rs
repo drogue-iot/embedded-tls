@@ -34,7 +34,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     pub fn push(&mut self, b: u8) -> Result<(), TlsError> {
-        if self.capacity() - (self.len + self.offset) > 0 {
+        if self.space() > 0 {
             self.buf[self.offset + self.len] = b;
             self.len += 1;
             Ok(())
@@ -43,13 +43,19 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
+    pub fn push_u16(&mut self, num: u16) -> Result<(), TlsError> {
+        let data = num.to_be_bytes();
+        self.extend_from_slice(&data)
+    }
+
     pub fn push_u24(&mut self, num: u32) -> Result<(), TlsError> {
-        if self.capacity() - (self.len + self.offset) > 2 {
-            let data = num.to_be_bytes();
-            self.extend_from_slice(&[data[0], data[1], data[2]])
-        } else {
-            Err(TlsError::InsufficientSpace)
-        }
+        let data = num.to_be_bytes();
+        self.extend_from_slice(&[data[0], data[1], data[2]])
+    }
+
+    pub fn push_u32(&mut self, num: u32) -> Result<(), TlsError> {
+        let data = num.to_be_bytes();
+        self.extend_from_slice(&data)
     }
 
     pub fn set(&mut self, idx: usize, val: u8) -> Result<(), TlsError> {
@@ -61,6 +67,21 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
+    pub fn set_u16(&mut self, idx: usize, val: u16) -> Result<(), TlsError> {
+        let [upper, lower] = val.to_be_bytes();
+        self.set(idx, upper)?;
+        self.set(idx + 1, lower)?;
+        Ok(())
+    }
+
+    pub fn set_u24(&mut self, idx: usize, val: u32) -> Result<(), TlsError> {
+        let [_, upper, mid, lower] = val.to_be_bytes();
+        self.set(idx, upper)?;
+        self.set(idx + 1, mid)?;
+        self.set(idx + 2, lower)?;
+        Ok(())
+    }
+
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.buf[self.offset..self.offset + self.len]
     }
@@ -70,14 +91,18 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     fn extend_internal(&mut self, other: &[u8]) -> Result<(), TlsError> {
-        let start = self.offset + self.len;
-        if self.capacity() - start < other.len() {
+        if self.space() < other.len() {
             Err(TlsError::InsufficientSpace)
         } else {
+            let start = self.offset + self.len;
             self.buf[start..start + other.len()].clone_from_slice(&other[..other.len()]);
             self.len += other.len();
             Ok(())
         }
+    }
+
+    fn space(&self) -> usize {
+        self.capacity() - (self.offset + self.len)
     }
 
     pub fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), TlsError> {

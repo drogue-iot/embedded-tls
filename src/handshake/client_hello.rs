@@ -43,7 +43,7 @@ where
         let public_key = EncodedPoint::from(&self.secret.public_key());
         let public_key = public_key.as_ref();
 
-        buf.extend_from_slice(&LEGACY_VERSION.to_be_bytes())
+        buf.push_u16(LEGACY_VERSION)
             .map_err(|_| TlsError::EncodeError)?;
         buf.extend_from_slice(&self.random)
             .map_err(|_| TlsError::EncodeError)?;
@@ -56,9 +56,8 @@ where
         //for c in self.config.cipher_suites.iter() {
         //buf.extend_from_slice(&(*c as u16).to_be_bytes());
         //}
-        buf.extend_from_slice(&2u16.to_be_bytes())
-            .map_err(|_| TlsError::EncodeError)?;
-        buf.extend_from_slice(&CipherSuite::CODE_POINT.to_be_bytes())
+        buf.push_u16(2).map_err(|_| TlsError::EncodeError)?;
+        buf.push_u16(CipherSuite::CODE_POINT)
             .map_err(|_| TlsError::EncodeError)?;
 
         // compression methods, 1 byte of 0
@@ -120,13 +119,8 @@ where
 
         let extensions_length = (buf.len() - extension_length_marker - 2) as u16;
         //info!("extensions length: {:x?}", extensions_length.to_be_bytes());
-        buf.set(extension_length_marker, extensions_length.to_be_bytes()[0])
+        buf.set_u16(extension_length_marker, extensions_length)
             .map_err(|_| TlsError::EncodeError)?;
-        buf.set(
-            extension_length_marker + 1,
-            extensions_length.to_be_bytes()[1],
-        )
-        .map_err(|_| TlsError::EncodeError)?;
 
         Ok(())
     }

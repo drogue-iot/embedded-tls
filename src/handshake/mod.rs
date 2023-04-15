@@ -97,21 +97,15 @@ where
             .map_err(|_| TlsError::EncodeError)?;
 
         let content_length_marker = buf.len();
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
+        buf.push_u24(0).map_err(|_| TlsError::EncodeError)?;
         match self {
             ClientHandshake::ClientHello(inner) => inner.encode(buf)?,
             ClientHandshake::Finished(inner) => inner.encode(buf)?,
             ClientHandshake::ClientCert(inner) => inner.encode(buf)?,
         }
-        let content_length = (buf.len() as u32 - content_length_marker as u32) - 3;
 
-        buf.set(content_length_marker, content_length.to_be_bytes()[1])
-            .map_err(|_| TlsError::EncodeError)?;
-        buf.set(content_length_marker + 1, content_length.to_be_bytes()[2])
-            .map_err(|_| TlsError::EncodeError)?;
-        buf.set(content_length_marker + 2, content_length.to_be_bytes()[3])
+        let content_length = (buf.len() - content_length_marker) as u32 - 3;
+        buf.set_u24(content_length_marker, content_length)
             .map_err(|_| TlsError::EncodeError)?;
 
         //info!("hash [{:x?}]", &buf[content_marker..]);
