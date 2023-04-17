@@ -106,8 +106,8 @@ pub enum PskKeyExchangeMode {
 }
 
 impl ClientExtension<'_> {
-    pub fn extension_type(&self) -> [u8; 2] {
-        (match self {
+    pub fn extension_type(&self) -> ExtensionType {
+        match self {
             ClientExtension::ServerName { .. } => ExtensionType::ServerName,
             ClientExtension::SupportedVersions { .. } => ExtensionType::SupportedVersions,
             ClientExtension::SignatureAlgorithms { .. } => ExtensionType::SignatureAlgorithms,
@@ -119,144 +119,115 @@ impl ClientExtension<'_> {
             ClientExtension::PskKeyExchangeModes { .. } => ExtensionType::PskKeyExchangeModes,
             ClientExtension::PreSharedKey { .. } => ExtensionType::PreSharedKey,
             ClientExtension::MaxFragmentLength(_) => ExtensionType::MaxFragmentLength,
-        } as u16)
-            .to_be_bytes()
+        }
     }
 
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
-        buf.extend_from_slice(&self.extension_type())
+        buf.push_u16(self.extension_type() as u16)
             .map_err(|_| TlsError::EncodeError)?;
-        let extension_length_marker = buf.len();
-        //info!("marker at {}", extension_length_marker);
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
-        match self {
-            ClientExtension::ServerName { server_name } => {
-                //info!("server name ext");
-                let sni_size: u16 = (server_name.as_bytes().len() + 3) as u16;
+        buf.with_u16_length(|buf| {
+            match self {
+                ClientExtension::ServerName { server_name } => {
+                    //info!("server name ext");
+                    buf.with_u16_length(|buf| {
+                        const NAME_TYPE_HOST: u8 = 0;
+                        buf.push(NAME_TYPE_HOST)
+                            .map_err(|_| TlsError::EncodeError)?;
 
-                buf.extend_from_slice(&sni_size.to_be_bytes())
-                    .map_err(|_| TlsError::EncodeError)?;
-
-                // Type host
-                buf.push(0).map_err(|_| TlsError::EncodeError)?;
-                buf.extend_from_slice(&(server_name.as_bytes().len() as u16).to_be_bytes())
-                    .map_err(|_| TlsError::EncodeError)?;
-                buf.extend_from_slice(server_name.as_bytes())
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-            ClientExtension::PskKeyExchangeModes { modes } => {
-                buf.push(modes.len() as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-                for mode in modes {
-                    buf.push(*mode as u8).map_err(|_| TlsError::EncodeError)?;
+                        buf.with_u16_length(|buf| buf.extend_from_slice(server_name.as_bytes()))
+                            .map_err(|_| TlsError::EncodeError)
+                    })
                 }
-            }
-            ClientExtension::SupportedVersions { versions } => {
-                //info!("supported versions ext");
-                buf.push(versions.len() as u8 * 2)
-                    .map_err(|_| TlsError::EncodeError)?;
-                for v in versions {
-                    buf.extend_from_slice(&v.to_be_bytes())
-                        .map_err(|_| TlsError::EncodeError)?;
+                ClientExtension::PskKeyExchangeModes { modes } => buf.with_u8_length(|buf| {
+                    for mode in modes {
+                        buf.push(*mode as u8).map_err(|_| TlsError::EncodeError)?;
+                    }
+                    Ok(())
+                }),
+                ClientExtension::SupportedVersions { versions } => {
+                    //info!("supported versions ext");
+                    buf.with_u8_length(|buf| {
+                        for &v in versions {
+                            buf.push_u16(v).map_err(|_| TlsError::EncodeError)?;
+                        }
+                        Ok(())
+                    })
                 }
-            }
-            ClientExtension::SignatureAlgorithms {
-                supported_signature_algorithms,
-            } => {
-                //info!("supported sig algo ext");
-                buf.extend_from_slice(
-                    &(supported_signature_algorithms.len() as u16 * 2).to_be_bytes(),
-                )
-                .map_err(|_| TlsError::EncodeError)?;
+                ClientExtension::SignatureAlgorithms {
+                    supported_signature_algorithms,
+                } => {
+                    //info!("supported sig algo ext");
+                    buf.with_u16_length(|buf| {
+                        for &a in supported_signature_algorithms {
+                            buf.push_u16(a as u16).map_err(|_| TlsError::EncodeError)?;
+                        }
+                        Ok(())
+                    })
+                }
+                ClientExtension::SignatureAlgorithmsCert {
+                    supported_signature_algorithms,
+                } => {
+                    //info!("supported sig algo cert ext");
+                    buf.with_u16_length(|buf| {
+                        for &a in supported_signature_algorithms {
+                            buf.push_u16(a as u16).map_err(|_| TlsError::EncodeError)?;
+                        }
+                        Ok(())
+                    })
+                }
+                ClientExtension::SupportedGroups { supported_groups } => {
+                    //info!("supported groups ext");
+                    buf.with_u16_length(|buf| {
+                        for &g in supported_groups {
+                            buf.push_u16(g as u16).map_err(|_| TlsError::EncodeError)?;
+                        }
+                        Ok(())
+                    })
+                }
+                ClientExtension::KeyShare { group, opaque } => {
+                    //info!("key_share ext");
+                    buf.with_u16_length(|buf| {
+                        // one key-share
+                        buf.push_u16(*group as u16)
+                            .map_err(|_| TlsError::EncodeError)?;
 
-                for a in supported_signature_algorithms {
-                    buf.extend_from_slice(&(*a as u16).to_be_bytes())
-                        .map_err(|_| TlsError::EncodeError)?;
+                        buf.with_u16_length(|buf| buf.extend_from_slice(opaque.as_ref()))
+                            .map_err(|_| TlsError::EncodeError)
+                    })
                 }
-            }
-            ClientExtension::SignatureAlgorithmsCert {
-                supported_signature_algorithms,
-            } => {
-                //info!("supported sig algo cert ext");
-                buf.extend_from_slice(
-                    &(supported_signature_algorithms.len() as u16 * 2).to_be_bytes(),
-                )
-                .map_err(|_| TlsError::EncodeError)?;
+                ClientExtension::PreSharedKey {
+                    identities,
+                    hash_size,
+                } => {
+                    buf.with_u16_length(|buf| {
+                        for identity in identities {
+                            buf.with_u16_length(|buf| buf.extend_from_slice(identity))
+                                .map_err(|_| TlsError::EncodeError)?;
 
-                for a in supported_signature_algorithms {
-                    buf.extend_from_slice(&(*a as u16).to_be_bytes())
-                        .map_err(|_| TlsError::EncodeError)?;
-                }
-            }
-            ClientExtension::SupportedGroups { supported_groups } => {
-                //info!("supported groups ext");
-                buf.extend_from_slice(&(supported_groups.len() as u16 * 2).to_be_bytes())
+                            // NOTE: No support for ticket age, set to 0 as recommended by RFC
+                            buf.push_u32(0).map_err(|_| TlsError::EncodeError)?;
+                        }
+                        Ok(())
+                    })
                     .map_err(|_| TlsError::EncodeError)?;
 
-                for g in supported_groups {
-                    buf.extend_from_slice(&(*g as u16).to_be_bytes())
-                        .map_err(|_| TlsError::EncodeError)?;
-                }
-            }
-            ClientExtension::KeyShare { group, opaque } => {
-                //info!("key_share ext");
-                buf.extend_from_slice(&(2 + 2 + opaque.len() as u16).to_be_bytes())
-                    .map_err(|_| TlsError::EncodeError)?;
-                // one key-share
-                buf.extend_from_slice(&(*group as u16).to_be_bytes())
-                    .map_err(|_| TlsError::EncodeError)?;
-                buf.extend_from_slice(&(opaque.len() as u16).to_be_bytes())
-                    .map_err(|_| TlsError::EncodeError)?;
-                buf.extend_from_slice(opaque.as_ref())
-                    .map_err(|_| TlsError::EncodeError)?;
-            }
-            ClientExtension::PreSharedKey {
-                identities,
-                hash_size,
-            } => {
-                // Each identity entry is of length identity.len() + u32 (for the ticket age)
-                let identities_len: usize = identities.iter().map(|i| i.len() + 2 + 4).sum();
-                buf.extend_from_slice(&(identities_len as u16).to_be_bytes())
-                    .map_err(|_| TlsError::EncodeError)?;
-                for identity in identities {
-                    buf.extend_from_slice(&(identity.len() as u16).to_be_bytes())
+                    // NOTE: We encode binders later after computing the transcript.
+                    let binders_len = (1 + hash_size) * identities.len();
+                    buf.push_u16(binders_len as u16)
                         .map_err(|_| TlsError::EncodeError)?;
 
-                    buf.extend_from_slice(identity)
-                        .map_err(|_| TlsError::EncodeError)?;
+                    for _ in 0..binders_len {
+                        buf.push(0).map_err(|_| TlsError::EncodeError)?;
+                    }
 
-                    // NOTE: No support for ticket age, set to 0 as recommended by RFC
-                    buf.extend_from_slice(&0u32.to_be_bytes())
-                        .map_err(|_| TlsError::EncodeError)?;
+                    Ok(())
                 }
-
-                // NOTE: We encode binders later after computing the transcript.
-                let binders_len = (1 + hash_size) * identities.len();
-                buf.extend_from_slice(&(binders_len as u16).to_be_bytes())
-                    .map_err(|_| TlsError::EncodeError)?;
-
-                for _ in 0..binders_len {
-                    buf.push(0).map_err(|_| TlsError::EncodeError)?;
+                ClientExtension::MaxFragmentLength(len) => {
+                    //info!("max fragment length");
+                    buf.push(*len as u8).map_err(|_| TlsError::EncodeError)
                 }
             }
-            ClientExtension::MaxFragmentLength(len) => {
-                //info!("max fragment length");
-                buf.push(*len as u8).map_err(|_| TlsError::EncodeError)?;
-            }
-        }
-
-        //info!("tail at {}", buf.len());
-        let extension_length = (buf.len() as u16 - extension_length_marker as u16) - 2;
-        //info!("len: {}", extension_length);
-        buf.set(extension_length_marker, extension_length.to_be_bytes()[0])
-            .map_err(|_| TlsError::EncodeError)?;
-        buf.set(
-            extension_length_marker + 1,
-            extension_length.to_be_bytes()[1],
-        )
-        .map_err(|_| TlsError::EncodeError)?;
-        Ok(())
+        })
     }
 }

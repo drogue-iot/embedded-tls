@@ -4,7 +4,6 @@ use aes_gcm::Error;
 
 pub struct CryptoBuffer<'b> {
     buf: &'b mut [u8],
-    capacity: usize,
     offset: usize,
     len: usize,
 }
@@ -12,7 +11,6 @@ pub struct CryptoBuffer<'b> {
 impl<'b> CryptoBuffer<'b> {
     pub(crate) fn empty() -> Self {
         Self {
-            capacity: 0,
             buf: &mut [],
             offset: 0,
             len: 0,
@@ -21,7 +19,6 @@ impl<'b> CryptoBuffer<'b> {
 
     pub(crate) fn wrap(buf: &'b mut [u8]) -> Self {
         Self {
-            capacity: buf.len(),
             buf,
             offset: 0,
             len: 0,
@@ -30,7 +27,6 @@ impl<'b> CryptoBuffer<'b> {
 
     pub(crate) fn wrap_with_pos(buf: &'b mut [u8], pos: usize) -> Self {
         Self {
-            capacity: buf.len(),
             buf,
             offset: 0,
             len: pos,
@@ -38,7 +34,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     pub fn push(&mut self, b: u8) -> Result<(), TlsError> {
-        if self.capacity - (self.len + self.offset) > 0 {
+        if self.space() > 0 {
             self.buf[self.offset + self.len] = b;
             self.len += 1;
             Ok(())
@@ -47,13 +43,19 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
+    pub fn push_u16(&mut self, num: u16) -> Result<(), TlsError> {
+        let data = num.to_be_bytes();
+        self.extend_from_slice(&data)
+    }
+
     pub fn push_u24(&mut self, num: u32) -> Result<(), TlsError> {
-        if self.capacity - (self.len + self.offset) > 2 {
-            let data = num.to_be_bytes();
-            self.extend_from_slice(&[data[0], data[1], data[2]])
-        } else {
-            Err(TlsError::InsufficientSpace)
-        }
+        let data = num.to_be_bytes();
+        self.extend_from_slice(&[data[1], data[2], data[3]])
+    }
+
+    pub fn push_u32(&mut self, num: u32) -> Result<(), TlsError> {
+        let data = num.to_be_bytes();
+        self.extend_from_slice(&data)
     }
 
     pub fn set(&mut self, idx: usize, val: u8) -> Result<(), TlsError> {
@@ -65,6 +67,21 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
+    pub fn set_u16(&mut self, idx: usize, val: u16) -> Result<(), TlsError> {
+        let [upper, lower] = val.to_be_bytes();
+        self.set(idx, upper)?;
+        self.set(idx + 1, lower)?;
+        Ok(())
+    }
+
+    pub fn set_u24(&mut self, idx: usize, val: u32) -> Result<(), TlsError> {
+        let [_, upper, mid, lower] = val.to_be_bytes();
+        self.set(idx, upper)?;
+        self.set(idx + 1, mid)?;
+        self.set(idx + 2, lower)?;
+        Ok(())
+    }
+
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.buf[self.offset..self.offset + self.len]
     }
@@ -74,14 +91,18 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     fn extend_internal(&mut self, other: &[u8]) -> Result<(), TlsError> {
-        let start = self.offset + self.len;
-        if self.capacity - start < other.len() {
+        if self.space() < other.len() {
             Err(TlsError::InsufficientSpace)
         } else {
+            let start = self.offset + self.len;
             self.buf[start..start + other.len()].clone_from_slice(&other[..other.len()]);
             self.len += other.len();
             Ok(())
         }
+    }
+
+    fn space(&self) -> usize {
+        self.capacity() - (self.offset + self.len)
     }
 
     pub fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), TlsError> {
@@ -89,7 +110,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     fn truncate_internal(&mut self, len: usize) {
-        if len <= self.capacity - self.offset {
+        if len <= self.capacity() - self.offset {
             self.len = len;
         }
     }
@@ -111,7 +132,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     pub fn capacity(&self) -> usize {
-        self.capacity
+        self.buf.len()
     }
 
     pub fn forward(self) -> CryptoBuffer<'b> {
@@ -136,9 +157,38 @@ impl<'b> CryptoBuffer<'b> {
         CryptoBuffer {
             buf: self.buf,
             len: new_len,
-            capacity: self.capacity,
             offset,
         }
+    }
+
+    pub fn with_u8_length<R>(
+        &mut self,
+        op: impl FnOnce(&mut Self) -> Result<R, TlsError>,
+    ) -> Result<R, TlsError> {
+        let len_pos = self.len;
+        self.push(0)?;
+
+        let r = op(self)?;
+
+        let len = (self.len() - len_pos) as u8 - 1;
+        self.set(len_pos, len)?;
+
+        Ok(r)
+    }
+
+    pub fn with_u16_length<R>(
+        &mut self,
+        op: impl FnOnce(&mut Self) -> Result<R, TlsError>,
+    ) -> Result<R, TlsError> {
+        let len_pos = self.len;
+        self.push_u16(0)?;
+
+        let r = op(self)?;
+
+        let len = (self.len() - len_pos) as u16 - 2;
+        self.set_u16(len_pos, len)?;
+
+        Ok(r)
     }
 }
 
@@ -170,11 +220,19 @@ mod test {
 
     #[test]
     fn encode() {
-        let mut buf = [0; 4];
-        let mut c = CryptoBuffer::wrap(&mut buf);
-        c.push_u24(1024).unwrap();
-        let decoded = u32::from_be_bytes(buf);
-        assert_eq!(1024, decoded);
+        let mut buf1 = [0; 4];
+        let mut c = CryptoBuffer::wrap(&mut buf1);
+        c.push_u24(1027).unwrap();
+
+        let mut buf2 = [0; 4];
+        let mut c = CryptoBuffer::wrap(&mut buf2);
+        c.push_u24(0).unwrap();
+        c.set_u24(0, 1027).unwrap();
+
+        assert_eq!(buf1, buf2);
+
+        let decoded = u32::from_be_bytes([0, buf1[0], buf1[1], buf1[2]]);
+        assert_eq!(1027, decoded);
     }
 
     #[test]

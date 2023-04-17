@@ -9,8 +9,7 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::extensions::{ClientExtension, PskKeyExchangeMode};
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::named_groups::NamedGroup;
-use crate::signature_schemes::SignatureScheme;
-use crate::supported_versions::{ProtocolVersion, TLS13};
+use crate::supported_versions::TLS13;
 use crate::TlsError;
 
 pub struct ClientHello<'config, CipherSuite>
@@ -44,7 +43,7 @@ where
         let public_key = EncodedPoint::from(&self.secret.public_key());
         let public_key = public_key.as_ref();
 
-        buf.extend_from_slice(&LEGACY_VERSION.to_be_bytes())
+        buf.push_u16(LEGACY_VERSION)
             .map_err(|_| TlsError::EncodeError)?;
         buf.extend_from_slice(&self.random)
             .map_err(|_| TlsError::EncodeError)?;
@@ -57,9 +56,8 @@ where
         //for c in self.config.cipher_suites.iter() {
         //buf.extend_from_slice(&(*c as u16).to_be_bytes());
         //}
-        buf.extend_from_slice(&2u16.to_be_bytes())
-            .map_err(|_| TlsError::EncodeError)?;
-        buf.extend_from_slice(&CipherSuite::CODE_POINT.to_be_bytes())
+        buf.push_u16(2).map_err(|_| TlsError::EncodeError)?;
+        buf.push_u16(CipherSuite::CODE_POINT)
             .map_err(|_| TlsError::EncodeError)?;
 
         // compression methods, 1 byte of 0
@@ -71,57 +69,45 @@ where
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
-        let mut versions = Vec::<ProtocolVersion, 16>::new();
-        versions.push(TLS13).map_err(|_| TlsError::EncodeError)?;
-
-        (ClientExtension::SupportedVersions { versions }).encode(buf)?;
-
-        let mut supported_signature_algorithms = Vec::<SignatureScheme, 16>::new();
-        for scheme in self.config.signature_schemes.iter() {
-            supported_signature_algorithms
-                .push(*scheme)
-                .map_err(|_| TlsError::EncodeError)?;
+        ClientExtension::SupportedVersions {
+            versions: Vec::from_slice(&[TLS13]).unwrap(),
         }
-
-        (ClientExtension::SignatureAlgorithms {
-            supported_signature_algorithms,
-        })
         .encode(buf)?;
 
-        let mut supported_groups = Vec::<NamedGroup, 16>::new();
-        for named_group in self.config.named_groups.iter() {
-            supported_groups
-                .push(*named_group)
-                .map_err(|_| TlsError::EncodeError)?;
+        ClientExtension::SignatureAlgorithms {
+            supported_signature_algorithms: self.config.signature_schemes.clone(),
         }
+        .encode(buf)?;
 
-        (ClientExtension::SupportedGroups { supported_groups }).encode(buf)?;
+        ClientExtension::SupportedGroups {
+            supported_groups: self.config.named_groups.clone(),
+        }
+        .encode(buf)?;
 
-        (ClientExtension::PskKeyExchangeModes {
+        ClientExtension::PskKeyExchangeModes {
             modes: Vec::from_slice(&[PskKeyExchangeMode::PskDheKe]).unwrap(),
-        })
+        }
         .encode(buf)?;
 
-        (ClientExtension::KeyShare {
+        ClientExtension::KeyShare {
             group: NamedGroup::Secp256r1,
             opaque: public_key,
-        })
+        }
         .encode(buf)?;
 
         if let Some(server_name) = self.config.server_name.as_ref() {
             // TODO Add SNI extension
-            (ClientExtension::ServerName { server_name }).encode(buf)?;
+            ClientExtension::ServerName { server_name }.encode(buf)?;
         }
 
         // IMPORTANT: The pre shared keys must be encoded last, since we encode the binders
         // at a later stage
         if let Some((_, identities)) = &self.config.psk {
-            (ClientExtension::PreSharedKey {
+            ClientExtension::PreSharedKey {
                 identities: identities.clone(),
                 hash_size: <CipherSuite::Hash as OutputSizeUser>::output_size(),
-            })
-            .encode(buf)
-            .map_err(|_| TlsError::EncodeError)?;
+            }
+            .encode(buf)?;
         }
 
         //extensions.push(ClientExtension::MaxFragmentLength(
@@ -131,15 +117,10 @@ where
         // ----------------------------------------
         // ----------------------------------------
 
-        let extensions_length = (buf.len() as u16 - extension_length_marker as u16) - 2;
+        let extensions_length = (buf.len() - extension_length_marker - 2) as u16;
         //info!("extensions length: {:x?}", extensions_length.to_be_bytes());
-        buf.set(extension_length_marker, extensions_length.to_be_bytes()[0])
+        buf.set_u16(extension_length_marker, extensions_length)
             .map_err(|_| TlsError::EncodeError)?;
-        buf.set(
-            extension_length_marker + 1,
-            extensions_length.to_be_bytes()[1],
-        )
-        .map_err(|_| TlsError::EncodeError)?;
 
         Ok(())
     }

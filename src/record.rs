@@ -90,8 +90,7 @@ where
             .map_err(|_| TlsError::EncodeError)?;
 
         let record_length_marker = buf.len();
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
+        buf.push_u16(0).map_err(|_| TlsError::EncodeError)?;
 
         let (range, mut buf) = match self {
             ClientRecord::Handshake(handshake, false) => {
