@@ -46,13 +46,31 @@ mod tests {
         });
     }
 
-    // #[test]
-    fn test_parse() {
+    #[test]
+    fn test_parse_empty() {
         setup();
-        let buffer = [0x00, 0x017, 0xAA, 0xBB];
+        let buffer = [
+            0x00, 0x017, // Secp256r1
+            0x00, 0x00, // key_exchange length = 0 bytes
+        ];
         let result = KeyShareEntry::parse(&mut ParseBuffer::new(&buffer)).unwrap();
 
         assert_eq!(NamedGroup::Secp256r1, result.group);
+        assert_eq!(0, result.opaque.as_ref().len());
+    }
+
+    #[test]
+    fn test_parse() {
+        setup();
+        let buffer = [
+            0x00, 0x017, // Secp256r1
+            0x00, 0x02, // key_exchange length = 2 bytes
+            0xAA, 0xBB,
+        ];
+        let result = KeyShareEntry::parse(&mut ParseBuffer::new(&buffer)).unwrap();
+
+        assert_eq!(NamedGroup::Secp256r1, result.group);
+        assert_eq!(2, result.opaque.as_ref().len());
         assert_eq!([0xAA, 0xBB], result.opaque.as_ref());
     }
 }
