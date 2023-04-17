@@ -150,8 +150,7 @@ where
     ) -> Result<(), TlsError> {
         match self {
             ClientRecord::Handshake(handshake, false) => {
-                let end = buf.len();
-                let enc_buf = &mut buf.as_mut_slice()[0..end];
+                let enc_buf = &mut buf.as_mut_slice();
                 let transcript = read_key_schedule
                     .ok_or(TlsError::InternalError)?
                     .transcript_hash();

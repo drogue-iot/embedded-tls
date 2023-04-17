@@ -40,9 +40,9 @@ use crate::content_types::ContentType;
 use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 
-pub(crate) fn decrypt_record<'m, CipherSuite>(
+pub(crate) fn decrypt_record<CipherSuite>(
     key_schedule: &mut ReadKeySchedule<CipherSuite>,
-    record: ServerRecord<'m, HashOutputSize<CipherSuite>>,
+    record: ServerRecord<'_, HashOutputSize<CipherSuite>>,
     mut cb: impl FnMut(
         &mut ReadKeySchedule<CipherSuite>,
         ServerRecord<'_, HashOutputSize<CipherSuite>>,
