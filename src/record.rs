@@ -2,7 +2,6 @@ use crate::application_data::ApplicationData;
 use crate::buffer::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::config::{TlsCipherSuite, TlsConfig};
-use crate::connection::encrypt;
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
@@ -29,20 +28,81 @@ where
     ApplicationData(&'a [u8]),
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ClientRecordHeader {
+    Handshake(Encrypted),
+    ChangeCipherSpec(Encrypted),
+    Alert(Encrypted),
+    ApplicationData,
+}
+
+impl ClientRecordHeader {
+    pub fn is_encrypted(&self) -> bool {
+        match self {
+            ClientRecordHeader::Handshake(encrypted)
+            | ClientRecordHeader::ChangeCipherSpec(encrypted)
+            | ClientRecordHeader::Alert(encrypted) => *encrypted,
+            ClientRecordHeader::ApplicationData => true,
+        }
+    }
+
+    pub fn header_content_type(&self) -> ContentType {
+        match self {
+            Self::Handshake(false) => ContentType::Handshake,
+            Self::Alert(false) => ContentType::ChangeCipherSpec,
+            Self::ChangeCipherSpec(false) => ContentType::ChangeCipherSpec,
+            Self::Handshake(true) => ContentType::ApplicationData,
+            Self::Alert(true) => ContentType::ApplicationData,
+            Self::ChangeCipherSpec(true) => ContentType::ApplicationData,
+            Self::ApplicationData => ContentType::ApplicationData,
+        }
+    }
+
+    pub fn trailer_content_type(&self) -> ContentType {
+        match self {
+            Self::Handshake(_) => ContentType::Handshake,
+            Self::Alert(_) => ContentType::ChangeCipherSpec,
+            Self::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
+            Self::ApplicationData => ContentType::ApplicationData,
+        }
+    }
+
+    pub fn version(&self) -> [u8; 2] {
+        match self {
+            Self::Handshake(true) => [0x03, 0x03],
+            Self::Handshake(false) => [0x03, 0x01],
+            Self::ChangeCipherSpec(true) => [0x03, 0x03],
+            Self::ChangeCipherSpec(false) => [0x03, 0x01],
+            Self::Alert(true) => [0x03, 0x03],
+            Self::Alert(false) => [0x03, 0x01],
+            Self::ApplicationData => [0x03, 0x03],
+        }
+    }
+
+    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        buf.push(self.header_content_type() as u8)
+            .map_err(|_| TlsError::EncodeError)?;
+        buf.extend_from_slice(&self.version())
+            .map_err(|_| TlsError::EncodeError)?;
+
+        Ok(())
+    }
+}
+
 impl<'config, 'a, CipherSuite> ClientRecord<'config, 'a, CipherSuite>
 where
     //N: ArrayLength<u8>,
     CipherSuite: TlsCipherSuite,
 {
-    pub fn content_type(&self) -> ContentType {
+    pub fn header(&self) -> ClientRecordHeader {
         match self {
-            ClientRecord::Handshake(_, false) => ContentType::Handshake,
-            ClientRecord::Alert(_, false) => ContentType::ChangeCipherSpec,
-            ClientRecord::ChangeCipherSpec(_, false) => ContentType::ChangeCipherSpec,
-            ClientRecord::Handshake(_, true) => ContentType::ApplicationData,
-            ClientRecord::Alert(_, true) => ContentType::ApplicationData,
-            ClientRecord::ChangeCipherSpec(_, true) => ContentType::ApplicationData,
-            ClientRecord::ApplicationData(_) => ContentType::ApplicationData,
+            ClientRecord::Handshake(_, encrypted) => ClientRecordHeader::Handshake(*encrypted),
+            ClientRecord::ChangeCipherSpec(_, encrypted) => {
+                ClientRecordHeader::ChangeCipherSpec(*encrypted)
+            }
+            ClientRecord::Alert(_, encrypted) => ClientRecordHeader::Alert(*encrypted),
+            ClientRecord::ApplicationData(_) => ClientRecordHeader::ApplicationData,
         }
     }
 
@@ -66,37 +126,32 @@ where
         )
     }
 
-    pub(crate) fn encode(
-        &self,
-        enc_buf: &mut [u8],
-        read_key_schedule: Option<&mut ReadKeySchedule<CipherSuite>>,
-        write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
-    ) -> Result<usize, TlsError> {
-        let mut buf = CryptoBuffer::wrap(enc_buf);
-        buf.push(self.content_type() as u8)
-            .map_err(|_| TlsError::EncodeError)?;
-        let version = match self {
-            ClientRecord::Handshake(_, true) => &[0x03, 0x03],
-            ClientRecord::Handshake(_, false) => &[0x03, 0x01],
-            ClientRecord::ChangeCipherSpec(_, true) => &[0x03, 0x03],
-            ClientRecord::ChangeCipherSpec(_, false) => &[0x03, 0x01],
-            ClientRecord::Alert(_, true) => &[0x03, 0x03],
-            ClientRecord::Alert(_, false) => &[0x03, 0x01],
-            ClientRecord::ApplicationData(_) => &[0x03, 0x03],
+    pub(crate) fn encode_payload(&self, buf: &mut CryptoBuffer) -> Result<usize, TlsError> {
+        let record_length_marker = buf.len();
+
+        match self {
+            ClientRecord::Handshake(handshake, _) => handshake.encode(buf)?,
+            ClientRecord::ChangeCipherSpec(spec, _) => spec.encode(buf)?,
+            ClientRecord::Alert(alert, _) => alert.encode(buf)?,
+
+            ClientRecord::ApplicationData(data) => buf
+                .extend_from_slice(data)
+                .map_err(|_| TlsError::EncodeError)?,
         };
 
-        buf.extend_from_slice(version)
-            .map_err(|_| TlsError::EncodeError)?;
+        Ok(buf.len() - record_length_marker)
+    }
 
-        let record_length_marker = buf.len();
-        buf.push_u16(0).map_err(|_| TlsError::EncodeError)?;
-
-        let mut wrapped = buf.forward();
+    pub fn finish_record(
+        &self,
+        buf: &mut CryptoBuffer,
+        read_key_schedule: Option<&mut ReadKeySchedule<CipherSuite>>,
+        write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
+    ) -> Result<(), TlsError> {
         match self {
             ClientRecord::Handshake(handshake, false) => {
-                let range = handshake.encode(&mut wrapped)?;
-
-                let enc_buf = &mut wrapped.as_mut_slice()[range];
+                let end = buf.len();
+                let enc_buf = &mut buf.as_mut_slice()[0..end];
                 let transcript = read_key_schedule
                     .ok_or(TlsError::InternalError)?
                     .transcript_hash();
@@ -135,112 +190,20 @@ where
                     transcript.update(enc_buf);
                 }
             }
-            ClientRecord::Handshake(handshake, true) => {
+            ClientRecord::Handshake(_, true) => {
                 let transcript = read_key_schedule
                     .ok_or(TlsError::InternalError)?
                     .transcript_hash();
-                let range = handshake.encode(&mut wrapped)?;
-                transcript.update(&wrapped.as_slice()[range]);
-                wrapped
-                    .push(ContentType::Handshake as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
 
-                // TODO: write buffer should track written range and encrypt if the record type
-                // requires it. The API should contain start_record, append and end_record fns.
-                let _ = encrypt(write_key_schedule, &mut wrapped)?;
+                let end = buf.len();
+                // Don't include the content type in the slice
+                transcript.update(&buf.as_slice()[0..end - 1]);
             }
-            ClientRecord::ChangeCipherSpec(spec, false) => {
-                spec.encode(&mut wrapped)?;
-            }
-            ClientRecord::ChangeCipherSpec(spec, true) => {
-                spec.encode(&mut wrapped)?;
-                wrapped
-                    .push(ContentType::ChangeCipherSpec as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-
-                let _ = encrypt(write_key_schedule, &mut wrapped)?;
-            }
-            ClientRecord::Alert(alert, false) => {
-                alert.encode(&mut wrapped)?;
-            }
-            ClientRecord::Alert(alert, true) => {
-                alert.encode(&mut wrapped)?;
-                wrapped
-                    .push(ContentType::Alert as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-
-                let _ = encrypt(write_key_schedule, &mut wrapped)?;
-            }
-
-            ClientRecord::ApplicationData(data) => {
-                wrapped
-                    .extend_from_slice(data)
-                    .map_err(|_| TlsError::EncodeError)?;
-                wrapped
-                    .push(ContentType::ApplicationData as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-
-                let _ = encrypt(write_key_schedule, &mut wrapped)?;
-            }
+            _ => {}
         };
-        let mut buf = wrapped.rewind();
 
-        let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
-
-        // trace!("record len {}", record_length);
-
-        buf.set(record_length_marker, record_length.to_be_bytes()[0])
-            .map_err(|_| TlsError::EncodeError)?;
-        buf.set(record_length_marker + 1, record_length.to_be_bytes()[1])
-            .map_err(|_| TlsError::EncodeError)?;
-
-        Ok(buf.len())
+        Ok(())
     }
-}
-
-pub(crate) fn encode_application_data_in_place<
-    F: FnMut(&mut CryptoBuffer<'_>) -> Result<usize, TlsError>,
->(
-    enc_buf: &mut [u8],
-    data_len: usize,
-    mut encrypt_fn: F,
-) -> Result<usize, TlsError> {
-    if 5 + data_len > enc_buf.len() {
-        return Err(TlsError::EncodeError);
-    }
-
-    // Make room for the header
-    enc_buf.copy_within(..data_len, 5);
-
-    let mut buf = CryptoBuffer::wrap(enc_buf);
-    buf.push(ContentType::ApplicationData as u8)
-        .map_err(|_| TlsError::EncodeError)?;
-    let version = &[0x03, 0x03];
-    buf.extend_from_slice(version)
-        .map_err(|_| TlsError::EncodeError)?;
-
-    let record_length_marker = buf.len();
-    buf.push(0).map_err(|_| TlsError::EncodeError)?;
-    buf.push(0).map_err(|_| TlsError::EncodeError)?;
-
-    assert_eq!(5, buf.len());
-
-    let buf = CryptoBuffer::wrap_with_pos(enc_buf, 5 + data_len);
-    let mut wrapped = buf.offset(5);
-    wrapped
-        .push(ContentType::ApplicationData as u8)
-        .map_err(|_| TlsError::EncodeError)?;
-    let _ = encrypt_fn(&mut wrapped)?;
-
-    let mut buf = wrapped.rewind();
-    let record_length = (buf.len() as u16 - record_length_marker as u16) - 2;
-
-    buf.set(record_length_marker, record_length.to_be_bytes()[0])
-        .map_err(|_| TlsError::EncodeError)?;
-    buf.set(record_length_marker + 1, record_length.to_be_bytes()[1])
-        .map_err(|_| TlsError::EncodeError)?;
-
-    Ok(buf.len())
 }
 
 #[derive(Debug)]
@@ -281,6 +244,15 @@ impl RecordHeader {
 }
 
 impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
+    pub fn content_type(&self) -> ContentType {
+        match self {
+            ServerRecord::Handshake(_) => ContentType::Handshake,
+            ServerRecord::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
+            ServerRecord::Alert(_) => ContentType::Alert,
+            ServerRecord::ApplicationData(_) => ContentType::ApplicationData,
+        }
+    }
+
     pub fn decode<D>(
         header: RecordHeader,
         data: &'a mut [u8],

@@ -82,6 +82,7 @@ mod record;
 mod record_reader;
 mod signature_schemes;
 mod supported_versions;
+mod write_buffer;
 
 #[cfg(feature = "webpki")]
 pub mod webpki;

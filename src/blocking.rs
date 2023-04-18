@@ -3,8 +3,9 @@ use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::*;
 use crate::key_schedule::KeySchedule;
 use crate::read_buffer::ReadBuffer;
-use crate::record::ClientRecord;
+use crate::record::{ClientRecord, ClientRecordHeader};
 use crate::record_reader::RecordReader;
+use crate::write_buffer::WriteBuffer;
 use embedded_io::blocking::BufRead;
 use embedded_io::Error as _;
 use embedded_io::{
@@ -15,9 +16,6 @@ use rand_core::{CryptoRng, RngCore};
 
 pub use crate::config::*;
 pub use crate::TlsError;
-
-// Some space needed by TLS record
-const TLS_RECORD_OVERHEAD: usize = 128;
 
 /// Type representing an async TLS connection. An instance of this type can
 /// be used to establish a TLS connection, write and read encrypted data over this connection,
@@ -31,8 +29,7 @@ where
     opened: bool,
     key_schedule: KeySchedule<CipherSuite>,
     record_reader: RecordReader<'a, CipherSuite>,
-    record_write_buf: &'a mut [u8],
-    write_pos: usize,
+    record_write_buf: WriteBuffer<'a>,
     decrypted: DecryptedBufferInfo,
 }
 
@@ -57,17 +54,12 @@ where
         record_read_buf: &'a mut [u8],
         record_write_buf: &'a mut [u8],
     ) -> Self {
-        assert!(
-            record_write_buf.len() > TLS_RECORD_OVERHEAD,
-            "The write buffer must be sufficiently large to include the tls record overhead"
-        );
         Self {
             delegate,
             opened: false,
             key_schedule: KeySchedule::new(),
             record_reader: RecordReader::new(record_read_buf),
-            record_write_buf,
-            write_pos: 0,
+            record_write_buf: WriteBuffer::new(record_write_buf),
             decrypted: DecryptedBufferInfo::default(),
         }
     }
@@ -95,7 +87,7 @@ where
                 &mut self.delegate,
                 &mut handshake,
                 &mut self.record_reader,
-                self.record_write_buf,
+                &mut self.record_write_buf,
                 &mut self.key_schedule,
                 context.config,
                 context.rng,
@@ -121,15 +113,18 @@ where
     /// Returns the number of bytes buffered/written.
     pub fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
         if self.opened {
-            let max_block_size = self.record_write_buf.len() - TLS_RECORD_OVERHEAD;
-            let buffered = usize::min(buf.len(), max_block_size - self.write_pos);
-            if buffered > 0 {
-                self.record_write_buf[self.write_pos..self.write_pos + buffered]
-                    .copy_from_slice(&buf[..buffered]);
-                self.write_pos += buffered;
+            if !self
+                .record_write_buf
+                .contains(ClientRecordHeader::ApplicationData)
+            {
+                self.flush()?;
+                self.record_write_buf
+                    .start_record(ClientRecordHeader::ApplicationData)?;
             }
 
-            if self.write_pos == max_block_size {
+            let buffered = self.record_write_buf.append(buf);
+
+            if self.record_write_buf.is_full() {
                 self.flush()?;
             }
 
@@ -141,20 +136,15 @@ where
 
     /// Force all previously written, buffered bytes to be encoded into a tls record and written to the connection.
     pub fn flush(&mut self) -> Result<(), TlsError> {
-        if self.write_pos > 0 {
+        if !self.record_write_buf.is_empty() {
             let key_schedule = self.key_schedule.write_state();
-            let len = encode_application_data_record_in_place(
-                self.record_write_buf,
-                self.write_pos,
-                key_schedule,
-            )?;
+            let slice = self.record_write_buf.close_record(key_schedule)?;
 
             self.delegate
-                .write_all(&self.record_write_buf[..len])
+                .write_all(slice)
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
             key_schedule.increment_counter();
-            self.write_pos = 0;
         }
 
         Ok(())
@@ -207,15 +197,17 @@ where
     }
 
     fn close_internal(&mut self) -> Result<(), TlsError> {
+        self.flush()?;
+
         let (write_key_schedule, read_key_schedule) = self.key_schedule.as_split();
-        let len = ClientRecord::close_notify(self.opened).encode(
-            self.record_write_buf,
-            Some(read_key_schedule),
+        let slice = self.record_write_buf.write_record(
+            &ClientRecord::close_notify(self.opened),
             write_key_schedule,
+            Some(read_key_schedule),
         )?;
 
         self.delegate
-            .write_all(&self.record_write_buf[..len])
+            .write_all(slice)
             .map_err(|e| TlsError::Io(e.kind()))?;
 
         self.key_schedule.write_state().increment_counter();

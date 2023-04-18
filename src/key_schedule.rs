@@ -159,10 +159,8 @@ where
     }
 
     pub fn get_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        Ok(KeySchedule::<CipherSuite>::get_nonce(
-            self.counter,
-            &self.get_iv()?,
-        ))
+        let iv = self.get_iv()?;
+        Ok(KeySchedule::<CipherSuite>::get_nonce(self.counter, &iv))
     }
 
     fn calculate_traffic_secret(
