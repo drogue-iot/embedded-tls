@@ -8,7 +8,6 @@ use crate::handshake::{
 use crate::TlsError;
 use core::marker::PhantomData;
 use digest::Digest;
-use heapless::String;
 use heapless::Vec;
 use webpki::DnsNameRef;
 
@@ -20,26 +19,26 @@ static ALL_SIGALGS: &[&webpki::SignatureAlgorithm] = &[
     &webpki::ED25519,
 ];
 
-pub struct CertVerifier<CipherSuite, Clock, const CERT_SIZE: usize>
+pub struct CertVerifier<'a, CipherSuite, Clock, const CERT_SIZE: usize>
 where
     Clock: TlsClock,
     CipherSuite: TlsCipherSuite,
 {
-    host: Option<String<256>>,
+    host: Option<&'a str>,
     certificate_transcript: Option<CipherSuite::Hash>,
     certificate: Option<OwnedCertificate<CERT_SIZE>>,
     _clock: PhantomData<Clock>,
 }
 
-impl<CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<CipherSuite>
-    for CertVerifier<CipherSuite, Clock, CERT_SIZE>
+impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<'a, CipherSuite>
+    for CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
 where
     CipherSuite: TlsCipherSuite,
     Clock: TlsClock,
 {
-    fn new(host: Option<&str>) -> Self {
+    fn new(host: Option<&'a str>) -> Self {
         Self {
-            host: host.map(|s| s.try_into().unwrap()),
+            host,
             certificate_transcript: None,
             certificate: None,
             _clock: PhantomData,
@@ -52,12 +51,7 @@ where
         ca: &Option<Certificate>,
         cert: ServerCertificate,
     ) -> Result<(), TlsError> {
-        verify_certificate(
-            self.host.as_ref().map(|s| s.as_str()),
-            ca,
-            &cert,
-            Clock::now(),
-        )?;
+        verify_certificate(self.host.clone(), ca, &cert, Clock::now())?;
         self.certificate.replace(cert.try_into()?);
         self.certificate_transcript.replace(transcript.clone());
         Ok(())

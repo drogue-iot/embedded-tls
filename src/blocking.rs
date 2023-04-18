@@ -76,13 +76,13 @@ where
     ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection instance
     /// must be recreated.
-    pub fn open<RNG, Verifier>(
+    pub fn open<'v, RNG, Verifier>(
         &mut self,
-        context: TlsContext<'_, CipherSuite, RNG>,
+        context: TlsContext<'v, CipherSuite, RNG>,
     ) -> Result<(), TlsError>
     where
         RNG: CryptoRng + RngCore,
-        Verifier: TlsVerifier<CipherSuite>,
+        Verifier: TlsVerifier<'v, CipherSuite>,
     {
         let mut handshake: Handshake<CipherSuite, Verifier> =
             Handshake::new(Verifier::new(context.config.server_name));
