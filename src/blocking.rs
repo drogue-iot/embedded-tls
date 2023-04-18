@@ -5,6 +5,7 @@ use crate::key_schedule::KeySchedule;
 use crate::read_buffer::ReadBuffer;
 use crate::record::ClientRecord;
 use crate::record_reader::RecordReader;
+use embedded_io::blocking::BufRead;
 use embedded_io::Error as _;
 use embedded_io::{
     blocking::{Read, Write},
@@ -246,6 +247,20 @@ where
 {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         TlsConnection::read(self, buf)
+    }
+}
+
+impl<'a, Socket, CipherSuite> BufRead for TlsConnection<'a, Socket, CipherSuite>
+where
+    Socket: Read + Write + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    fn fill_buf(&mut self) -> Result<&[u8], Self::Error> {
+        self.read_buffered().map(|mut buf| buf.peek_all())
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.create_read_buffer().pop(amt);
     }
 }
 

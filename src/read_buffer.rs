@@ -31,7 +31,7 @@ impl<'a> ReadBuffer<'a> {
 
     /// Consumes and returns a slice of at most `count` bytes.
     #[inline]
-    pub fn peek(&mut self, count: usize) -> &[u8] {
+    pub fn peek(&mut self, count: usize) -> &'a [u8] {
         let count = self.len().min(count);
         let start = self.consumed;
 
@@ -43,13 +43,13 @@ impl<'a> ReadBuffer<'a> {
 
     /// Consumes and returns a slice of at most `count` bytes.
     #[inline]
-    pub fn peek_all(&mut self) -> &[u8] {
+    pub fn peek_all(&mut self) -> &'a [u8] {
         self.peek(self.len())
     }
 
     /// Consumes and returns a slice of at most `count` bytes.
     #[inline]
-    pub fn pop(&mut self, count: usize) -> &[u8] {
+    pub fn pop(&mut self, count: usize) -> &'a [u8] {
         let count = self.len().min(count);
         let start = self.consumed;
         self.consumed += count;
@@ -60,7 +60,7 @@ impl<'a> ReadBuffer<'a> {
 
     /// Consumes and returns the internal buffer.
     #[inline]
-    pub fn pop_all(&mut self) -> &[u8] {
+    pub fn pop_all(&mut self) -> &'a [u8] {
         self.pop(self.len())
     }
 

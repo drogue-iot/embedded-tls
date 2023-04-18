@@ -6,6 +6,7 @@ use crate::read_buffer::ReadBuffer;
 use crate::record::ClientRecord;
 use crate::record_reader::RecordReader;
 use crate::TlsError;
+use embedded_io::asynch::BufRead;
 use embedded_io::Error as _;
 use embedded_io::{
     asynch::{Read as AsyncRead, Write as AsyncWrite},
@@ -252,6 +253,20 @@ where
 {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         TlsConnection::read(self, buf).await
+    }
+}
+
+impl<'a, Socket, CipherSuite> BufRead for TlsConnection<'a, Socket, CipherSuite>
+where
+    Socket: AsyncRead + AsyncWrite + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    async fn fill_buf(&mut self) -> Result<&[u8], Self::Error> {
+        self.read_buffered().await.map(|mut buf| buf.peek_all())
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.create_read_buffer().pop(amt);
     }
 }
 
