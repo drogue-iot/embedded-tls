@@ -91,8 +91,12 @@ where
                 // Decode potentially coaleced handshake messages
                 let data = app_data.as_slice();
                 let mut buf = ParseBuffer::new(data);
+                let mut offset = 0;
                 while buf.remaining() > 1 {
+                    let remaining = buf.remaining();
                     let mut inner = ServerHandshake::parse(&mut buf)?;
+                    let handshake_length = remaining - buf.remaining();
+
                     if let ServerHandshake::Finished(ref mut finished) = inner {
                         // trace!("Server finished hash: {:x?}", finished.hash);
                         finished
@@ -101,7 +105,12 @@ where
                     }
                     //info!("===> inner ==> {:?}", inner);
                     //if hash_later {
-                    key_schedule.transcript_hash().update(data);
+
+                    key_schedule
+                        .transcript_hash()
+                        .update(&data[offset..offset + handshake_length]);
+                    offset += handshake_length;
+
                     // info!("hash {:02x?}", &data[..data.len()]);
                     cb(key_schedule, ServerRecord::Handshake(inner))?;
                 }
@@ -420,45 +429,47 @@ where
 {
     let mut state = State::ServerVerify;
     decrypt_record(key_schedule.read_state(), record, |key_schedule, record| {
-        debug!("record = {:?}", record.content_type());
+        trace!("record = {:?}", record.content_type());
         match record {
-            ServerRecord::Handshake(server_handshake) => match server_handshake {
-                ServerHandshake::EncryptedExtensions(_) => {}
-                ServerHandshake::Certificate(certificate) => {
-                    trace!("Verifying certificate!");
-                    let transcript = key_schedule.transcript_hash();
-                    handshake
-                        .verifier
-                        .verify_certificate(transcript, &config.ca, certificate)?;
-                    trace!("Certificate verified!");
-                }
-                ServerHandshake::CertificateVerify(verify) => {
-                    trace!("Verifying signature!");
-                    handshake.verifier.verify_signature(verify)?;
-                    trace!("Signature verified!");
-                }
-                ServerHandshake::CertificateRequest(request) => {
-                    trace!("Certificate requested");
-                    handshake.certificate_request.replace(request.try_into()?);
-                }
-                ServerHandshake::Finished(finished) => {
-                    trace!("************* Finished");
-                    if !key_schedule.verify_server_finished(&finished)? {
-                        return Err(TlsError::InvalidSignature);
+            ServerRecord::Handshake(server_handshake) => {
+                trace!("handshake = {:?}", server_handshake.handshake_type());
+                match server_handshake {
+                    ServerHandshake::EncryptedExtensions(_) => {}
+                    ServerHandshake::Certificate(certificate) => {
+                        let transcript = key_schedule.transcript_hash();
+                        handshake.verifier.verify_certificate(
+                            transcript,
+                            &config.ca,
+                            certificate,
+                        )?;
+                        debug!("Certificate verified!");
                     }
+                    ServerHandshake::CertificateVerify(verify) => {
+                        handshake.verifier.verify_signature(verify)?;
+                        debug!("Signature verified!");
+                    }
+                    ServerHandshake::CertificateRequest(request) => {
+                        handshake.certificate_request.replace(request.try_into()?);
+                    }
+                    ServerHandshake::Finished(finished) => {
+                        if !key_schedule.verify_server_finished(&finished)? {
+                            warn!("Server signature verification failed");
+                            return Err(TlsError::InvalidSignature);
+                        }
 
-                    // trace!("server verified {}", verified);
-                    state = if handshake.certificate_request.is_some() {
-                        State::ClientCert
-                    } else {
-                        handshake
-                            .traffic_hash
-                            .replace(key_schedule.transcript_hash().clone());
-                        State::ClientFinished
-                    };
+                        // trace!("server verified {}", verified);
+                        state = if handshake.certificate_request.is_some() {
+                            State::ClientCert
+                        } else {
+                            handshake
+                                .traffic_hash
+                                .replace(key_schedule.transcript_hash().clone());
+                            State::ClientFinished
+                        };
+                    }
+                    _ => return Err(TlsError::InvalidHandshake),
                 }
-                _ => return Err(TlsError::InvalidHandshake),
-            },
+            }
             ServerRecord::ChangeCipherSpec(_) => {}
             _ => return Err(TlsError::InvalidRecord),
         }

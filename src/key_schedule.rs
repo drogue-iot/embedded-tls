@@ -496,11 +496,16 @@ where
                 ContextType::None,
             )?;
         // info!("hmac sign key {:x?}", key);
-        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
-            .map_err(|_| TlsError::InternalError)?;
+        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key).map_err(|err| {
+            warn!("{:?}", err);
+            TlsError::InternalError
+        })?;
         Mac::update(
             &mut hmac,
-            finished.hash.as_ref().ok_or(TlsError::InternalError)?,
+            finished.hash.as_ref().ok_or_else(|| {
+                warn!("No hash in Finished");
+                TlsError::InternalError
+            })?,
         );
         //let code = hmac.clone().finalize().into_bytes();
         Ok(hmac.verify(&finished.verify).is_ok())
