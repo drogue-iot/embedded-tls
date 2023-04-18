@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![allow(dead_code)]
 #![cfg_attr(feature = "async", allow(incomplete_features))]
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
@@ -80,6 +80,7 @@ pub mod read_buffer;
 mod record;
 mod record_reader;
 mod signature_schemes;
+mod split;
 mod supported_versions;
 mod write_buffer;
 
@@ -139,7 +140,6 @@ impl embedded_io::Error for TlsError {
 
 #[cfg(feature = "std")]
 mod stdlib {
-    extern crate std;
     use crate::config::TlsClock;
 
     use std::time::SystemTime;
