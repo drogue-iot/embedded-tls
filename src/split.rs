@@ -43,7 +43,7 @@ impl SplitState for &SplitConnectionState {
     }
 
     fn same(&self, other: &Self) -> bool {
-        core::ptr::eq(self, other)
+        core::ptr::eq(*self, *other)
     }
 }
 

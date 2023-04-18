@@ -241,7 +241,7 @@ where
         self.split_with(ManagedSplitState::new())
     }
 
-    pub fn split_with< StateContainer>(
+    pub fn split_with<StateContainer>(
         self,
         state: StateContainer,
     ) -> (
