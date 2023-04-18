@@ -63,7 +63,7 @@ mod stdlib {
         }
     }
 
-    impl<'a> SplitStateContainer for ManagedSplitState {
+    impl SplitStateContainer for ManagedSplitState {
         type State = ManagedSplitState;
 
         fn state(self) -> Self::State {

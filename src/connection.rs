@@ -49,7 +49,7 @@ pub(crate) fn decrypt_record<CipherSuite>(
     ) -> Result<(), TlsError>,
 ) -> Result<(), TlsError>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    CipherSuite: TlsCipherSuite,
 {
     if let ServerRecord::ApplicationData(ApplicationData {
         header,
@@ -173,7 +173,7 @@ where
 
 pub struct Handshake<CipherSuite, Verifier>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    CipherSuite: TlsCipherSuite,
 {
     traffic_hash: Option<CipherSuite::Hash>,
     secret: Option<EphemeralSecret>,
@@ -223,7 +223,7 @@ impl<'a> State {
     where
         Transport: AsyncRead + AsyncWrite + 'a,
         RNG: CryptoRng + RngCore + 'a,
-        CipherSuite: TlsCipherSuite + 'static,
+        CipherSuite: TlsCipherSuite,
         Verifier: TlsVerifier<'v, CipherSuite>,
     {
         match self {
@@ -332,7 +332,7 @@ fn respond_blocking<CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite>,
 ) -> Result<(), TlsError>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    CipherSuite: TlsCipherSuite,
 {
     transport
         .write_all(tx)
@@ -350,7 +350,7 @@ async fn respond<CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite>,
 ) -> Result<(), TlsError>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    CipherSuite: TlsCipherSuite,
 {
     transport
         .write_all(tx)
@@ -362,7 +362,7 @@ where
     Ok(())
 }
 
-fn client_hello<'r, 'v, CipherSuite, RNG, Verifier>(
+fn client_hello<'r, CipherSuite, RNG, Verifier>(
     key_schedule: &mut KeySchedule<CipherSuite>,
     config: &TlsConfig<CipherSuite>,
     rng: &mut RNG,
@@ -371,8 +371,7 @@ fn client_hello<'r, 'v, CipherSuite, RNG, Verifier>(
 ) -> Result<(State, &'r [u8]), TlsError>
 where
     RNG: CryptoRng + RngCore,
-    CipherSuite: TlsCipherSuite + 'static,
-    Verifier: TlsVerifier<'v, CipherSuite>,
+    CipherSuite: TlsCipherSuite,
 {
     key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
@@ -387,14 +386,13 @@ where
     }
 }
 
-fn process_server_hello<'v, CipherSuite, Verifier>(
+fn process_server_hello<CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
     record: ServerRecord<'_, HashOutputSize<CipherSuite>>,
 ) -> Result<State, TlsError>
 where
-    CipherSuite: TlsCipherSuite + 'static,
-    Verifier: TlsVerifier<'v, CipherSuite>,
+    CipherSuite: TlsCipherSuite,
 {
     match record {
         ServerRecord::Handshake(server_handshake) => match server_handshake {
@@ -423,7 +421,7 @@ fn process_server_verify<'a, 'v, CipherSuite, Verifier>(
     record: ServerRecord<'_, HashOutputSize<CipherSuite>>,
 ) -> Result<State, TlsError>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    CipherSuite: TlsCipherSuite,
     Verifier: TlsVerifier<'v, CipherSuite>,
 {
     let mut state = State::ServerVerify;
@@ -478,15 +476,14 @@ where
     Ok(state)
 }
 
-fn client_cert<'r, 'v, CipherSuite, Verifier>(
+fn client_cert<'r, CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
     config: &TlsConfig<CipherSuite>,
     buffer: &'r mut WriteBuffer,
 ) -> Result<(State, &'r [u8]), TlsError>
 where
-    CipherSuite: TlsCipherSuite + 'static,
-    Verifier: TlsVerifier<'v, CipherSuite>,
+    CipherSuite: TlsCipherSuite,
 {
     handshake
         .traffic_hash
@@ -518,7 +515,7 @@ fn client_finished<'r, CipherSuite>(
     buffer: &'r mut WriteBuffer,
 ) -> Result<&'r [u8], TlsError>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    CipherSuite: TlsCipherSuite,
 {
     let client_finished = key_schedule
         .create_client_finished()
@@ -533,13 +530,12 @@ where
     )
 }
 
-fn client_finished_finalize<'v, CipherSuite, Verifier>(
+fn client_finished_finalize<CipherSuite, Verifier>(
     key_schedule: &mut KeySchedule<CipherSuite>,
     handshake: &mut Handshake<CipherSuite, Verifier>,
 ) -> Result<State, TlsError>
 where
-    CipherSuite: TlsCipherSuite + 'static,
-    Verifier: TlsVerifier<'v, CipherSuite>,
+    CipherSuite: TlsCipherSuite,
 {
     key_schedule.replace_transcript_hash(
         handshake

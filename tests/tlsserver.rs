@@ -100,10 +100,8 @@ struct Connection {
 }
 
 /// Open a plaintext TCP-level connection for forwarded connections.
-fn open_back(mode: &ServerMode) -> Option<TcpStream> {
-    match *mode {
-        _ => None,
-    }
+fn open_back(_mode: &ServerMode) -> Option<TcpStream> {
+    None
 }
 
 /// This used to be conveniently exposed by mio: map EWOULDBLOCK
@@ -199,7 +197,7 @@ impl Connection {
             self.do_tls_write_and_handle_error();
 
             self.closing = true;
-            return;
+            
         }
     }
 
@@ -272,7 +270,7 @@ impl Connection {
         if rc.is_err() {
             log::warn!("write failed {:?}", rc);
             self.closing = true;
-            return;
+            
         }
     }
 
@@ -392,7 +390,7 @@ pub fn run(mut listener: TcpListener) {
                         .accept(poll.registry())
                         .expect("error accepting socket");
                 }
-                _ => tlsserv.conn_event(poll.registry(), &event),
+                _ => tlsserv.conn_event(poll.registry(), event),
             }
         }
     }

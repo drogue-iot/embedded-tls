@@ -71,6 +71,6 @@ mod tests {
 
         assert_eq!(NamedGroup::Secp256r1, result.group);
         assert_eq!(2, result.opaque.as_ref().len());
-        assert_eq!([0xAA, 0xBB], result.opaque.as_ref());
+        assert_eq!([0xAA, 0xBB], result.opaque);
     }
 }
