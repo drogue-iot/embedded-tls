@@ -6,6 +6,12 @@ pub trait SplitState: Clone {
     fn set_open(&self, open: bool);
 }
 
+pub trait SplitStateContainer {
+    type State: SplitState;
+
+    fn state(self) -> Self::State;
+}
+
 pub struct SplitConnectionState {
     is_open: AtomicBool,
 }
@@ -16,6 +22,14 @@ impl Default for SplitConnectionState {
         Self {
             is_open: AtomicBool::new(true),
         }
+    }
+}
+
+impl<'a> SplitStateContainer for &'a mut SplitConnectionState {
+    type State = &'a SplitConnectionState;
+
+    fn state(self) -> Self::State {
+        &*self
     }
 }
 
@@ -43,10 +57,17 @@ mod stdlib {
 
     #[derive(Clone)]
     pub struct ManagedSplitState(Arc<SplitConnectionState>);
-    impl Default for ManagedSplitState {
-        #[inline]
-        fn default() -> Self {
+    impl ManagedSplitState {
+        pub(crate) fn new() -> Self {
             Self(Arc::new(SplitConnectionState::default()))
+        }
+    }
+
+    impl<'a> SplitStateContainer for ManagedSplitState {
+        type State = ManagedSplitState;
+
+        fn state(self) -> Self::State {
+            self
         }
     }
 

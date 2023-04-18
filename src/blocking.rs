@@ -6,7 +6,7 @@ use crate::key_schedule::{ReadKeySchedule, SharedState, WriteKeySchedule};
 use crate::read_buffer::ReadBuffer;
 use crate::record::{ClientRecord, ClientRecordHeader};
 use crate::record_reader::RecordReader;
-use crate::split::SplitState;
+use crate::split::{SplitState, SplitStateContainer};
 use crate::write_buffer::WriteBuffer;
 use embedded_io::blocking::BufRead;
 use embedded_io::Error as _;
@@ -238,20 +238,21 @@ where
     where
         Socket: Clone,
     {
-        self.split_with(ManagedSplitState::default())
+        self.split_with(ManagedSplitState::new())
     }
 
-    pub fn split_with<State>(
+    pub fn split_with< StateContainer>(
         self,
-        state: State,
+        state: StateContainer,
     ) -> (
-        TlsReader<'a, Socket, CipherSuite, State>,
-        TlsWriter<'a, Socket, CipherSuite, State>,
+        TlsReader<'a, Socket, CipherSuite, StateContainer::State>,
+        TlsWriter<'a, Socket, CipherSuite, StateContainer::State>,
     )
     where
         Socket: Clone,
-        State: SplitState,
+        StateContainer: SplitStateContainer,
     {
+        let state = state.state();
         state.set_open(self.opened);
 
         let (shared, wks, rks) = self.key_schedule.split();
