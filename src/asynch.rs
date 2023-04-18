@@ -469,6 +469,21 @@ where
     }
 }
 
+impl<'a, Socket, CipherSuite, State> BufRead for TlsReader<'a, Socket, CipherSuite, State>
+where
+    Socket: AsyncRead + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+    State: SplitState,
+{
+    async fn fill_buf(&mut self) -> Result<&[u8], Self::Error> {
+        self.read_buffered().await.map(|mut buf| buf.peek_all())
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.create_read_buffer().pop(amt);
+    }
+}
+
 impl<'a, Socket, CipherSuite, State> AsyncWrite for TlsWriter<'a, Socket, CipherSuite, State>
 where
     Socket: AsyncWrite + 'a,
