@@ -65,62 +65,50 @@ where
         buf.push(0).map_err(|_| TlsError::EncodeError)?;
 
         // extensions (1+)
-        let extension_length_marker = buf.len();
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
-        buf.push(0).map_err(|_| TlsError::EncodeError)?;
-
-        ClientExtension::SupportedVersions {
-            versions: Vec::from_slice(&[TLS13]).unwrap(),
-        }
-        .encode(buf)?;
-
-        ClientExtension::SignatureAlgorithms {
-            supported_signature_algorithms: self.config.signature_schemes.clone(),
-        }
-        .encode(buf)?;
-
-        ClientExtension::SupportedGroups {
-            supported_groups: self.config.named_groups.clone(),
-        }
-        .encode(buf)?;
-
-        ClientExtension::PskKeyExchangeModes {
-            modes: Vec::from_slice(&[PskKeyExchangeMode::PskDheKe]).unwrap(),
-        }
-        .encode(buf)?;
-
-        ClientExtension::KeyShare {
-            group: NamedGroup::Secp256r1,
-            opaque: public_key,
-        }
-        .encode(buf)?;
-
-        if let Some(server_name) = self.config.server_name.as_ref() {
-            // TODO Add SNI extension
-            ClientExtension::ServerName { server_name }.encode(buf)?;
-        }
-
-        // IMPORTANT: The pre shared keys must be encoded last, since we encode the binders
-        // at a later stage
-        if let Some((_, identities)) = &self.config.psk {
-            ClientExtension::PreSharedKey {
-                identities: identities.clone(),
-                hash_size: <CipherSuite::Hash as OutputSizeUser>::output_size(),
+        buf.with_u16_length(|buf| {
+            ClientExtension::SupportedVersions {
+                versions: Vec::from_slice(&[TLS13]).unwrap(),
             }
             .encode(buf)?;
-        }
 
-        //extensions.push(ClientExtension::MaxFragmentLength(
-        //self.config.max_fragment_length,
-        //));
+            ClientExtension::SignatureAlgorithms {
+                supported_signature_algorithms: self.config.signature_schemes.clone(),
+            }
+            .encode(buf)?;
 
-        // ----------------------------------------
-        // ----------------------------------------
+            ClientExtension::SupportedGroups {
+                supported_groups: self.config.named_groups.clone(),
+            }
+            .encode(buf)?;
 
-        let extensions_length = (buf.len() - extension_length_marker - 2) as u16;
-        //info!("extensions length: {:x?}", extensions_length.to_be_bytes());
-        buf.set_u16(extension_length_marker, extensions_length)
-            .map_err(|_| TlsError::EncodeError)?;
+            ClientExtension::PskKeyExchangeModes {
+                modes: Vec::from_slice(&[PskKeyExchangeMode::PskDheKe]).unwrap(),
+            }
+            .encode(buf)?;
+
+            ClientExtension::KeyShare {
+                group: NamedGroup::Secp256r1,
+                opaque: public_key,
+            }
+            .encode(buf)?;
+
+            if let Some(server_name) = self.config.server_name.as_ref() {
+                // TODO Add SNI extension
+                ClientExtension::ServerName { server_name }.encode(buf)?;
+            }
+
+            // IMPORTANT: The pre shared keys must be encoded last, since we encode the binders
+            // at a later stage
+            if let Some((_, identities)) = &self.config.psk {
+                ClientExtension::PreSharedKey {
+                    identities: identities.clone(),
+                    hash_size: <CipherSuite::Hash as OutputSizeUser>::output_size(),
+                }
+                .encode(buf)?;
+            }
+
+            Ok(())
+        })?;
 
         Ok(())
     }

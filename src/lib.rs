@@ -1,6 +1,5 @@
 #![no_std]
 #![allow(dead_code)]
-#![allow(non_snake_case)]
 #![cfg_attr(feature = "async", allow(incomplete_features))]
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
 #![cfg_attr(feature = "async", feature(impl_trait_projections))]

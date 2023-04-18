@@ -1,14 +1,11 @@
 use crate::{
     buffer::CryptoBuffer,
-    config::TlsCipherSuite,
+    config::{TlsCipherSuite, TLS_RECORD_OVERHEAD},
     connection::encrypt,
     key_schedule::{ReadKeySchedule, WriteKeySchedule},
     record::{ClientRecord, ClientRecordHeader},
     TlsError,
 };
-
-// Some space needed by TLS record
-pub const TLS_RECORD_OVERHEAD: usize = 128;
 
 pub struct WriteBuffer<'a> {
     buffer: &'a mut [u8],
@@ -101,15 +98,16 @@ impl<'a> WriteBuffer<'a> {
 
         let header = self.current_header.take().unwrap();
         self.with_buffer(|mut buf| {
-            if header.is_encrypted() {
-                buf.push(header.trailer_content_type() as u8)
-                    .map_err(|_| TlsError::EncodeError)?;
-
-                let mut buf = buf.offset(HEADER_SIZE);
-                encrypt(write_key_schedule, &mut buf)?;
-                return Ok(buf.rewind());
+            if !header.is_encrypted() {
+                return Ok(buf);
             }
-            Ok(buf)
+
+            buf.push(header.trailer_content_type() as u8)
+                .map_err(|_| TlsError::EncodeError)?;
+
+            let mut buf = buf.offset(HEADER_SIZE);
+            encrypt(write_key_schedule, &mut buf)?;
+            Ok(buf.rewind())
         })?;
         let [upper, lower] = ((self.pos - HEADER_SIZE) as u16).to_be_bytes();
 

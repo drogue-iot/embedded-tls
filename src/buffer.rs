@@ -58,7 +58,7 @@ impl<'b> CryptoBuffer<'b> {
         self.extend_from_slice(&data)
     }
 
-    pub fn set(&mut self, idx: usize, val: u8) -> Result<(), TlsError> {
+    fn set(&mut self, idx: usize, val: u8) -> Result<(), TlsError> {
         if idx < self.len {
             self.buf[self.offset + idx] = val;
             Ok(())
@@ -67,14 +67,14 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
-    pub fn set_u16(&mut self, idx: usize, val: u16) -> Result<(), TlsError> {
+    fn set_u16(&mut self, idx: usize, val: u16) -> Result<(), TlsError> {
         let [upper, lower] = val.to_be_bytes();
         self.set(idx, upper)?;
         self.set(idx + 1, lower)?;
         Ok(())
     }
 
-    pub fn set_u24(&mut self, idx: usize, val: u32) -> Result<(), TlsError> {
+    fn set_u24(&mut self, idx: usize, val: u32) -> Result<(), TlsError> {
         let [_, upper, mid, lower] = val.to_be_bytes();
         self.set(idx, upper)?;
         self.set(idx + 1, mid)?;
@@ -145,11 +145,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     pub(crate) fn offset(self, offset: usize) -> CryptoBuffer<'b> {
-        let new_len = if offset > self.offset {
-            self.len - (offset - self.offset)
-        } else {
-            self.len + (self.offset - offset)
-        };
+        let new_len = self.len + self.offset - offset;
         /*info!(
             "offset({}) len({}) -> offset({}), len({})",
             self.offset, self.len, offset, new_len
@@ -167,10 +163,11 @@ impl<'b> CryptoBuffer<'b> {
     ) -> Result<R, TlsError> {
         let len_pos = self.len;
         self.push(0)?;
+        let start = self.len;
 
         let r = op(self)?;
 
-        let len = (self.len() - len_pos) as u8 - 1;
+        let len = (self.len() - start) as u8;
         self.set(len_pos, len)?;
 
         Ok(r)
@@ -182,11 +179,28 @@ impl<'b> CryptoBuffer<'b> {
     ) -> Result<R, TlsError> {
         let len_pos = self.len;
         self.push_u16(0)?;
+        let start = self.len;
 
         let r = op(self)?;
 
-        let len = (self.len() - len_pos) as u16 - 2;
+        let len = (self.len() - start) as u16;
         self.set_u16(len_pos, len)?;
+
+        Ok(r)
+    }
+
+    pub fn with_u24_length<R>(
+        &mut self,
+        op: impl FnOnce(&mut Self) -> Result<R, TlsError>,
+    ) -> Result<R, TlsError> {
+        let len_pos = self.len;
+        self.push_u24(0)?;
+        let start = self.len;
+
+        let r = op(self)?;
+
+        let len = (self.len() - start) as u32;
+        self.set_u24(len_pos, len)?;
 
         Ok(r)
     }

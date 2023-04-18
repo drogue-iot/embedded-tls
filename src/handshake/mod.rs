@@ -100,19 +100,7 @@ where
         buf.push(self.handshake_type() as u8)
             .map_err(|_| TlsError::EncodeError)?;
 
-        let content_length_marker = buf.len();
-        buf.push_u24(0).map_err(|_| TlsError::EncodeError)?;
-
-        self.encode_inner(buf)?;
-
-        let content_length = (buf.len() - content_length_marker) as u32 - 3;
-        buf.set_u24(content_length_marker, content_length)
-            .map_err(|_| TlsError::EncodeError)?;
-
-        //info!("hash [{:x?}]", &buf[content_marker..]);
-        //digest.update(&buf[content_marker..]);
-
-        Ok(())
+        buf.with_u24_length(|buf| self.encode_inner(buf))
     }
 }
 
