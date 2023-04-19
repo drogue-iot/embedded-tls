@@ -1,4 +1,5 @@
 use embedded_io::adapters::FromStd;
+use embedded_io::blocking::Write as _;
 use embedded_tls::blocking::*;
 use embedded_tls::webpki::CertVerifier;
 use rand::rngs::OsRng;
@@ -13,8 +14,11 @@ fn main() {
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new().with_server_name("localhost");
-    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> =
-        TlsConnection::new(FromStd::new(stream), &mut read_record_buffer, &mut write_record_buffer);
+    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+        FromStd::new(stream),
+        &mut read_record_buffer,
+        &mut write_record_buffer,
+    );
     let mut rng = OsRng;
 
     tls.open::<OsRng, CertVerifier<Aes128GcmSha256, SystemTime, 4096>>(TlsContext::new(
@@ -22,7 +26,8 @@ fn main() {
     ))
     .expect("error establishing TLS connection");
 
-    tls.write(b"ping").expect("error writing data");
+    tls.write_all(b"ping").expect("error writing data");
+    tls.flush().expect("error flushing data");
 
     let mut rx_buf = [0; 4096];
     let sz = tls.read(&mut rx_buf).expect("error reading data");
