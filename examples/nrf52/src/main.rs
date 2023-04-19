@@ -7,6 +7,7 @@ use defmt_rtt as _;
 use nrf52833_hal as hal;
 use panic_probe as _;
 
+use embedded_io::blocking::Write as _;
 use embedded_tls::blocking::*;
 
 use cortex_m_rt::entry;
@@ -27,7 +28,8 @@ fn main() -> ! {
     tls.open::<Rng, NoVerify>(TlsContext::new(&config, &mut rng))
         .expect("error establishing TLS connection");
 
-    tls.write(b"ping").expect("error writing data");
+    tls.write_all(b"ping").expect("error writing data");
+    tls.flush().expect("error flushing data");
 
     let mut rx_buf = [0; 4096];
     let sz = tls.read(&mut rx_buf).expect("error reading data");

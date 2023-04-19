@@ -7,6 +7,7 @@ use clap::Parser;
 use embassy_executor::{Executor, Spawner};
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{ConfigStrategy, Ipv4Address, Ipv4Cidr, Stack, StackResources};
+use embedded_io::asynch::Write as _;
 use embedded_tls::{Aes128GcmSha256, NoVerify, TlsConfig, TlsConnection, TlsContext};
 use heapless::Vec;
 use log::*;
@@ -102,7 +103,8 @@ async fn main_task(spawner: Spawner) {
         .await
         .expect("error establishing TLS connection");
 
-    tls.write(b"ping").await.expect("error writing data");
+    tls.write_all(b"ping").await.expect("error writing data");
+    tls.flush().await.expect("error flushing data");
 
     let mut rx_buf = [0; 128];
     let sz = tls.read(&mut rx_buf[..]).await.expect("error reading data");

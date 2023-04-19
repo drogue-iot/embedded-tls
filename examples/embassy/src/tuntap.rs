@@ -33,7 +33,11 @@ fn ifreq_for(name: &str) -> ifreq {
     ifreq
 }
 
-fn ifreq_ioctl(lower: libc::c_int, ifreq: &mut ifreq, cmd: libc::c_ulong) -> io::Result<libc::c_int> {
+fn ifreq_ioctl(
+    lower: libc::c_int,
+    ifreq: &mut ifreq,
+    cmd: libc::c_ulong,
+) -> io::Result<libc::c_int> {
     unsafe {
         let res = libc::ioctl(lower, cmd as _, ifreq as *mut ifreq);
         if res == -1 {
@@ -140,7 +144,9 @@ impl TunTapDevice {
 use core::task::Waker;
 use std::task::Context;
 
-use embassy_net::{Device, DeviceCapabilities, LinkState, Packet, PacketBox, PacketBoxExt, PacketBuf};
+use embassy_net::{
+    Device, DeviceCapabilities, LinkState, Packet, PacketBox, PacketBoxExt, PacketBuf,
+};
 
 impl Device for TunTapDevice {
     fn is_transmit_ready(&mut self) -> bool {
