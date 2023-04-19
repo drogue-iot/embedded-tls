@@ -496,10 +496,8 @@ where
                 ContextType::None,
             )?;
         // info!("hmac sign key {:x?}", key);
-        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key).map_err(|err| {
-            warn!("{:?}", err);
-            TlsError::InternalError
-        })?;
+        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
+            .map_err(|_| TlsError::InternalError)?;
         Mac::update(
             &mut hmac,
             finished.hash.as_ref().ok_or_else(|| {
