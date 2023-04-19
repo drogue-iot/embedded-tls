@@ -215,7 +215,6 @@ impl<'a> State {
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
-        tx_buf: &mut WriteBuffer<'_>,
         key_schedule: &mut KeySchedule<CipherSuite>,
         config: &TlsConfig<'a, CipherSuite>,
         rng: &mut RNG,
@@ -228,7 +227,8 @@ impl<'a> State {
     {
         match self {
             State::ClientHello => {
-                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let (state, tx) = client_hello(key_schedule, config, rng, &mut tx_buf, handshake)?;
 
                 respond(tx, transport, key_schedule).await?;
 
@@ -252,14 +252,16 @@ impl<'a> State {
                 handle_processing_error(result, transport, key_schedule, tx_buf).await
             }
             State::ClientCert => {
-                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let (state, tx) = client_cert(handshake, key_schedule, config, &mut tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
                 Ok(state)
             }
             State::ClientFinished => {
-                let tx = client_finished(key_schedule, tx_buf)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let tx = client_finished(key_schedule, &mut tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
@@ -275,7 +277,6 @@ impl<'a> State {
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
-        tx_buf: &mut WriteBuffer,
         key_schedule: &mut KeySchedule<CipherSuite>,
         config: &TlsConfig<'a, CipherSuite>,
         rng: &mut RNG,
@@ -288,7 +289,8 @@ impl<'a> State {
     {
         match self {
             State::ClientHello => {
-                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let (state, tx) = client_hello(key_schedule, config, rng, &mut tx_buf, handshake)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -309,14 +311,16 @@ impl<'a> State {
                 handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
             }
             State::ClientCert => {
-                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let (state, tx) = client_cert(handshake, key_schedule, config, &mut tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
                 Ok(state)
             }
             State::ClientFinished => {
-                let tx = client_finished(key_schedule, tx_buf)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let tx = client_finished(key_schedule, &mut tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 

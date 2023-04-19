@@ -91,7 +91,6 @@ where
                 &mut self.delegate,
                 &mut handshake,
                 &mut self.record_reader,
-                &mut self.record_write_buf,
                 &mut self.key_schedule,
                 context.config,
                 context.rng,
