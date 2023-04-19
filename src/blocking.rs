@@ -52,8 +52,8 @@ where
     /// The write record buffer can be smaller than the read buffer. During write [`TLS_RECORD_OVERHEAD`] over overhead
     /// is added per record, so the buffer must at least be this large. Large writes are split into multiple records if
     /// depending on the size of the write buffer.
-    /// The largest of the two buffers will be used to encode the TLS handshake record, hence either of the
-    /// buffers must at least be large enough to encode a handshake.
+    /// The read buffer will also be used to encode the TLS handshake record. The write buffer may
+    /// be resued by the certificate verifier.
     pub fn new(
         delegate: Socket,
         record_read_buf: &'a mut [u8],
@@ -74,16 +74,18 @@ where
     ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection
     /// instance must be recreated.
-    pub fn open<'v, RNG, Verifier>(
-        &mut self,
-        context: TlsContext<'v, CipherSuite, RNG>,
+    pub fn open<'v, 'c, RNG, Verifier>(
+        &'v mut self,
+        context: TlsContext<'c, CipherSuite, RNG>,
     ) -> Result<(), TlsError>
     where
         RNG: CryptoRng + RngCore,
-        Verifier: TlsVerifier<'v, CipherSuite>,
+        Verifier: TlsVerifier<'v, 'c, CipherSuite>,
     {
-        let mut handshake: Handshake<CipherSuite, Verifier> =
-            Handshake::new(Verifier::new(context.config.server_name));
+        let mut handshake: Handshake<CipherSuite, Verifier> = Handshake::new(Verifier::new(
+            self.record_write_buf.take_buffer()?,
+            context.config.server_name,
+        ));
         let mut state = State::ClientHello;
 
         loop {

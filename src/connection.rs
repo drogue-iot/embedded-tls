@@ -181,10 +181,10 @@ where
     verifier: Verifier,
 }
 
-impl<'v, CipherSuite, Verifier> Handshake<CipherSuite, Verifier>
+impl<'v, 'c, CipherSuite, Verifier> Handshake<CipherSuite, Verifier>
 where
     CipherSuite: TlsCipherSuite,
-    Verifier: TlsVerifier<'v, CipherSuite>,
+    Verifier: TlsVerifier<'v, 'c, CipherSuite>,
 {
     pub fn new(verifier: Verifier) -> Handshake<CipherSuite, Verifier> {
         Handshake {
@@ -210,20 +210,20 @@ pub enum State {
 impl<'a> State {
     #[cfg(feature = "async")]
     #[allow(clippy::too_many_arguments)]
-    pub async fn process<'v, Transport, CipherSuite, RNG, Verifier>(
+    pub async fn process<'v, 'c, Transport, CipherSuite, RNG, Verifier>(
         self,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
         key_schedule: &mut KeySchedule<CipherSuite>,
-        config: &TlsConfig<'a, CipherSuite>,
+        config: &TlsConfig<'c, CipherSuite>,
         rng: &mut RNG,
     ) -> Result<State, TlsError>
     where
-        Transport: AsyncRead + AsyncWrite + 'a,
-        RNG: CryptoRng + RngCore + 'a,
+        Transport: AsyncRead + AsyncWrite,
+        RNG: CryptoRng + RngCore,
         CipherSuite: TlsCipherSuite,
-        Verifier: TlsVerifier<'v, CipherSuite>,
+        Verifier: TlsVerifier<'v, 'c, CipherSuite>,
     {
         match self {
             State::ClientHello => {
@@ -272,20 +272,20 @@ impl<'a> State {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn process_blocking<'v, Transport, CipherSuite, RNG, Verifier>(
+    pub fn process_blocking<'v, 'c, Transport, CipherSuite, RNG, Verifier>(
         self,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
         key_schedule: &mut KeySchedule<CipherSuite>,
-        config: &TlsConfig<'a, CipherSuite>,
+        config: &TlsConfig<'c, CipherSuite>,
         rng: &mut RNG,
     ) -> Result<State, TlsError>
     where
-        Transport: BlockingRead + BlockingWrite + 'a,
+        Transport: BlockingRead + BlockingWrite,
         RNG: CryptoRng + RngCore,
         CipherSuite: TlsCipherSuite + 'static,
-        Verifier: TlsVerifier<'v, CipherSuite>,
+        Verifier: TlsVerifier<'v, 'c, CipherSuite>,
     {
         match self {
             State::ClientHello => {
@@ -473,7 +473,7 @@ where
     }
 }
 
-fn process_server_verify<'a, 'v, CipherSuite, Verifier>(
+fn process_server_verify<'a, 'v, 'c, CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
     config: &TlsConfig<'a, CipherSuite>,
@@ -481,7 +481,7 @@ fn process_server_verify<'a, 'v, CipherSuite, Verifier>(
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,
-    Verifier: TlsVerifier<'v, CipherSuite>,
+    Verifier: TlsVerifier<'v, 'c, CipherSuite>,
 {
     let mut state = State::ServerVerify;
     decrypt_record(key_schedule.read_state(), record, |key_schedule, record| {

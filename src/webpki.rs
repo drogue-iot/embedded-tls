@@ -30,13 +30,13 @@ where
     _clock: PhantomData<Clock>,
 }
 
-impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<'a, CipherSuite>
-    for CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
+impl<'a, 'c, CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<'a, 'c, CipherSuite>
+    for CertVerifier<'c, CipherSuite, Clock, CERT_SIZE>
 where
     CipherSuite: TlsCipherSuite,
     Clock: TlsClock,
 {
-    fn new(host: Option<&'a str>) -> Self {
+    fn new(_buffer: &'a mut [u8], host: Option<&'c str>) -> Self {
         Self {
             host,
             certificate_transcript: None,

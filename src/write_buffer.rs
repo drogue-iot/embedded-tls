@@ -26,6 +26,14 @@ impl<'a> WriteBuffer<'a> {
         }
     }
 
+    pub(crate) fn take_buffer(&mut self) -> Result<&mut [u8], TlsError> {
+        if self.pos > 0 {
+            return Err(TlsError::InternalError);
+        }
+
+        Ok(self.buffer)
+    }
+
     fn max_block_size(&self) -> usize {
         self.buffer.len() - TLS_RECORD_OVERHEAD
     }
