@@ -114,6 +114,20 @@ pub enum ServerHandshake<'a, N: ArrayLength<u8>> {
     Finished(Finished<N>),
 }
 
+impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
+    pub fn handshake_type(&self) -> HandshakeType {
+        match self {
+            ServerHandshake::ServerHello(_) => HandshakeType::ServerHello,
+            ServerHandshake::EncryptedExtensions(_) => HandshakeType::EncryptedExtensions,
+            ServerHandshake::NewSessionTicket(_) => HandshakeType::NewSessionTicket,
+            ServerHandshake::Certificate(_) => HandshakeType::Certificate,
+            ServerHandshake::CertificateRequest(_) => HandshakeType::CertificateRequest,
+            ServerHandshake::CertificateVerify(_) => HandshakeType::CertificateVerify,
+            ServerHandshake::Finished(_) => HandshakeType::Finished,
+        }
+    }
+}
+
 impl<'a, N: ArrayLength<u8>> Debug for ServerHandshake<'a, N> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
