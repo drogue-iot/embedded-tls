@@ -150,6 +150,8 @@ where
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
             key_schedule.increment_counter();
+
+            self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))?;
         }
 
         Ok(())
@@ -216,6 +218,8 @@ where
             .map_err(|e| TlsError::Io(e.kind()))?;
 
         self.key_schedule.write_state().increment_counter();
+
+        self.flush()?;
 
         Ok(())
     }
@@ -515,6 +519,8 @@ where
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
             self.key_schedule.increment_counter();
+
+            self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))?;
         }
 
         Ok(())

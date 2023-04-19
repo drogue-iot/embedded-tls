@@ -153,6 +153,11 @@ where
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
             key_schedule.increment_counter();
+
+            self.delegate
+                .flush()
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
         }
 
         Ok(())
@@ -224,7 +229,7 @@ where
 
         self.key_schedule.write_state().increment_counter();
 
-        Ok(())
+        self.flush().await
     }
 
     /// Close a connection instance, returning the ownership of the async I/O provider.
@@ -524,6 +529,11 @@ where
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
             self.key_schedule.increment_counter();
+
+            self.delegate
+                .flush()
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
         }
 
         Ok(())
