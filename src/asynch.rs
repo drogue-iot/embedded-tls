@@ -69,13 +69,11 @@ where
         }
     }
 
-    /// Open a TLS connection, performing the handshake with the configuration provided when creating
-    /// the connection instance.
+    /// Open a TLS connection, performing the handshake with the configuration provided when
+    /// creating the connection instance.
     ///
-    /// The handshake may support certificates up to CERT_SIZE.
-    ///
-    /// Returns an error if the handshake does not proceed. If an error occurs, the connection instance
-    /// must be recreated.
+    /// Returns an error if the handshake does not proceed. If an error occurs, the connection
+    /// instance must be recreated.
     pub async fn open<'v, RNG, Verifier>(
         &mut self,
         context: TlsContext<'v, CipherSuite, RNG>,
@@ -142,7 +140,8 @@ where
         }
     }
 
-    /// Force all previously written, buffered bytes to be encoded into a tls record and written to the connection.
+    /// Force all previously written, buffered bytes to be encoded into a tls record and written
+    /// to the connection.
     pub async fn flush(&mut self) -> Result<(), TlsError> {
         if !self.record_write_buf.is_empty() {
             let key_schedule = self.key_schedule.write_state();
