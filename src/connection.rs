@@ -340,6 +340,8 @@ where
 
     key_schedule.write_state().increment_counter();
 
+    transport.flush().map_err(|e| TlsError::Io(e.kind()))?;
+
     Ok(())
 }
 
@@ -358,6 +360,11 @@ where
         .map_err(|e| TlsError::Io(e.kind()))?;
 
     key_schedule.write_state().increment_counter();
+
+    transport
+        .flush()
+        .await
+        .map_err(|e| TlsError::Io(e.kind()))?;
 
     Ok(())
 }

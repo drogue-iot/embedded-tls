@@ -22,7 +22,7 @@ pub use crate::split::ManagedSplitState;
 pub use crate::split::SplitConnectionState;
 pub use crate::TlsError;
 
-/// Type representing an async TLS connection. An instance of this type can
+/// Type representing a TLS connection. An instance of this type can
 /// be used to establish a TLS connection, write and read encrypted data over this connection,
 /// and closing to free up the underlying resources.
 pub struct TlsConnection<'a, Socket, CipherSuite>
@@ -43,7 +43,7 @@ where
     Socket: Read + Write + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    /// Create a new TLS connection with the provided context and a async I/O implementation
+    /// Create a new TLS connection with the provided context and a blocking I/O implementation
     ///
     /// NOTE: The record read buffer should be sized to fit an encrypted TLS record. The size of this record
     /// depends on the server configuration, but the maximum allowed value for a TLS record is 16 kB, which
@@ -69,13 +69,11 @@ where
         }
     }
 
-    /// Open a TLS connection, performing the handshake with the configuration provided when creating
-    /// the connection instance.
+    /// Open a TLS connection, performing the handshake with the configuration provided when
+    /// creating the connection instance.
     ///
-    /// The handshake may support certificates up to CERT_SIZE.
-    ///
-    /// Returns an error if the handshake does not proceed. If an error occurs, the connection instance
-    /// must be recreated.
+    /// Returns an error if the handshake does not proceed. If an error occurs, the connection
+    /// instance must be recreated.
     pub fn open<'v, RNG, Verifier>(
         &mut self,
         context: TlsContext<'v, CipherSuite, RNG>,
@@ -140,7 +138,8 @@ where
         }
     }
 
-    /// Force all previously written, buffered bytes to be encoded into a tls record and written to the connection.
+    /// Force all previously written, buffered bytes to be encoded into a tls record and written
+    /// to the connection.
     pub fn flush(&mut self) -> Result<(), TlsError> {
         if !self.record_write_buf.is_empty() {
             let key_schedule = self.key_schedule.write_state();
@@ -151,6 +150,8 @@ where
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
             key_schedule.increment_counter();
+
+            self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))?;
         }
 
         Ok(())
@@ -217,6 +218,8 @@ where
             .map_err(|e| TlsError::Io(e.kind()))?;
 
         self.key_schedule.write_state().increment_counter();
+
+        self.flush()?;
 
         Ok(())
     }
@@ -516,6 +519,8 @@ where
                 .map_err(|e| TlsError::Io(e.kind()))?;
 
             self.key_schedule.increment_counter();
+
+            self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))?;
         }
 
         Ok(())
