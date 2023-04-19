@@ -40,7 +40,7 @@ impl<'a, 'b> ServerExtensionParserIterator<'a, 'b> {
 }
 
 impl<'a, 'b> Iterator for ServerExtensionParserIterator<'a, 'b> {
-    type Item = Result<ServerExtension<'a>, TlsError>;
+    type Item = Result<Option<ServerExtension<'a>>, TlsError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.buffer.is_empty() {
@@ -62,7 +62,7 @@ impl<'a> KeyShare<'a> {
 }
 
 impl<'a> ServerExtension<'a> {
-    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<ServerExtension<'a>, TlsError> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Option<ServerExtension<'a>>, TlsError> {
         let extension_type =
             ExtensionType::of(buf.read_u16().map_err(|_| TlsError::UnknownExtensionType)?)
                 .ok_or(TlsError::UnknownExtensionType)?;
@@ -86,9 +86,11 @@ impl<'a> ServerExtension<'a> {
         let mut extensions = Vec::new();
 
         while let Some(extension) = iter.next() {
-            extensions
-                .push(extension?)
-                .map_err(|_| TlsError::DecodeError)?;
+            if let Some(extension) = extension? {
+                extensions
+                    .push(extension)
+                    .map_err(|_| TlsError::DecodeError)?;
+            }
         }
 
         Ok(extensions)
@@ -97,7 +99,7 @@ impl<'a> ServerExtension<'a> {
     fn from_type_and_data<'b>(
         extension_type: ExtensionType,
         data: &mut ParseBuffer<'b>,
-    ) -> Result<ServerExtension<'b>, TlsError> {
+    ) -> Result<Option<ServerExtension<'b>>, TlsError> {
         let extension = match extension_type {
             ExtensionType::SupportedVersions => ServerExtension::SupportedVersion(
                 SupportedVersion::parse(data).map_err(|_| TlsError::InvalidSupportedVersions)?,
@@ -114,10 +116,10 @@ impl<'a> ServerExtension<'a> {
             ExtensionType::ServerName => ServerExtension::ServerName,
             t => {
                 warn!("Unimplemented extension: {:?}", t);
-                return Err(TlsError::Unimplemented);
+                return Ok(None);
             }
         };
 
-        Ok(extension)
+        Ok(Some(extension))
     }
 }
