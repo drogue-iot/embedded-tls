@@ -59,15 +59,11 @@ where
         let server_key = key_schedule.get_key()?;
         let nonce = key_schedule.get_nonce()?;
 
-        // info!("decrypting {:x?} with {}", &header, app_data.len());
-        //let crypto = Aes128Gcm::new(&self.key_schedule.get_server_key());
         let crypto = <CipherSuite::Cipher as KeyInit>::new(&server_key);
-        // let nonce = &key_schedule.get_server_nonce();
-        // info!("server write nonce {:x?}", nonce);
         crypto
             .decrypt_in_place(&nonce, header.data(), &mut app_data)
             .map_err(|_| TlsError::CryptoError)?;
-        // info!("decrypted with padding {:x?}", app_data.as_slice());
+
         let padding = app_data
             .as_slice()
             .iter()
@@ -76,12 +72,11 @@ where
         if let Some((index, _)) = padding {
             app_data.truncate(index + 1);
         };
-        //trace!("decrypted {:x?}", data);
 
         let content_type =
             ContentType::of(*app_data.as_slice().last().unwrap()).ok_or(TlsError::InvalidRecord)?;
 
-        trace!("Decrypting content type = {:?}", content_type);
+        trace!("Decrypting: content type = {:?}", content_type);
 
         // Remove the content type
         app_data.truncate(app_data.len() - 1);
@@ -98,23 +93,18 @@ where
                     let handshake_length = remaining - buf.remaining();
 
                     if let ServerHandshake::Finished(ref mut finished) = inner {
-                        // trace!("Server finished hash: {:x?}", finished.hash);
                         finished
                             .hash
                             .replace(key_schedule.transcript_hash().clone().finalize());
                     }
-                    //info!("===> inner ==> {:?}", inner);
-                    //if hash_later {
 
                     key_schedule
                         .transcript_hash()
                         .update(&data[offset..offset + handshake_length]);
                     offset += handshake_length;
 
-                    // info!("hash {:02x?}", &data[..data.len()]);
                     cb(key_schedule, ServerRecord::Handshake(inner))?;
                 }
-                //}
             }
             ContentType::ApplicationData => {
                 let inner = ApplicationData::new(app_data, header);
@@ -127,10 +117,9 @@ where
             }
             _ => return Err(TlsError::Unimplemented),
         }
-        //debug!("decrypted {:?} --> {:x?}", content_type, data);
         key_schedule.increment_counter();
     } else {
-        debug!("Not decrypting: Not encapsulated in app data");
+        trace!("Not decrypting: content_type = {:?}", record.content_type());
         cb(key_schedule, record)?;
     }
     Ok(())
@@ -481,10 +470,8 @@ where
 {
     let mut state = State::ServerVerify;
     decrypt_record(key_schedule.read_state(), record, |key_schedule, record| {
-        trace!("record = {:?}", record.content_type());
         match record {
             ServerRecord::Handshake(server_handshake) => {
-                trace!("handshake = {:?}", server_handshake.handshake_type());
                 match server_handshake {
                     ServerHandshake::EncryptedExtensions(_) => {}
                     ServerHandshake::Certificate(certificate) => {
