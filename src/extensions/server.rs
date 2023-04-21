@@ -1,5 +1,5 @@
 use crate::alert::{AlertDescription, AlertLevel};
-use crate::extensions::common::KeyShareEntry;
+use crate::extensions::common::KeyShare;
 use crate::extensions::ExtensionType;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::supported_versions::ProtocolVersion;
@@ -59,16 +59,6 @@ impl<'a, 'b> Iterator for ServerExtensionParserIterator<'a, 'b> {
         }
 
         Some(ServerExtension::parse(self.buffer, self.allowed))
-    }
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct KeyShare<'a>(pub(crate) KeyShareEntry<'a>);
-
-impl<'a> KeyShare<'a> {
-    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShare<'a>, ParseError> {
-        Ok(KeyShare(KeyShareEntry::parse(buf)?))
     }
 }
 
