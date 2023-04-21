@@ -1,8 +1,7 @@
 mod extension_group_macro;
 
-use crate::{
-    extension_group,
-    extensions::extension_data::{
+use crate::extensions::{
+    extension_data::{
         application_layer_protocol_negotiation::ApplicationLayerProtocolNegotiation,
         certificate_authorities::CertificateAuthorities,
         certificate_type::{
@@ -46,6 +45,7 @@ use crate::{
         },
         use_srtp::UseSrtp,
     },
+    messages::extension_group_macro::extension_group,
 };
 
 // Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with SH

@@ -1,5 +1,3 @@
-#[doc(hidden)]
-#[macro_export]
 macro_rules! extension_group {
     (pub enum $name:ident$(<$lt:lifetime>)? {
         $($extension:ident($extension_data:ty)),+
@@ -91,3 +89,7 @@ macro_rules! extension_group {
         }
     };
 }
+
+// This re-export makes it possible to omit #[macro_export]
+// https://stackoverflow.com/a/67140319
+pub(crate) use extension_group;
