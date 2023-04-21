@@ -6,6 +6,8 @@ use crate::TlsError;
 
 use heapless::Vec;
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SignatureAlgorithmsCert<const N: usize> {
     pub supported_signature_algorithms: Vec<SignatureScheme, N>,
 }

@@ -6,6 +6,8 @@ use crate::{
     TlsError,
 };
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ProtocolName<'a> {
     pub name: &'a str,
 }
@@ -36,6 +38,8 @@ impl<'a> ProtocolName<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ApplicationLayerProtocolNegotiation<'a, const N: usize> {
     // Note: server response must contain a single protocol name.
     pub protocol_name_list: Vec<ProtocolName<'a>, N>,

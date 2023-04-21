@@ -6,7 +6,7 @@ use crate::{
     TlsError,
 };
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum NamedGroup {
     /* Elliptic Curve Groups (ECDHE) */
@@ -47,6 +47,8 @@ impl NamedGroup {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SupportedGroups<const N: usize> {
     pub supported_groups: Vec<NamedGroup, N>,
 }

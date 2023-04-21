@@ -20,6 +20,8 @@ use crate::{
     TlsError,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Padding {
     pub zero_count: u16,
 }

@@ -2,18 +2,17 @@ use heapless::Vec;
 
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 // RFC 6962
 // Clients that support the extension SHOULD send a ClientHello
 // extension with the appropriate type and empty "extension_data".
 pub struct SignedCertificateTimestampIndication;
 impl SignedCertificateTimestampIndication {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SignedCertificateTimestamp;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         if !buf.is_empty() {
             return Err(ParseError::InvalidData);
@@ -27,13 +26,12 @@ impl SignedCertificateTimestampIndication {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 // opaque SerializedSCT<1..2^16-1>;
-
 pub struct SerializedSct<'a>(pub &'a [u8]);
 
 impl<'a> SerializedSct<'a> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SignedCertificateTimestamp;
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
         let len = buf.read_u16()? as usize;
         let bytes = buf.slice(len)?.as_slice();

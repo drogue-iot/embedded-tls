@@ -1,14 +1,12 @@
-#![allow(unused_imports)]
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
 
 use heapless::Vec;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SignatureScheme {
     /* RSASSA-PKCS1-v1_5 algorithms */
@@ -72,6 +70,8 @@ impl SignatureScheme {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SignatureAlgorithms<const N: usize> {
     pub supported_signature_algorithms: Vec<SignatureScheme, N>,
 }

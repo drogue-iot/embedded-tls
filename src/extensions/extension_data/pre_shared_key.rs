@@ -5,6 +5,8 @@ use crate::TlsError;
 
 use heapless::Vec;
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PreSharedKeyClientHello<'a, const N: usize> {
     pub identities: Vec<&'a [u8], N>,
     pub hash_size: usize,
@@ -41,6 +43,8 @@ impl<const N: usize> PreSharedKeyClientHello<'_, N> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PreSharedKeyServerHello {
     pub selected_identity: u16,
 }

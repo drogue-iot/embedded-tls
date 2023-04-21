@@ -12,6 +12,8 @@ use crate::{
     TlsError,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct EarlyDataIndication;
 
 impl EarlyDataIndication {
@@ -28,6 +30,8 @@ impl EarlyDataIndication {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct EarlyDataIndicationInNewSessionTicket {
     pub max_early_data_size: u32,
 }

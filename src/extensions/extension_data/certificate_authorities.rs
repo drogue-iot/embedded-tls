@@ -6,6 +6,8 @@ use crate::{
     TlsError,
 };
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 // opaque DistinguishedName<1..2^16-1>;
 pub struct DistinguishedName<'a> {
     pub name: &'a [u8],
@@ -24,6 +26,8 @@ impl<'a> DistinguishedName<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 // struct {
 //     DistinguishedName authorities<3..2^16-1>;
 // } CertificateAuthoritiesExtension;

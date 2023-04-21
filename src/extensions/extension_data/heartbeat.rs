@@ -6,7 +6,8 @@ use crate::{
     TlsError,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Heartbeat {
     PeerAllowedToSend = 1,
     PeerNotAllowedToSend = 2,

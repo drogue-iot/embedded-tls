@@ -7,7 +7,7 @@ use crate::{
     TlsError,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum NameType {
     HostName = 0,
@@ -29,7 +29,7 @@ impl NameType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ServerName<'a> {
     pub name_type: NameType,
@@ -63,7 +63,7 @@ impl<'a> ServerName<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ServerNameList<'a, const N: usize> {
     pub names: Vec<ServerName<'a>, N>,
@@ -112,7 +112,7 @@ impl<'a, const N: usize> ServerNameList<'a, N> {
 // SHALL include an extension of type "server_name" in the (extended)
 // server hello.  The "extension_data" field of this extension SHALL be
 // empty.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ServerNameResponse;
 

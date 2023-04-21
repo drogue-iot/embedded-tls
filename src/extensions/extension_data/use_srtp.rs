@@ -5,6 +5,9 @@ use crate::{
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 // uint8 SRTPProtectionProfile[2];
 // SRTPProtectionProfile SRTPProtectionProfiles<2..2^16-1>;
 pub struct SrtpProtectionProfile(pub u8, pub u8);
@@ -26,6 +29,8 @@ impl SrtpProtectionProfile {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 // struct {
 //    SRTPProtectionProfiles SRTPProtectionProfiles;
 //    opaque srtp_mki<0..255>;

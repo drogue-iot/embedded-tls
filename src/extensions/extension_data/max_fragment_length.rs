@@ -11,7 +11,7 @@ use crate::{
 /// fragment length of 2^14 bytes.  It may be desirable for constrained
 /// clients to negotiate a smaller maximum fragment length due to memory
 /// limitations or bandwidth limitations.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum MaxFragmentLength {
     /// 512 bytes

@@ -6,6 +6,8 @@ use crate::{
     TlsError,
 };
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 // struct {
 //     opaque certificate_extension_oid<1..2^8-1>;
 //     opaque certificate_extension_values<0..2^16-1>;
@@ -34,6 +36,8 @@ impl<'a> OidFilter<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 // struct {
 //     OIDFilter filters<0..2^16-1>;
 // } OIDFilterExtension;

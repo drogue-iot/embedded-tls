@@ -6,7 +6,7 @@ use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyShareServerHello<'a>(pub KeyShareEntry<'a>);
 
@@ -20,7 +20,7 @@ impl<'a> KeyShareServerHello<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyShareClientHello<'a, const N: usize> {
     pub client_shares: Vec<KeyShareEntry<'a>, N>,
@@ -54,7 +54,7 @@ impl<'a, const N: usize> KeyShareClientHello<'a, N> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyShareHelloRetryRequest {
     pub selected_group: NamedGroup,
@@ -72,20 +72,11 @@ impl KeyShareHelloRetryRequest {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyShareEntry<'a> {
     pub(crate) group: NamedGroup,
     pub(crate) opaque: &'a [u8],
-}
-
-impl Clone for KeyShareEntry<'_> {
-    fn clone(&self) -> Self {
-        Self {
-            group: self.group,
-            opaque: self.opaque,
-        }
-    }
 }
 
 impl<'a> KeyShareEntry<'a> {

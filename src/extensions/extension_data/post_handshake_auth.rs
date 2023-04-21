@@ -8,7 +8,7 @@ use crate::{
 // struct {} PostHandshakeAuth;
 // The "extension_data" field of the "post_handshake_auth" extension is
 // zero length.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PostHandshakeAuth;
 

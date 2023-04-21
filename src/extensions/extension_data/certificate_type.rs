@@ -8,7 +8,8 @@ use crate::{
     TlsError,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum CertType {
     X509 = 0,
     Reserved = 1,
@@ -35,6 +36,8 @@ impl CertType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertTypeRequest<const N: usize> {
     pub cert_types: Vec<CertType, N>,
 }
@@ -57,6 +60,8 @@ impl<const N: usize> CertTypeRequest<N> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertTypeResponse {
     pub cert_type: CertType,
 }

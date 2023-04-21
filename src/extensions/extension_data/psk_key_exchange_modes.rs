@@ -5,8 +5,8 @@ use crate::TlsError;
 
 use heapless::Vec;
 
-#[derive(Clone, Copy)]
-#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PskKeyExchangeMode {
     PskKe = 0,
     PskDheKe = 1,
@@ -28,6 +28,8 @@ impl PskKeyExchangeMode {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PskKeyExchangeModes<const N: usize> {
     pub modes: Vec<PskKeyExchangeMode, N>,
 }
