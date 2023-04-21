@@ -1,4 +1,4 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![allow(dead_code)]
 #![cfg_attr(feature = "async", allow(incomplete_features))]
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
@@ -73,7 +73,6 @@ mod crypto_engine;
 mod extensions;
 mod handshake;
 mod key_schedule;
-mod named_groups;
 mod parse_buffer;
 pub mod read_buffer;
 mod record;

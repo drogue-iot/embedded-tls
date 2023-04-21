@@ -2,11 +2,11 @@ use crate::extensions::types::key_share::KeyShare;
 use crate::extensions::types::max_fragment_length::MaxFragmentLength;
 use crate::extensions::types::server_name::ServerNameList;
 use crate::extensions::types::status_request::CertificateStatusRequest;
+use crate::extensions::types::supported_groups::SupportedGroups;
 use crate::extensions::ExtensionType;
 use crate::signature_schemes::SignatureScheme;
 
 use crate::buffer::*;
-use crate::named_groups::NamedGroup;
 use crate::supported_versions::ProtocolVersions;
 use crate::TlsError;
 use heapless::Vec;
@@ -19,9 +19,7 @@ pub enum ClientExtension<'a> {
     SignatureAlgorithms {
         supported_signature_algorithms: Vec<SignatureScheme, 16>,
     },
-    SupportedGroups {
-        supported_groups: Vec<NamedGroup, 16>,
-    },
+    SupportedGroups(SupportedGroups<16>),
     KeyShare(KeyShare<'a>),
     PreSharedKey {
         identities: Vec<&'a [u8], 4>,
@@ -98,14 +96,7 @@ impl ClientExtension<'_> {
                     }
                     Ok(())
                 }),
-                ClientExtension::SupportedGroups { supported_groups } => {
-                    buf.with_u16_length(|buf| {
-                        for &g in supported_groups {
-                            buf.push_u16(g as u16).map_err(|_| TlsError::EncodeError)?;
-                        }
-                        Ok(())
-                    })
-                }
+                ClientExtension::SupportedGroups(supported_groups) => supported_groups.encode(buf),
                 ClientExtension::KeyShare(key_share) => key_share.encode(buf),
                 ClientExtension::PreSharedKey {
                     identities,

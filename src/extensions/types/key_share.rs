@@ -1,5 +1,5 @@
 use crate::buffer::CryptoBuffer;
-use crate::named_groups::NamedGroup;
+use crate::extensions::types::supported_groups::NamedGroup;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
 
@@ -35,7 +35,7 @@ impl Clone for KeyShareEntry<'_> {
 
 impl<'a> KeyShareEntry<'a> {
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShareEntry<'a>, ParseError> {
-        let group = NamedGroup::of(buf.read_u16()?).ok_or(ParseError::InvalidData)?;
+        let group = NamedGroup::parse(buf)?;
 
         let opaque_len = buf.read_u16()?;
         let opaque = buf.slice(opaque_len as usize)?;
@@ -48,8 +48,7 @@ impl<'a> KeyShareEntry<'a> {
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.with_u16_length(|buf| {
-            buf.push_u16(self.group as u16)
-                .map_err(|_| TlsError::EncodeError)?;
+            self.group.encode(buf)?;
 
             buf.with_u16_length(|buf| buf.extend_from_slice(self.opaque))
                 .map_err(|_| TlsError::EncodeError)
@@ -59,12 +58,8 @@ impl<'a> KeyShareEntry<'a> {
 
 #[cfg(test)]
 mod tests {
-    extern crate std;
-
     use super::*;
 
-    use crate::named_groups::NamedGroup;
-    use crate::parse_buffer::ParseBuffer;
     use std::sync::Once;
 
     static INIT: Once = Once::new();

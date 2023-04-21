@@ -9,8 +9,8 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::extensions::client::{ClientExtension, PskKeyExchangeMode};
 use crate::extensions::types::key_share::{KeyShare, KeyShareEntry};
 use crate::extensions::types::server_name::ServerNameList;
+use crate::extensions::types::supported_groups::{NamedGroup, SupportedGroups};
 use crate::handshake::{Random, LEGACY_VERSION};
-use crate::named_groups::NamedGroup;
 use crate::supported_versions::TLS13;
 use crate::TlsError;
 
@@ -86,9 +86,9 @@ where
                 ClientExtension::MaxFragmentLength(max_fragment_length).encode(buf)?;
             }
 
-            ClientExtension::SupportedGroups {
+            ClientExtension::SupportedGroups(SupportedGroups {
                 supported_groups: self.config.named_groups.clone(),
-            }
+            })
             .encode(buf)?;
 
             ClientExtension::PskKeyExchangeModes {

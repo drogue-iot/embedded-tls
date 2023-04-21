@@ -1,7 +1,7 @@
 use crate::cipher_suites::CipherSuite;
+use crate::extensions::types::supported_groups::NamedGroup;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_verify::CertificateVerify;
-use crate::named_groups::NamedGroup;
 use crate::signature_schemes::SignatureScheme;
 use crate::TlsError;
 use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
