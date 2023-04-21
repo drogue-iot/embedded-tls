@@ -4,7 +4,7 @@ use crate::{
         messages::unexpected_extension_type,
         types::{
             key_share::KeyShareServerHello, pre_shared_key::PreSharedKeyServerHello,
-            supported_versions::SupportedVersions,
+            supported_versions::SupportedVersionsServerHello,
         },
         ExtensionType,
     },
@@ -16,7 +16,7 @@ use crate::{
 pub enum ServerHelloExtension<'a> {
     KeyShare(KeyShareServerHello<'a>),
     PreSharedKey(PreSharedKeyServerHello),
-    SupportedVersions(SupportedVersions<16>),
+    SupportedVersions(SupportedVersionsServerHello),
 }
 
 impl<'a> ServerHelloExtension<'a> {
@@ -33,9 +33,9 @@ impl<'a> ServerHelloExtension<'a> {
             ExtensionType::PreSharedKey => {
                 Ok(Self::PreSharedKey(PreSharedKeyServerHello::parse(buf)?))
             }
-            ExtensionType::SupportedVersions => {
-                Ok(Self::SupportedVersions(SupportedVersions::parse(buf)?))
-            }
+            ExtensionType::SupportedVersions => Ok(Self::SupportedVersions(
+                SupportedVersionsServerHello::parse(buf)?,
+            )),
             ExtensionType::KeyShare => Ok(Self::KeyShare(KeyShareServerHello::parse(buf)?)),
             other => Err(unexpected_extension_type(other)),
         }

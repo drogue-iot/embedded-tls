@@ -1,7 +1,7 @@
 use crate::alert::{AlertDescription, AlertLevel};
 use crate::extensions::types::key_share::KeyShareServerHello;
 use crate::extensions::types::server_name::ServerNameResponse;
-use crate::extensions::types::supported_versions::SupportedVersion;
+use crate::extensions::types::supported_versions::SupportedVersionsServerHello;
 use crate::extensions::ExtensionType;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
@@ -10,7 +10,7 @@ use heapless::Vec;
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ServerExtension<'a> {
-    SupportedVersion(SupportedVersion),
+    SupportedVersion(SupportedVersionsServerHello),
     KeyShare(KeyShareServerHello<'a>),
     PreSharedKey(u16),
 
@@ -109,7 +109,8 @@ impl<'a> ServerExtension<'a> {
     ) -> Result<Option<ServerExtension<'b>>, TlsError> {
         let extension = match extension_type {
             ExtensionType::SupportedVersions => ServerExtension::SupportedVersion(
-                SupportedVersion::parse(data).map_err(|_| TlsError::InvalidSupportedVersions)?,
+                SupportedVersionsServerHello::parse(data)
+                    .map_err(|_| TlsError::InvalidSupportedVersions)?,
             ),
             ExtensionType::KeyShare => ServerExtension::KeyShare(
                 KeyShareServerHello::parse(data).map_err(|_| TlsError::InvalidKeyShare)?,

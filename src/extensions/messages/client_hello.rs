@@ -12,7 +12,7 @@ use crate::{
             signature_algorithms_cert::SignatureAlgorithmsCert,
             signed_certificate_timestamp::SignedCertificateTimestampIndication,
             status_request::CertificateStatusRequest, supported_groups::SupportedGroups,
-            supported_versions::SupportedVersions, use_srtp::UseSrtp,
+            supported_versions::SupportedVersionsClientHello, use_srtp::UseSrtp,
         },
         ExtensionType,
     },
@@ -23,7 +23,7 @@ use crate::{
 // TODO: check if these are the correct types
 pub enum ClientHelloExtension<'a> {
     ServerName(ServerNameList<'a, 1>),
-    SupportedVersions(SupportedVersions<16>),
+    SupportedVersions(SupportedVersionsClientHello<16>),
     SignatureAlgorithms(SignatureAlgorithms<16>),
     SupportedGroups(SupportedGroups<16>),
     KeyShare(KeyShareClientHello<'a, 1>),
@@ -112,9 +112,9 @@ impl<'a> ClientHelloExtension<'a> {
                 Ok(Self::PreSharedKey(PreSharedKeyClientHello::parse(buf)?))
             }
             ExtensionType::EarlyData => Ok(Self::EarlyData(EarlyDataIndication::parse(buf)?)),
-            ExtensionType::SupportedVersions => {
-                Ok(Self::SupportedVersions(SupportedVersions::parse(buf)?))
-            }
+            ExtensionType::SupportedVersions => Ok(Self::SupportedVersions(
+                SupportedVersionsClientHello::parse(buf)?,
+            )),
             ExtensionType::Cookie => Ok(Self::Cookie(Cookie::parse(buf)?)),
             ExtensionType::PskKeyExchangeModes => {
                 Ok(Self::PskKeyExchangeModes(PskKeyExchangeModes::parse(buf)?))

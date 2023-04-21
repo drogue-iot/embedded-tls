@@ -13,7 +13,7 @@ use crate::extensions::types::psk_key_exchange_modes::{PskKeyExchangeMode, PskKe
 use crate::extensions::types::server_name::ServerNameList;
 use crate::extensions::types::signature_algorithms::SignatureAlgorithms;
 use crate::extensions::types::supported_groups::{NamedGroup, SupportedGroups};
-use crate::extensions::types::supported_versions::{SupportedVersions, TLS13};
+use crate::extensions::types::supported_versions::{SupportedVersionsClientHello, TLS13};
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::TlsError;
 
@@ -75,7 +75,7 @@ where
             // Implementations of this specification MUST send this extension in the
             // ClientHello containing all versions of TLS which they are prepared to
             // negotiate
-            ClientHelloExtension::SupportedVersions(SupportedVersions {
+            ClientHelloExtension::SupportedVersions(SupportedVersionsClientHello {
                 versions: Vec::from_slice(&[TLS13]).unwrap(),
             })
             .encode(buf)?;

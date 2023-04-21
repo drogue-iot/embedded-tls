@@ -1,6 +1,5 @@
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -16,7 +15,7 @@ impl ProtocolVersion {
     }
 
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
-        Ok(Self(buf.read_u16()?))
+        buf.read_u16().map(Self)
     }
 }
 
@@ -24,11 +23,11 @@ pub const TLS13: ProtocolVersion = ProtocolVersion(0x0304);
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct SupportedVersions<const N: usize> {
+pub struct SupportedVersionsClientHello<const N: usize> {
     pub versions: Vec<ProtocolVersion, N>,
 }
 
-impl<const N: usize> SupportedVersions<N> {
+impl<const N: usize> SupportedVersionsClientHello<N> {
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.read_u8()? as usize;
 
@@ -49,13 +48,11 @@ impl<const N: usize> SupportedVersions<N> {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct SupportedVersion {
-    selected_version: ProtocolVersion,
+pub struct SupportedVersionsServerHello {
+    pub selected_version: ProtocolVersion,
 }
 
-impl SupportedVersion {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SupportedVersions;
-
+impl SupportedVersionsServerHello {
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         Ok(Self {
             selected_version: ProtocolVersion::parse(buf)?,
