@@ -3,7 +3,7 @@ use crate::extensions::types::key_share::KeyShare;
 use crate::extensions::types::server_name::ServerNameResponse;
 use crate::extensions::types::supported_versions::SupportedVersion;
 use crate::extensions::ExtensionType;
-use crate::parse_buffer::ParseBuffer;
+use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
 use heapless::Vec;
 
@@ -46,9 +46,11 @@ impl<'a> ServerExtension<'a> {
         buf: &mut ParseBuffer<'a>,
         allowed: &[ExtensionType],
     ) -> Result<Option<ServerExtension<'a>>, TlsError> {
-        let extension_type =
-            ExtensionType::of(buf.read_u16().map_err(|_| TlsError::UnknownExtensionType)?)
-                .ok_or(TlsError::UnknownExtensionType)?;
+        let extension_type = match ExtensionType::parse(buf) {
+            Ok(extension_type) => extension_type,
+            Err(ParseError::InvalidData) => return Ok(None),
+            Err(_) => return Err(TlsError::DecodeError),
+        };
 
         trace!("extension type {:?}", extension_type);
 
