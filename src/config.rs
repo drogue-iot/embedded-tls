@@ -1,7 +1,7 @@
 use crate::cipher_suites::CipherSuite;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_verify::CertificateVerify;
-use crate::max_fragment_length::MaxFragmentLength;
+pub use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
 use crate::signature_schemes::SignatureScheme;
 use crate::TlsError;
@@ -130,7 +130,7 @@ where
     pub(crate) cipher_suite: PhantomData<CipherSuite>,
     pub(crate) signature_schemes: Vec<SignatureScheme, 16>,
     pub(crate) named_groups: Vec<NamedGroup, 16>,
-    pub(crate) max_fragment_length: MaxFragmentLength,
+    pub(crate) max_fragment_length: Option<MaxFragmentLength>,
     pub(crate) ca: Option<Certificate<'a>>,
     pub(crate) cert: Option<Certificate<'a>>,
 }
@@ -178,7 +178,7 @@ where
             cipher_suite: PhantomData,
             signature_schemes: Vec::new(),
             named_groups: Vec::new(),
-            max_fragment_length: MaxFragmentLength::Bits10,
+            max_fragment_length: None,
             psk: None,
             server_name: None,
             ca: None,
@@ -234,6 +234,35 @@ where
 
     pub fn with_server_name(mut self, server_name: &'a str) -> Self {
         self.server_name = Some(server_name);
+        self
+    }
+
+    /// Configures the maximum plaintext fragment size.
+    ///
+    /// This option may help reduce memory size, as smaller fragment lengths require smaller
+    /// read/write buffers. Note that embedded-tls does not currently use this option to fragment
+    /// writes. Note that the buffers need to include some overhead over the configured fragment
+    /// length.
+    ///
+    /// From [RFC 6066, Section 4.  Maximum Fragment Length Negotiation](https://www.rfc-editor.org/rfc/rfc6066#page-8):
+    ///
+    /// > Without this extension, TLS specifies a fixed maximum plaintext
+    /// > fragment length of 2^14 bytes.  It may be desirable for constrained
+    /// > clients to negotiate a smaller maximum fragment length due to memory
+    /// > limitations or bandwidth limitations.
+    ///
+    /// > For example, if the negotiated length is 2^9=512, then, when using currently defined
+    /// > cipher suites ([...]) and null compression, the record-layer output can be at most
+    /// > 805 bytes: 5 bytes of headers, 512 bytes of application data, 256 bytes of padding,
+    /// > and 32 bytes of MAC.
+    pub fn with_max_fragment_length(mut self, max_fragment_length: MaxFragmentLength) -> Self {
+        self.max_fragment_length = Some(max_fragment_length);
+        self
+    }
+
+    /// Resets the max fragment length to 14 bits (16384).
+    pub fn reset_max_fragment_length(mut self) -> Self {
+        self.max_fragment_length = None;
         self
     }
 

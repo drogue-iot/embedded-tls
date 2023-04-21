@@ -80,6 +80,10 @@ where
             }
             .encode(buf)?;
 
+            if let Some(max_fragment_length) = self.config.max_fragment_length {
+                ClientExtension::MaxFragmentLength(max_fragment_length).encode(buf)?;
+            }
+
             ClientExtension::SupportedGroups {
                 supported_groups: self.config.named_groups.clone(),
             }
