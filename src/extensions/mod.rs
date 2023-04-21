@@ -6,7 +6,6 @@ use crate::{
 
 pub mod extension_data;
 pub mod messages;
-pub mod server;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

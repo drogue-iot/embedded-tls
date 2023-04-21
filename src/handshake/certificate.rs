@@ -1,6 +1,5 @@
 use crate::buffer::CryptoBuffer;
-use crate::extensions::server::ServerExtension;
-use crate::extensions::ExtensionType;
+use crate::extensions::messages::CertificateExtension;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use heapless::Vec;
@@ -70,12 +69,6 @@ pub enum CertificateEntryRef<'a> {
 }
 
 impl<'a> CertificateEntryRef<'a> {
-    // Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with CT
-    const ALLOWED_EXTENSIONS: &[ExtensionType] = &[
-        ExtensionType::StatusRequest,
-        ExtensionType::SignedCertificateTimestamp,
-    ];
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, TlsError> {
         let entry_len = buf
             .read_u24()
@@ -87,7 +80,7 @@ impl<'a> CertificateEntryRef<'a> {
         let entry = CertificateEntryRef::X509(cert.as_slice());
 
         // Validate extensions
-        ServerExtension::parse_vector::<2>(buf, Self::ALLOWED_EXTENSIONS)?;
+        CertificateExtension::parse_vector::<2>(buf)?;
 
         Ok(entry)
     }

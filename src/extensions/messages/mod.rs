@@ -7,7 +7,7 @@ use crate::{
         certificate_authorities::CertificateAuthorities,
         certificate_type::{CertTypeRequest, CertTypeResponse},
         cookie::Cookie,
-        early_data::EarlyDataIndication,
+        early_data::{EarlyDataIndication, EarlyDataIndicationInNewSessionTicket},
         heartbeat::Heartbeat,
         key_share::{KeyShareClientHello, KeyShareServerHello},
         max_fragment_length::MaxFragmentLength,
@@ -103,5 +103,22 @@ extension_group! {
         CertificateAuthorities(CertificateAuthorities<'a, 1>),
         OidFilters(OidFilters<'a, 4>),
         SignatureAlgorithmsCert(SignatureAlgorithmsCert<1>)
+    }
+}
+
+// TODO: check if these are the correct data types
+// Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with CT
+extension_group! {
+    pub enum CertificateExtension<'a> {
+        StatusRequest(CertificateStatusRequest),
+        SignedCertificateTimestamp(SignedCertificateTimestamps<'a, 4>)
+    }
+}
+
+// TODO: check if these are the correct data types
+// Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with NST
+extension_group! {
+    pub enum NewSessionTicketExtension {
+        EarlyData(EarlyDataIndicationInNewSessionTicket)
     }
 }

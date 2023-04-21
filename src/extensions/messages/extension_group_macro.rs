@@ -1,16 +1,16 @@
 #[doc(hidden)]
 #[macro_export]
 macro_rules! extension_group {
-    (pub enum $name:ident<'a> {
+    (pub enum $name:ident$(<$lt:lifetime>)? {
         $($extension:ident($extension_data:ty)),+
     }) => {
         #[derive(Debug, Clone)]
         #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-        pub enum $name<'a> {
+        pub enum $name$(<$lt>)? {
             $($extension($extension_data)),+
         }
 
-        impl<'a> $name<'a> {
+        impl$(<$lt>)? $name$(<$lt>)? {
             pub fn extension_type(&self) -> crate::extensions::ExtensionType {
                 match self {
                     $(Self::$extension(_) => crate::extensions::ExtensionType::$extension),+
@@ -25,7 +25,7 @@ macro_rules! extension_group {
                 })
             }
 
-            pub fn parse(buf: &mut crate::parse_buffer::ParseBuffer<'a>) -> Result<Self, crate::TlsError> {
+            pub fn parse(buf: &mut crate::parse_buffer::ParseBuffer$(<$lt>)?) -> Result<Self, crate::TlsError> {
                 let ext_type = crate::extensions::ExtensionType::parse(buf).map_err(|err| {
                     warn!("Failed to read extension type: {:?}", err);
                     match err {
@@ -62,7 +62,7 @@ macro_rules! extension_group {
             }
 
             pub fn parse_vector<const N: usize>(
-                buf: &mut crate::parse_buffer::ParseBuffer<'a>,
+                buf: &mut crate::parse_buffer::ParseBuffer$(<$lt>)?,
             ) -> Result<heapless::Vec<Self, N>, crate::TlsError> {
                 let extensions_len = buf
                     .read_u16()
