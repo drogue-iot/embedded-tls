@@ -23,23 +23,26 @@ macro_rules! extension_group {
                 })
             }
 
-            pub fn parse(buf: &mut crate::parse_buffer::ParseBuffer<'a>) -> Result<Self, crate::parse_buffer::ParseError> {
-                match crate::extensions::ExtensionType::parse(buf)? {
-                    $(crate::extensions::ExtensionType::$extension => Ok(Self::$extension(<$extension_data>::parse(buf)?)),)+
+            pub fn parse(buf: &mut crate::parse_buffer::ParseBuffer<'a>) -> Result<Self, crate::TlsError> {
+                match crate::extensions::ExtensionType::parse(buf).map_err(|err| {
+                    match err {
+                        crate::parse_buffer::ParseError::InvalidData => crate::TlsError::UnknownExtensionType,
+                        _ => crate::TlsError::DecodeError,
+                    }
+                })? {
+                    $(crate::extensions::ExtensionType::$extension => Ok(Self::$extension(<$extension_data>::parse(buf).map_err(|_| crate::TlsError::DecodeError)?)),)+
                     #[allow(unreachable_patterns)]
                     other => {
                         warn!("Read unexpected ExtensionType: {:?}", other);
-                        // TODO: parse should return this TlsError:
                         // Section 4.2.  Extensions
                         // If an implementation receives an extension
                         // which it recognizes and which is not specified for the message in
                         // which it appears, it MUST abort the handshake with an
                         // "illegal_parameter" alert.
-                        // return Err(TlsError::AbortHandshake(
-                        //     AlertLevel::Fatal,
-                        //     AlertDescription::IllegalParameter,
-                        // ));
-                        Err(crate::parse_buffer::ParseError::InvalidData)
+                        return Err(crate::TlsError::AbortHandshake(
+                            crate::alert::AlertLevel::Fatal,
+                            crate::alert::AlertDescription::IllegalParameter,
+                        ));
                     }
                 }
             }
