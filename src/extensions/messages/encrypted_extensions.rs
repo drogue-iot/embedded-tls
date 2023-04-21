@@ -25,8 +25,10 @@ extension_group! {
         // "extension_data", except that the "ProtocolNameList" MUST contain
         // exactly one "ProtocolName".
         ApplicationLayerProtocolNegotiation(ApplicationLayerProtocolNegotiation<'a, 1>),
-        ClientCertificateType(CertTypeResponse), // TODO
-        ServerCertificateType(CertTypeResponse), // TODO
-        EarlyData(EarlyDataIndication)          // TODO
+        // Note: RFC 7250 includes the cert types in the Server Hello,
+        // but RFC 8446 specifies them for EncryptedExtensions
+        ClientCertificateType(CertTypeResponse),
+        ServerCertificateType(CertTypeResponse),
+        EarlyData(EarlyDataIndication)
     }
 }
