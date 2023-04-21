@@ -78,16 +78,14 @@ impl<'a> ServerHello<'a> {
         })
     }
 
-    pub fn key_share(&self) -> Option<KeyShareEntry> {
-        let key_share = self
-            .extensions
-            .iter()
-            .find(|e| matches!(e, ServerExtension::KeyShare(..)))?;
-
-        match key_share {
-            ServerExtension::KeyShare(key_share) => Some(key_share.0.clone()),
-            _ => None,
-        }
+    pub fn key_share(&self) -> Option<&KeyShareEntry> {
+        self.extensions.iter().find_map(|e| {
+            if let ServerExtension::KeyShare(entry) = e {
+                Some(&entry.0)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn calculate_shared_secret(&self, secret: &EphemeralSecret) -> Option<SharedSecret> {
