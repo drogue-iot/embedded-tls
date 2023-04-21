@@ -8,7 +8,6 @@
 
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -16,8 +15,6 @@ use crate::{
 pub struct EarlyDataIndication;
 
 impl EarlyDataIndication {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::EarlyData;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         if !buf.is_empty() {
             return Err(ParseError::InvalidData);
@@ -36,8 +33,6 @@ pub struct EarlyDataIndicationInNewSessionTicket {
 }
 
 impl EarlyDataIndicationInNewSessionTicket {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::EarlyData;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         Ok(Self {
             max_early_data_size: buf.read_u32()?,

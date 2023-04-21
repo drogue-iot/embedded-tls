@@ -1,5 +1,5 @@
 use crate::buffer::CryptoBuffer;
-use crate::extensions::ExtensionType;
+
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
 
@@ -32,8 +32,6 @@ pub struct PskKeyExchangeModes<const N: usize> {
     pub modes: Vec<PskKeyExchangeMode, N>,
 }
 impl<const N: usize> PskKeyExchangeModes<N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::PskKeyExchangeModes;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.read_u8()? as usize;
 

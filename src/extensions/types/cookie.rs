@@ -1,6 +1,5 @@
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -10,8 +9,6 @@ pub struct Cookie<'a> {
 }
 
 impl<'a> Cookie<'a> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::Cookie;
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
         let data_length = buf.read_u16()? as usize;
         let cookie = buf.slice(data_length)?.as_slice();

@@ -1,6 +1,5 @@
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -11,8 +10,6 @@ pub enum CertificateStatusRequest {
 }
 
 impl CertificateStatusRequest {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::StatusRequest;
-
     pub fn parse(_buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         unimplemented!()
     }

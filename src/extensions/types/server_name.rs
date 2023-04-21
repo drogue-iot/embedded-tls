@@ -117,8 +117,6 @@ impl<'a, const N: usize> ServerNameList<'a, N> {
 pub struct ServerNameResponse;
 
 impl ServerNameResponse {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::ServerName;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         if !buf.is_empty() {
             Err(ParseError::InvalidData)

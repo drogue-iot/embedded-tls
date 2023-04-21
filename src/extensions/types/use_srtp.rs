@@ -2,7 +2,6 @@ use heapless::Vec;
 
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -16,7 +15,7 @@ impl SrtpProtectionProfile {
     pub const NULL_HMAC_SHA1_80: Self = Self(0x00, 0x05);
     pub const NULL_HMAC_SHA1_32: Self = Self(0x00, 0x06);
 
-    pub fn parse<'a>(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         Ok(Self(buf.read_u8()?, buf.read_u8()?))
     }
 
@@ -37,8 +36,6 @@ pub struct UseSrtp<'a, const N: usize> {
 }
 
 impl<'a, const N: usize> UseSrtp<'a, N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::UseSrtp;
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
         let profiles_length = buf.read_u16()? as usize;
         let profiles = buf.read_list(profiles_length, SrtpProtectionProfile::parse)?;

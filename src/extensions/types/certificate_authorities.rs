@@ -2,7 +2,6 @@ use heapless::Vec;
 
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -33,8 +32,6 @@ pub struct CertificateAuthorities<'a, const N: usize> {
 }
 
 impl<'a, const N: usize> CertificateAuthorities<'a, N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::CertificateAuthorities;
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
         let data_length = buf.read_u16()?;
         buf.read_list(data_length as usize, DistinguishedName::parse)

@@ -3,26 +3,16 @@ use crate::{
     extensions::{
         types::{
             application_layer_protocol_negotiation::ApplicationLayerProtocolNegotiation,
-            certificate_authorities::CertificateAuthorities,
-            certificate_type::{ClientCertTypeRequest, ServerCertTypeRequest},
-            cookie::Cookie,
-            early_data::EarlyDataIndication,
-            heartbeat::Heartbeat,
-            key_share::KeyShare,
-            max_fragment_length::MaxFragmentLength,
-            oid_filters::OidFilters,
-            padding::Padding,
-            post_handshake_auth::PostHandshakeAuth,
-            pre_shared_key::PreSharedKey,
-            psk_key_exchange_modes::PskKeyExchangeModes,
-            server_name::ServerNameList,
+            certificate_authorities::CertificateAuthorities, certificate_type::CertTypeRequest,
+            cookie::Cookie, early_data::EarlyDataIndication, heartbeat::Heartbeat,
+            key_share::KeyShare, max_fragment_length::MaxFragmentLength, oid_filters::OidFilters,
+            padding::Padding, post_handshake_auth::PostHandshakeAuth, pre_shared_key::PreSharedKey,
+            psk_key_exchange_modes::PskKeyExchangeModes, server_name::ServerNameList,
             signature_algorithms::SignatureAlgorithms,
             signature_algorithms_cert::SignatureAlgorithmsCert,
             signed_certificate_timestamp::SignedCertificateTimestampIndication,
-            status_request::CertificateStatusRequest,
-            supported_groups::SupportedGroups,
-            supported_versions::SupportedVersions,
-            use_srtp::UseSrtp,
+            status_request::CertificateStatusRequest, supported_groups::SupportedGroups,
+            supported_versions::SupportedVersions, use_srtp::UseSrtp,
         },
         ExtensionType,
     },
@@ -46,8 +36,8 @@ pub enum ClientHelloExtension<'a> {
     Heartbeat(Heartbeat),
     ApplicationLayerProtocolNegotiation(ApplicationLayerProtocolNegotiation<'a, 2>),
     SignedCertificateTimestamp(SignedCertificateTimestampIndication),
-    ClientCertificateType(ClientCertTypeRequest<2>),
-    ServerCertificateType(ServerCertTypeRequest<2>),
+    ClientCertificateType(CertTypeRequest<2>),
+    ServerCertificateType(CertTypeRequest<2>),
     Padding(Padding),
     EarlyData(EarlyDataIndication),
     Cookie(Cookie<'a>),
@@ -111,12 +101,12 @@ impl<'a> ClientHelloExtension<'a> {
             ExtensionType::SignedCertificateTimestamp => Ok(Self::SignedCertificateTimestamp(
                 SignedCertificateTimestampIndication::parse(buf)?,
             )),
-            ExtensionType::ClientCertificateType => Ok(Self::ClientCertificateType(
-                ClientCertTypeRequest::parse(buf)?,
-            )),
-            ExtensionType::ServerCertificateType => Ok(Self::ServerCertificateType(
-                ServerCertTypeRequest::parse(buf)?,
-            )),
+            ExtensionType::ClientCertificateType => {
+                Ok(Self::ClientCertificateType(CertTypeRequest::parse(buf)?))
+            }
+            ExtensionType::ServerCertificateType => {
+                Ok(Self::ServerCertificateType(CertTypeRequest::parse(buf)?))
+            }
             ExtensionType::Padding => Ok(Self::Padding(Padding::parse(buf)?)),
             ExtensionType::PreSharedKey => Ok(Self::PreSharedKey(PreSharedKey::parse(buf)?)),
             ExtensionType::EarlyData => Ok(Self::EarlyData(EarlyDataIndication::parse(buf)?)),

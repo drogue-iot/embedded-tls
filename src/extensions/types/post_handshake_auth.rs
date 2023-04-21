@@ -1,6 +1,5 @@
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -14,8 +13,6 @@ use crate::{
 pub struct PostHandshakeAuth;
 
 impl PostHandshakeAuth {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::PostHandshakeAuth;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         if !buf.is_empty() {
             Err(ParseError::InvalidData)

@@ -77,8 +77,6 @@ pub struct SignatureAlgorithms<const N: usize> {
 }
 
 impl<const N: usize> SignatureAlgorithms<N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SignatureAlgorithms;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.read_u16()? as usize;
 

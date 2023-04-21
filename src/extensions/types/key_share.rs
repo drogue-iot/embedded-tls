@@ -1,6 +1,6 @@
 use crate::buffer::CryptoBuffer;
 use crate::extensions::types::supported_groups::NamedGroup;
-use crate::extensions::ExtensionType;
+
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
 
@@ -9,8 +9,6 @@ use crate::TlsError;
 pub struct KeyShare<'a>(pub(crate) KeyShareEntry<'a>);
 
 impl<'a> KeyShare<'a> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::KeyShare;
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShare<'a>, ParseError> {
         Ok(KeyShare(KeyShareEntry::parse(buf)?))
     }

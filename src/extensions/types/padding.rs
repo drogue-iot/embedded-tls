@@ -16,7 +16,6 @@
 
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -26,9 +25,7 @@ pub struct Padding {
 }
 
 impl Padding {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::Padding;
-
-    pub fn parse<'a>(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.remaining();
 
         // The client MUST fill the padding extension completely with zero

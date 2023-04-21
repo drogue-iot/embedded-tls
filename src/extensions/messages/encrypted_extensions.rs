@@ -4,13 +4,9 @@ use crate::{
         messages::unexpected_extension_type,
         types::{
             application_layer_protocol_negotiation::ApplicationLayerProtocolNegotiation,
-            certificate_type::{ClientCertTypeRequest, ServerCertTypeRequest},
-            early_data::EarlyDataIndication,
-            heartbeat::Heartbeat,
-            max_fragment_length::MaxFragmentLength,
-            server_name::ServerNameList,
-            supported_groups::SupportedGroups,
-            use_srtp::UseSrtp,
+            certificate_type::CertTypeResponse, early_data::EarlyDataIndication,
+            heartbeat::Heartbeat, max_fragment_length::MaxFragmentLength,
+            server_name::ServerNameList, supported_groups::SupportedGroups, use_srtp::UseSrtp,
         },
         ExtensionType,
     },
@@ -26,8 +22,8 @@ pub enum EncryptedExtensionsExtension<'a> {
     UseSrtp(UseSrtp<'a, 4>),
     Heartbeat(Heartbeat),
     ApplicationLayerProtocolNegotiation(ApplicationLayerProtocolNegotiation<'a, 2>),
-    ClientCertificateType(ClientCertTypeRequest<2>),
-    ServerCertificateType(ServerCertTypeRequest<2>),
+    ClientCertificateType(CertTypeResponse),
+    ServerCertificateType(CertTypeResponse),
     EarlyData(EarlyDataIndication),
 }
 
@@ -64,12 +60,12 @@ impl<'a> EncryptedExtensionsExtension<'a> {
                     ApplicationLayerProtocolNegotiation::parse(buf)?,
                 ))
             }
-            ExtensionType::ClientCertificateType => Ok(Self::ClientCertificateType(
-                ClientCertTypeRequest::parse(buf)?,
-            )),
-            ExtensionType::ServerCertificateType => Ok(Self::ServerCertificateType(
-                ServerCertTypeRequest::parse(buf)?,
-            )),
+            ExtensionType::ClientCertificateType => {
+                Ok(Self::ClientCertificateType(CertTypeResponse::parse(buf)?))
+            }
+            ExtensionType::ServerCertificateType => {
+                Ok(Self::ServerCertificateType(CertTypeResponse::parse(buf)?))
+            }
             ExtensionType::EarlyData => Ok(Self::EarlyData(EarlyDataIndication::parse(buf)?)),
             other => Err(unexpected_extension_type(other)),
         }

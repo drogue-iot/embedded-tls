@@ -2,7 +2,6 @@
 
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -14,8 +13,6 @@ pub enum Heartbeat {
 }
 
 impl Heartbeat {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::Heartbeat;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         match buf.read_u8()? {
             v if v == Self::PeerAllowedToSend as u8 => Ok(Self::PeerAllowedToSend),

@@ -2,7 +2,6 @@ use heapless::Vec;
 
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -43,8 +42,6 @@ pub struct ApplicationLayerProtocolNegotiation<'a, const N: usize> {
 }
 
 impl<'a, const N: usize> ApplicationLayerProtocolNegotiation<'a, N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::ApplicationLayerProtocolNegotiation;
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
         let data_length = buf.read_u16()? as usize;
 

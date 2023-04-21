@@ -1,6 +1,5 @@
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -26,8 +25,6 @@ pub enum MaxFragmentLength {
 }
 
 impl MaxFragmentLength {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::MaxFragmentLength;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let byte = buf.read_u8()?;
 

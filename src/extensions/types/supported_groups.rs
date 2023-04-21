@@ -2,7 +2,6 @@ use heapless::Vec;
 
 use crate::{
     buffer::CryptoBuffer,
-    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -53,8 +52,6 @@ pub struct SupportedGroups<const N: usize> {
 }
 
 impl<const N: usize> SupportedGroups<N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SupportedGroups;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.read_u16()? as usize;
 

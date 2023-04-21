@@ -57,8 +57,6 @@ pub struct SignedCertificateTimestamps<'a, const N: usize> {
 }
 
 impl<'a, const N: usize> SignedCertificateTimestamps<'a, N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SignedCertificateTimestamp;
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
         let len = buf.read_u16()? as usize;
         let sct_list = buf.read_list(len, SerializedSct::parse)?;

@@ -1,6 +1,6 @@
 use crate::buffer::CryptoBuffer;
 use crate::extensions::types::signature_algorithms::SignatureScheme;
-use crate::extensions::ExtensionType;
+
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
 
@@ -11,8 +11,6 @@ pub struct SignatureAlgorithmsCert<const N: usize> {
 }
 
 impl<const N: usize> SignatureAlgorithmsCert<N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SignatureAlgorithmsCert;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.read_u16()? as usize;
 

@@ -29,8 +29,6 @@ pub struct SupportedVersions<const N: usize> {
 }
 
 impl<const N: usize> SupportedVersions<N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SupportedVersions;
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.read_u8()? as usize;
 

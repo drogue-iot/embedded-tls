@@ -1,5 +1,5 @@
 use crate::buffer::CryptoBuffer;
-use crate::extensions::ExtensionType;
+
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
 
@@ -11,8 +11,6 @@ pub struct PreSharedKey<'a, const N: usize> {
 }
 
 impl<const N: usize> PreSharedKey<'_, N> {
-    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::PreSharedKey;
-
     pub fn parse(_buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         unimplemented!()
     }
