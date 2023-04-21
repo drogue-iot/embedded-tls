@@ -60,6 +60,7 @@ impl ClientExtension<'_> {
     }
 
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        trace!("Encoding client extension {:?}", self.extension_type());
         buf.push_u16(self.extension_type() as u16)
             .map_err(|_| TlsError::EncodeError)?;
 
@@ -72,39 +73,29 @@ impl ClientExtension<'_> {
                     }
                     Ok(())
                 }),
-                ClientExtension::SupportedVersions { versions } => {
-                    //info!("supported versions ext");
-                    buf.with_u8_length(|buf| {
-                        for &v in versions {
-                            buf.push_u16(v).map_err(|_| TlsError::EncodeError)?;
-                        }
-                        Ok(())
-                    })
-                }
+                ClientExtension::SupportedVersions { versions } => buf.with_u8_length(|buf| {
+                    for &v in versions {
+                        buf.push_u16(v).map_err(|_| TlsError::EncodeError)?;
+                    }
+                    Ok(())
+                }),
                 ClientExtension::SignatureAlgorithms {
                     supported_signature_algorithms,
-                } => {
-                    //info!("supported sig algo ext");
-                    buf.with_u16_length(|buf| {
-                        for &a in supported_signature_algorithms {
-                            buf.push_u16(a as u16).map_err(|_| TlsError::EncodeError)?;
-                        }
-                        Ok(())
-                    })
-                }
+                } => buf.with_u16_length(|buf| {
+                    for &a in supported_signature_algorithms {
+                        buf.push_u16(a as u16).map_err(|_| TlsError::EncodeError)?;
+                    }
+                    Ok(())
+                }),
                 ClientExtension::SignatureAlgorithmsCert {
                     supported_signature_algorithms,
-                } => {
-                    //info!("supported sig algo cert ext");
-                    buf.with_u16_length(|buf| {
-                        for &a in supported_signature_algorithms {
-                            buf.push_u16(a as u16).map_err(|_| TlsError::EncodeError)?;
-                        }
-                        Ok(())
-                    })
-                }
+                } => buf.with_u16_length(|buf| {
+                    for &a in supported_signature_algorithms {
+                        buf.push_u16(a as u16).map_err(|_| TlsError::EncodeError)?;
+                    }
+                    Ok(())
+                }),
                 ClientExtension::SupportedGroups { supported_groups } => {
-                    //info!("supported groups ext");
                     buf.with_u16_length(|buf| {
                         for &g in supported_groups {
                             buf.push_u16(g as u16).map_err(|_| TlsError::EncodeError)?;
@@ -141,7 +132,6 @@ impl ClientExtension<'_> {
                     Ok(())
                 }
                 ClientExtension::MaxFragmentLength(len) => {
-                    //info!("max fragment length");
                     buf.push(*len as u8).map_err(|_| TlsError::EncodeError)
                 }
             }
