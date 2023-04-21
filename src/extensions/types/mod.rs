@@ -14,6 +14,7 @@ pub mod psk_key_exchange_modes;
 pub mod server_name;
 pub mod signature_algorithms;
 pub mod signature_algorithms_cert;
+pub mod signed_certificate_timestamp;
 pub mod status_request;
 pub mod supported_groups;
 pub mod supported_versions;
