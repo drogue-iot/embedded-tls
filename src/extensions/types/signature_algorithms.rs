@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 use crate::{
     buffer::CryptoBuffer,
+    extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
     TlsError,
 };
@@ -76,6 +77,8 @@ pub struct SignatureAlgorithms<const N: usize> {
 }
 
 impl<const N: usize> SignatureAlgorithms<N> {
+    pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SignatureAlgorithms;
+
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.read_u16()?;
 

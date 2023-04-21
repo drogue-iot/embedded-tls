@@ -62,7 +62,6 @@ pub mod alert;
 mod application_data;
 pub mod blocking;
 mod buffer;
-mod certificate_types;
 mod change_cipher_spec;
 mod cipher_suites;
 mod common;
@@ -78,7 +77,6 @@ pub mod read_buffer;
 mod record;
 mod record_reader;
 mod split;
-mod supported_versions;
 mod write_buffer;
 
 #[cfg(feature = "webpki")]

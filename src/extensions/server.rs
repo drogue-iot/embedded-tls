@@ -1,9 +1,9 @@
 use crate::alert::{AlertDescription, AlertLevel};
 use crate::extensions::types::key_share::KeyShare;
 use crate::extensions::types::server_name::ServerNameResponse;
+use crate::extensions::types::supported_versions::SupportedVersion;
 use crate::extensions::ExtensionType;
-use crate::parse_buffer::{ParseBuffer, ParseError};
-use crate::supported_versions::ProtocolVersion;
+use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use heapless::Vec;
 
@@ -16,19 +16,6 @@ pub enum ServerExtension<'a> {
 
     SupportedGroups,
     ServerName(ServerNameResponse),
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct SupportedVersion {
-    selected_version: ProtocolVersion,
-}
-
-impl SupportedVersion {
-    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
-        let selected_version = buf.read_u16()?;
-        Ok(Self { selected_version })
-    }
 }
 
 pub struct ServerExtensionParserIterator<'a, 'b> {

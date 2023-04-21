@@ -6,13 +6,15 @@ use p256::EncodedPoint;
 
 use crate::buffer::*;
 use crate::config::{TlsCipherSuite, TlsConfig};
-use crate::extensions::client::{ClientExtension, PskKeyExchangeMode};
+use crate::extensions::client::ClientExtension;
 use crate::extensions::types::key_share::{KeyShare, KeyShareEntry};
+use crate::extensions::types::pre_shared_key::PreSharedKey;
+use crate::extensions::types::psk_key_exchange_modes::{PskKeyExchangeMode, PskKeyExchangeModes};
 use crate::extensions::types::server_name::ServerNameList;
 use crate::extensions::types::signature_algorithms::SignatureAlgorithms;
 use crate::extensions::types::supported_groups::{NamedGroup, SupportedGroups};
+use crate::extensions::types::supported_versions::{SupportedVersions, TLS13};
 use crate::handshake::{Random, LEGACY_VERSION};
-use crate::supported_versions::TLS13;
 use crate::TlsError;
 
 pub struct ClientHello<'config, CipherSuite>
@@ -73,9 +75,9 @@ where
             // Implementations of this specification MUST send this extension in the
             // ClientHello containing all versions of TLS which they are prepared to
             // negotiate
-            ClientExtension::SupportedVersions {
+            ClientExtension::SupportedVersions(SupportedVersions {
                 versions: Vec::from_slice(&[TLS13]).unwrap(),
-            }
+            })
             .encode(buf)?;
 
             ClientExtension::SignatureAlgorithms(SignatureAlgorithms {
@@ -92,9 +94,9 @@ where
             })
             .encode(buf)?;
 
-            ClientExtension::PskKeyExchangeModes {
+            ClientExtension::PskKeyExchangeModes(PskKeyExchangeModes {
                 modes: Vec::from_slice(&[PskKeyExchangeMode::PskDheKe]).unwrap(),
-            }
+            })
             .encode(buf)?;
 
             ClientExtension::KeyShare(KeyShare(KeyShareEntry {
@@ -114,10 +116,10 @@ where
             // "pre_shared_key" which MUST be the last extension in
             // the ClientHello.
             if let Some((_, identities)) = &self.config.psk {
-                ClientExtension::PreSharedKey {
+                ClientExtension::PreSharedKey(PreSharedKey {
                     identities: identities.clone(),
                     hash_size: <CipherSuite::Hash as OutputSizeUser>::output_size(),
-                }
+                })
                 .encode(buf)?;
             }
 
