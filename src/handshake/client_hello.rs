@@ -66,6 +66,10 @@ where
 
         // extensions (1+)
         buf.with_u16_length(|buf| {
+            // Section 4.2.1.  Supported Versions
+            // Implementations of this specification MUST send this extension in the
+            // ClientHello containing all versions of TLS which they are prepared to
+            // negotiate
             ClientExtension::SupportedVersions {
                 versions: Vec::from_slice(&[TLS13]).unwrap(),
             }
@@ -92,13 +96,16 @@ where
             }
             .encode(buf)?;
 
-            if let Some(server_name) = self.config.server_name.as_ref() {
+            if let Some(server_name) = self.config.server_name {
                 // TODO Add SNI extension
                 ClientExtension::ServerName { server_name }.encode(buf)?;
             }
 
-            // IMPORTANT: The pre shared keys must be encoded last, since we encode the binders
-            // at a later stage
+            // Section 4.2
+            // When multiple extensions of different types are present, the
+            // extensions MAY appear in any order, with the exception of
+            // "pre_shared_key" which MUST be the last extension in
+            // the ClientHello.
             if let Some((_, identities)) = &self.config.psk {
                 ClientExtension::PreSharedKey {
                     identities: identities.clone(),

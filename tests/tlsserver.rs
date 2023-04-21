@@ -9,18 +9,18 @@ use std::io::{BufReader, Read, Write};
 use std::net;
 
 // Token for our listening socket.
-const LISTENER: mio::Token = mio::Token(0);
+pub const LISTENER: mio::Token = mio::Token(0);
 
 // Which mode the server operates in.
 #[derive(Clone)]
-enum ServerMode {
+pub enum ServerMode {
     /// Write back received bytes
     Echo,
 }
 
 /// This binds together a TCP listening socket, some outstanding
 /// connections, and a TLS server configuration.
-struct TlsServer {
+pub struct TlsServer {
     server: TcpListener,
     connections: HashMap<mio::Token, Connection>,
     next_id: usize,
@@ -29,7 +29,7 @@ struct TlsServer {
 }
 
 impl TlsServer {
-    fn new(server: TcpListener, mode: ServerMode, cfg: Arc<rustls::ServerConfig>) -> TlsServer {
+    pub fn new(server: TcpListener, mode: ServerMode, cfg: Arc<rustls::ServerConfig>) -> TlsServer {
         TlsServer {
             server,
             connections: HashMap::new(),
@@ -39,7 +39,7 @@ impl TlsServer {
         }
     }
 
-    fn accept(&mut self, registry: &mio::Registry) -> Result<(), io::Error> {
+    pub fn accept(&mut self, registry: &mio::Registry) -> Result<(), io::Error> {
         loop {
             match self.server.accept() {
                 Ok((socket, addr)) => {
@@ -68,7 +68,7 @@ impl TlsServer {
         }
     }
 
-    fn conn_event(&mut self, registry: &mio::Registry, event: &mio::event::Event) {
+    pub fn conn_event(&mut self, registry: &mio::Registry, event: &mio::event::Event) {
         let token = event.token();
 
         if self.connections.contains_key(&token) {
@@ -197,7 +197,6 @@ impl Connection {
             self.do_tls_write_and_handle_error();
 
             self.closing = true;
-            
         }
     }
 
@@ -270,7 +269,6 @@ impl Connection {
         if rc.is_err() {
             log::warn!("write failed {:?}", rc);
             self.closing = true;
-            
         }
     }
 
@@ -326,7 +324,7 @@ impl Connection {
     }
 }
 
-fn load_certs(filename: &PathBuf) -> Vec<rustls::Certificate> {
+pub fn load_certs(filename: &PathBuf) -> Vec<rustls::Certificate> {
     let certfile = fs::File::open(filename).expect("cannot open certificate file");
     let mut reader = BufReader::new(certfile);
     rustls_pemfile::certs(&mut reader)
@@ -336,7 +334,7 @@ fn load_certs(filename: &PathBuf) -> Vec<rustls::Certificate> {
         .collect()
 }
 
-fn load_private_key(filename: &PathBuf) -> rustls::PrivateKey {
+pub fn load_private_key(filename: &PathBuf) -> rustls::PrivateKey {
     let keyfile = fs::File::open(filename).expect("cannot open private key file");
     let mut reader = BufReader::new(keyfile);
 
@@ -355,7 +353,8 @@ fn load_private_key(filename: &PathBuf) -> rustls::PrivateKey {
     );
 }
 
-pub fn run(mut listener: TcpListener) {
+#[allow(dead_code)]
+pub fn run(listener: TcpListener) {
     let versions = &[&rustls::version::TLS13];
 
     let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
@@ -372,6 +371,10 @@ pub fn run(mut listener: TcpListener) {
         .with_single_cert(certs, privkey)
         .unwrap();
 
+    run_with_config(listener, config)
+}
+
+pub fn run_with_config(mut listener: TcpListener, config: rustls::ServerConfig) {
     let mut poll = mio::Poll::new().unwrap();
     poll.registry()
         .register(&mut listener, LISTENER, mio::Interest::READABLE)

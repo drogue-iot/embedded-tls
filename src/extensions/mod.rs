@@ -10,7 +10,7 @@ use crate::supported_versions::ProtocolVersions;
 use crate::TlsError;
 use heapless::Vec;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ExtensionType {
     ServerName = 0,
@@ -19,7 +19,7 @@ pub enum ExtensionType {
     SupportedGroups = 10,
     SignatureAlgorithms = 13,
     UseSrtp = 14,
-    Heatbeat = 15,
+    Heartbeat = 15,
     ApplicationLayerProtocolNegotiation = 16,
     SignedCertificateTimestamp = 18,
     ClientCertificateType = 19,
@@ -47,7 +47,7 @@ impl ExtensionType {
             10 => Some(Self::SupportedGroups),
             13 => Some(Self::SignatureAlgorithms),
             14 => Some(Self::UseSrtp),
-            15 => Some(Self::Heatbeat),
+            15 => Some(Self::Heartbeat),
             16 => Some(Self::ApplicationLayerProtocolNegotiation),
             18 => Some(Self::SignedCertificateTimestamp),
             19 => Some(Self::ClientCertificateType),

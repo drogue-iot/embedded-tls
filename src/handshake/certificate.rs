@@ -1,4 +1,6 @@
 use crate::buffer::CryptoBuffer;
+use crate::extensions::server::ServerExtension;
+use crate::extensions::ExtensionType;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use heapless::Vec;
@@ -68,6 +70,12 @@ pub enum CertificateEntryRef<'a> {
 }
 
 impl<'a> CertificateEntryRef<'a> {
+    // Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with CT
+    const ALLOWED_EXTENSIONS: &[ExtensionType] = &[
+        ExtensionType::StatusRequest,
+        ExtensionType::SignedCertificateTimestamp,
+    ];
+
     pub fn parse_vector(
         buf: &mut ParseBuffer<'a>,
     ) -> Result<Vec<CertificateEntryRef<'a>, 16>, TlsError> {
@@ -88,9 +96,8 @@ impl<'a> CertificateEntryRef<'a> {
                 .push(CertificateEntryRef::X509(cert.as_slice()))
                 .map_err(|_| TlsError::DecodeError)?;
 
-            let _extensions_len = buf
-                .read_u16()
-                .map_err(|_| TlsError::InvalidExtensionsLength)?;
+            // Validate extensions
+            ServerExtension::parse_vector::<2>(buf, Self::ALLOWED_EXTENSIONS)?;
 
             if buf.is_empty() {
                 break;

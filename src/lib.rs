@@ -100,6 +100,7 @@ pub enum TlsError {
     Unimplemented,
     MissingHandshake,
     HandshakeAborted(alert::AlertLevel, alert::AlertDescription),
+    AbortHandshake(alert::AlertLevel, alert::AlertDescription),
     IoError,
     InternalError,
     InvalidRecord,

@@ -1,3 +1,5 @@
+use crate::extensions::server::ServerExtension;
+use crate::extensions::ExtensionType;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use heapless::Vec;
@@ -9,6 +11,16 @@ pub struct CertificateRequestRef<'a> {
 }
 
 impl<'a> CertificateRequestRef<'a> {
+    // Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with CR
+    const ALLOWED_EXTENSIONS: &[ExtensionType] = &[
+        ExtensionType::StatusRequest,
+        ExtensionType::SignatureAlgorithms,
+        ExtensionType::SignedCertificateTimestamp,
+        ExtensionType::CertificateAuthorities,
+        ExtensionType::OidFilters,
+        ExtensionType::SignatureAlgorithmsCert,
+    ];
+
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<CertificateRequestRef<'a>, TlsError> {
         let request_context_len = buf
             .read_u8()
@@ -22,12 +34,8 @@ impl<'a> CertificateRequestRef<'a> {
             .map_err(|_| TlsError::InvalidExtensionsLength)?;
         //info!("sh 5 {}", extensions_length);
 
-        buf.slice(_extensions_length as usize)
-            .map_err(|_| TlsError::DecodeError)?;
-        // info!("Cert request parsing");
-        // TODO
-        //let extensions = ServerExtension::parse_vector(buf)?;
-        //info!("Cert request parsing done");
+        // Validate extensions
+        ServerExtension::parse_vector::<6>(buf, Self::ALLOWED_EXTENSIONS)?;
 
         Ok(Self {
             request_context: request_context.as_slice(),

@@ -53,7 +53,9 @@ impl DecryptedReadHandler<'_> {
             }
             ServerRecord::ChangeCipherSpec(_) => Err(TlsError::InternalError),
             ServerRecord::Handshake(ServerHandshake::NewSessionTicket(_)) => {
-                // Ignore
+                // TODO: we should validate extensions and abort. We can do this automatically
+                // as long as the connection is unsplit, however, split connections must be aborted
+                // by the user.
                 Ok(())
             }
             _ => {

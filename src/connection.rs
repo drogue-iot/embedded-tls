@@ -238,18 +238,18 @@ impl<'a> State {
                 let record = record_reader
                     .read(transport, key_schedule.read_state())
                     .await?;
-                process_server_hello(handshake, key_schedule, record)
+                let result = process_server_hello(handshake, key_schedule, record);
+
+                handle_processing_error(result, transport, key_schedule, tx_buf).await
             }
             State::ServerVerify => {
-                /*info!(
-                    "SIZE of server record queue : {}",
-                    core::mem::size_of_val(&records)
-                );*/
                 let record = record_reader
                     .read(transport, key_schedule.read_state())
                     .await?;
 
-                process_server_verify(handshake, key_schedule, config, record)
+                let result = process_server_verify(handshake, key_schedule, config, record);
+
+                handle_processing_error(result, transport, key_schedule, tx_buf).await
             }
             State::ClientCert => {
                 let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
@@ -296,16 +296,17 @@ impl<'a> State {
             }
             State::ServerHello => {
                 let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
-                process_server_hello(handshake, key_schedule, record)
+
+                let result = process_server_hello(handshake, key_schedule, record);
+
+                handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
             }
             State::ServerVerify => {
-                /*info!(
-                    "SIZE of server record queue : {}",
-                    core::mem::size_of_val(&records)
-                );*/
                 let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
 
-                process_server_verify(handshake, key_schedule, config, record)
+                let result = process_server_verify(handshake, key_schedule, config, record);
+
+                handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
             }
             State::ClientCert => {
                 let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
@@ -326,6 +327,29 @@ impl<'a> State {
     }
 }
 
+fn handle_processing_error_blocking<CipherSuite>(
+    result: Result<State, TlsError>,
+    transport: &mut impl BlockingWrite,
+    key_schedule: &mut KeySchedule<CipherSuite>,
+    tx_buf: &mut WriteBuffer,
+) -> Result<State, TlsError>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    if let Err(TlsError::AbortHandshake(level, description)) = result {
+        let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
+        let tx = tx_buf.write_record(
+            &ClientRecord::Alert(Alert { level, description }, false),
+            write_key_schedule,
+            Some(read_key_schedule),
+        )?;
+
+        respond_blocking(tx, transport, key_schedule)?;
+    }
+
+    result
+}
+
 fn respond_blocking<CipherSuite>(
     tx: &[u8],
     transport: &mut impl BlockingWrite,
@@ -343,6 +367,30 @@ where
     transport.flush().map_err(|e| TlsError::Io(e.kind()))?;
 
     Ok(())
+}
+
+#[cfg(feature = "async")]
+async fn handle_processing_error<'a, CipherSuite>(
+    result: Result<State, TlsError>,
+    transport: &mut impl AsyncWrite,
+    key_schedule: &mut KeySchedule<CipherSuite>,
+    tx_buf: &mut WriteBuffer<'a>,
+) -> Result<State, TlsError>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    if let Err(TlsError::AbortHandshake(level, description)) = result {
+        let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
+        let tx = tx_buf.write_record(
+            &ClientRecord::Alert(Alert { level, description }, false),
+            write_key_schedule,
+            Some(read_key_schedule),
+        )?;
+
+        respond(tx, transport, key_schedule).await?;
+    }
+
+    result
 }
 
 #[cfg(feature = "async")]
