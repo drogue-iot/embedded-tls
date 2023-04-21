@@ -27,11 +27,13 @@ use crate::{
     },
 };
 
+// Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with SH
 extension_group! {
     pub enum ServerHelloExtension<'a> {
         KeyShare(KeyShareServerHello<'a>),
         PreSharedKey(PreSharedKeyServerHello),
-        SupportedVersions(SupportedVersionsServerHello)
+        SupportedVersions(SupportedVersionsServerHello),
+        PostHandshakeAuth(PostHandshakeAuth)
     }
 }
 

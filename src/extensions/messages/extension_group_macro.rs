@@ -4,6 +4,8 @@ macro_rules! extension_group {
     (pub enum $name:ident<'a> {
         $($extension:ident($extension_data:ty)),+
     }) => {
+        #[derive(Debug, Clone)]
+        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
         pub enum $name<'a> {
             $($extension($extension_data)),+
         }
@@ -45,6 +47,34 @@ macro_rules! extension_group {
                         ));
                     }
                 }
+            }
+
+            pub fn parse_vector<const N: usize>(
+                buf: &mut crate::parse_buffer::ParseBuffer<'a>,
+            ) -> Result<heapless::Vec<Self, N>, crate::TlsError> {
+                let extensions_len = buf
+                    .read_u16()
+                    .map_err(|_| crate::TlsError::InvalidExtensionsLength)?;
+
+                let mut ext_buf = buf.slice(extensions_len as usize)?;
+
+                let mut extensions = heapless::Vec::new();
+
+                while !ext_buf.is_empty() {
+                    match Self::parse(&mut ext_buf) {
+                        Ok(extension) => {
+                            extensions
+                                .push(extension)
+                                .map_err(|_| crate::TlsError::DecodeError)?;
+                        }
+                        Err(crate::TlsError::UnknownExtensionType) => {
+                            // ignore unrecognized extension type
+                        }
+                        Err(err) => return Err(err),
+                    }
+                }
+
+                Ok(extensions)
             }
         }
     };

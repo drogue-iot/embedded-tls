@@ -21,7 +21,7 @@ impl ProtocolVersion {
 
 pub const TLS13: ProtocolVersion = ProtocolVersion(0x0304);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SupportedVersionsClientHello<const N: usize> {
     pub versions: Vec<ProtocolVersion, N>,
@@ -46,7 +46,7 @@ impl<const N: usize> SupportedVersionsClientHello<N> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SupportedVersionsServerHello {
     pub selected_version: ProtocolVersion,
