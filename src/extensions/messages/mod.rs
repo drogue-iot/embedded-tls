@@ -66,6 +66,7 @@ extension_group! {
 }
 
 // TODO: check if these are the correct data types
+// Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with EE
 extension_group! {
     pub enum EncryptedExtensionsExtension<'a> {
         ServerName(ServerNameList<'a, 1>), // TODO clarify - may be empty or contains a single name - still a list?
