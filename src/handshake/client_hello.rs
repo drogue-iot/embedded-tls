@@ -8,6 +8,7 @@ use crate::buffer::*;
 use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::extensions::client::{ClientExtension, PskKeyExchangeMode};
 use crate::extensions::types::key_share::{KeyShare, KeyShareEntry};
+use crate::extensions::types::server_name::ServerNameList;
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::named_groups::NamedGroup;
 use crate::supported_versions::TLS13;
@@ -103,7 +104,7 @@ where
 
             if let Some(server_name) = self.config.server_name {
                 // TODO Add SNI extension
-                ClientExtension::ServerName { server_name }.encode(buf)?;
+                ClientExtension::ServerName(ServerNameList::single(server_name)).encode(buf)?;
             }
 
             // Section 4.2

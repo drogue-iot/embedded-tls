@@ -1,5 +1,6 @@
 use crate::alert::{AlertDescription, AlertLevel};
 use crate::extensions::types::key_share::KeyShare;
+use crate::extensions::types::server_name::ServerNameResponse;
 use crate::extensions::ExtensionType;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::supported_versions::ProtocolVersion;
@@ -14,16 +15,7 @@ pub enum ServerExtension<'a> {
     PreSharedKey(u16),
 
     SupportedGroups,
-
-    // RFC 6066, Section 3.  Server Name Indication
-    // A server that receives a client hello containing the "server_name"
-    // extension MAY use the information contained in the extension to guide
-    // its selection of an appropriate certificate to return to the client,
-    // and/or other aspects of security policy.  In this event, the server
-    // SHALL include an extension of type "server_name" in the (extended)
-    // server hello.  The "extension_data" field of this extension SHALL be
-    // empty.
-    ServerName,
+    ServerName(ServerNameResponse),
 }
 
 #[derive(Debug)]
@@ -141,7 +133,9 @@ impl<'a> ServerExtension<'a> {
                 ServerExtension::PreSharedKey(value)
             }
             ExtensionType::SupportedGroups => ServerExtension::SupportedGroups,
-            ExtensionType::ServerName => ServerExtension::ServerName,
+            ExtensionType::ServerName => {
+                ServerExtension::ServerName(ServerNameResponse::parse(data)?)
+            }
             t => {
                 warn!("Unimplemented extension: {:?}", t);
                 return Ok(None);

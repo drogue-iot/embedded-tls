@@ -1,4 +1,5 @@
 use crate::extensions::types::key_share::KeyShare;
+use crate::extensions::types::server_name::ServerNameList;
 use crate::extensions::ExtensionType;
 use crate::signature_schemes::SignatureScheme;
 
@@ -10,9 +11,7 @@ use crate::TlsError;
 use heapless::Vec;
 
 pub enum ClientExtension<'a> {
-    ServerName {
-        server_name: &'a str,
-    },
+    ServerName(ServerNameList<'a, 1>),
     SupportedVersions {
         versions: ProtocolVersions,
     },
@@ -66,17 +65,7 @@ impl ClientExtension<'_> {
 
         buf.with_u16_length(|buf| {
             match self {
-                ClientExtension::ServerName { server_name } => {
-                    //info!("server name ext");
-                    buf.with_u16_length(|buf| {
-                        const NAME_TYPE_HOST: u8 = 0;
-                        buf.push(NAME_TYPE_HOST)
-                            .map_err(|_| TlsError::EncodeError)?;
-
-                        buf.with_u16_length(|buf| buf.extend_from_slice(server_name.as_bytes()))
-                            .map_err(|_| TlsError::EncodeError)
-                    })
-                }
+                ClientExtension::ServerName(server_name_list) => server_name_list.encode(buf),
                 ClientExtension::PskKeyExchangeModes { modes } => buf.with_u8_length(|buf| {
                     for mode in modes {
                         buf.push(*mode as u8).map_err(|_| TlsError::EncodeError)?;
