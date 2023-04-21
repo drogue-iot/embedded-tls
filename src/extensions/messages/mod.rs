@@ -73,7 +73,7 @@ extension_group! {
     pub enum EncryptedExtensionsExtension<'a> {
         ServerName(ServerNameResponse), // TODO clarify - may be empty or contains a single name - still a list?
         MaxFragmentLength(MaxFragmentLength),
-        SupportedGroups(SupportedGroups<1>), // TODO clarify - https://www.rfc-editor.org/rfc/rfc7919#page-8
+        SupportedGroups(SupportedGroups<10>),
         // https://www.rfc-editor.org/rfc/rfc5764#page-7
         // The extension_data field MUST contain a UseSRTPData value with a
         // single SRTPProtectionProfile value that the server has chosen for use
