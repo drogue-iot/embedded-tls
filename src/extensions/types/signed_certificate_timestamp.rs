@@ -10,8 +10,8 @@ use crate::{
 // RFC 6962
 // Clients that support the extension SHOULD send a ClientHello
 // extension with the appropriate type and empty "extension_data".
-pub struct SignedCertificateTimestampsIndication;
-impl SignedCertificateTimestampsIndication {
+pub struct SignedCertificateTimestampIndication;
+impl SignedCertificateTimestampIndication {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SignedCertificateTimestamp;
 
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {

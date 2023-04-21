@@ -28,11 +28,11 @@ impl<'a> DistinguishedName<'a> {
 // struct {
 //     DistinguishedName authorities<3..2^16-1>;
 // } CertificateAuthoritiesExtension;
-pub struct CertificateAuthoritiesExtension<'a, const N: usize> {
+pub struct CertificateAuthorities<'a, const N: usize> {
     pub authorities: Vec<DistinguishedName<'a>, N>,
 }
 
-impl<'a, const N: usize> CertificateAuthoritiesExtension<'a, N> {
+impl<'a, const N: usize> CertificateAuthorities<'a, N> {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::CertificateAuthorities;
 
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {

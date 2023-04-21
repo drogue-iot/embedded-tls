@@ -13,7 +13,7 @@ pub struct PreSharedKey<'a, const N: usize> {
 impl<const N: usize> PreSharedKey<'_, N> {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::PreSharedKey;
 
-    fn parse(_buf: &mut ParseBuffer) -> Result<Self, ParseError> {
+    pub fn parse(_buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         unimplemented!()
     }
 
