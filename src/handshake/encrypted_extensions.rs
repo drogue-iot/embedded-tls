@@ -1,7 +1,9 @@
 use crate::extensions::messages::EncryptedExtensionsExtension;
 
-use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
+use crate::{
+    parse_buffer::ParseBuffer,
+    TlsError,
+};
 use heapless::Vec;
 
 #[derive(Debug)]

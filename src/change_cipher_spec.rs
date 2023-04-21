@@ -1,6 +1,8 @@
-use crate::buffer::CryptoBuffer;
-use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
+use crate::{
+    buffer::CryptoBuffer,
+    parse_buffer::ParseBuffer,
+    TlsError,
+};
 use generic_array::ArrayLength;
 
 #[derive(Debug, Copy, Clone)]

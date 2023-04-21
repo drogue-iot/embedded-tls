@@ -1,11 +1,26 @@
-use crate::handshake::binder::PskBinder;
-use crate::handshake::finished::Finished;
-use crate::{config::TlsCipherSuite, TlsError};
-use digest::generic_array::ArrayLength;
-use digest::OutputSizeUser;
-use hmac::{Mac, SimpleHmac};
-use sha2::digest::generic_array::{typenum::Unsigned, GenericArray};
-use sha2::Digest;
+use crate::{
+    config::TlsCipherSuite,
+    handshake::{
+        binder::PskBinder,
+        finished::Finished,
+    },
+    TlsError,
+};
+use digest::{
+    generic_array::ArrayLength,
+    OutputSizeUser,
+};
+use hmac::{
+    Mac,
+    SimpleHmac,
+};
+use sha2::{
+    digest::generic_array::{
+        typenum::Unsigned,
+        GenericArray,
+    },
+    Digest,
+};
 
 pub type HashOutputSize<CipherSuite> =
     <<CipherSuite as TlsCipherSuite>::Hash as OutputSizeUser>::OutputSize;

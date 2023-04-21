@@ -2,10 +2,15 @@
 #![allow(incomplete_features)]
 #![feature(async_fn_in_trait)]
 #![feature(impl_trait_projections)]
-use embedded_io::adapters::{FromStd, FromTokio};
+use embedded_io::adapters::{
+    FromStd,
+    FromTokio,
+};
 use rand::rngs::OsRng;
-use std::net::SocketAddr;
-use std::sync::Once;
+use std::{
+    net::SocketAddr,
+    sync::Once,
+};
 
 mod tlsserver;
 

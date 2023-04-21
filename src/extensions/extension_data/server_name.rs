@@ -3,7 +3,10 @@ use heapless::Vec;
 use crate::{
     buffer::CryptoBuffer,
     extensions::ExtensionType,
-    parse_buffer::{ParseBuffer, ParseError},
+    parse_buffer::{
+        ParseBuffer,
+        ParseError,
+    },
     TlsError,
 };
 

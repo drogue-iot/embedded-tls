@@ -1,10 +1,17 @@
 use heapless::Vec;
 
-use crate::buffer::CryptoBuffer;
-use crate::extensions::extension_data::supported_groups::NamedGroup;
+use crate::{
+    buffer::CryptoBuffer,
+    extensions::extension_data::supported_groups::NamedGroup,
+};
 
-use crate::parse_buffer::{ParseBuffer, ParseError};
-use crate::TlsError;
+use crate::{
+    parse_buffer::{
+        ParseBuffer,
+        ParseError,
+    },
+    TlsError,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -1,23 +1,50 @@
 use digest::OutputSizeUser;
 use heapless::Vec;
-use p256::ecdh::EphemeralSecret;
-use p256::elliptic_curve::rand_core::{CryptoRng, RngCore};
-use p256::EncodedPoint;
-
-use crate::buffer::*;
-use crate::config::{TlsCipherSuite, TlsConfig};
-use crate::extensions::extension_data::key_share::{KeyShareClientHello, KeyShareEntry};
-use crate::extensions::extension_data::pre_shared_key::PreSharedKeyClientHello;
-use crate::extensions::extension_data::psk_key_exchange_modes::{
-    PskKeyExchangeMode, PskKeyExchangeModes,
+use p256::{
+    ecdh::EphemeralSecret,
+    elliptic_curve::rand_core::{
+        CryptoRng,
+        RngCore,
+    },
+    EncodedPoint,
 };
-use crate::extensions::extension_data::server_name::ServerNameList;
-use crate::extensions::extension_data::signature_algorithms::SignatureAlgorithms;
-use crate::extensions::extension_data::supported_groups::{NamedGroup, SupportedGroups};
-use crate::extensions::extension_data::supported_versions::{SupportedVersionsClientHello, TLS13};
-use crate::extensions::messages::ClientHelloExtension;
-use crate::handshake::{Random, LEGACY_VERSION};
-use crate::TlsError;
+
+use crate::{
+    buffer::*,
+    config::{
+        TlsCipherSuite,
+        TlsConfig,
+    },
+    extensions::{
+        extension_data::{
+            key_share::{
+                KeyShareClientHello,
+                KeyShareEntry,
+            },
+            pre_shared_key::PreSharedKeyClientHello,
+            psk_key_exchange_modes::{
+                PskKeyExchangeMode,
+                PskKeyExchangeModes,
+            },
+            server_name::ServerNameList,
+            signature_algorithms::SignatureAlgorithms,
+            supported_groups::{
+                NamedGroup,
+                SupportedGroups,
+            },
+            supported_versions::{
+                SupportedVersionsClientHello,
+                TLS13,
+            },
+        },
+        messages::ClientHelloExtension,
+    },
+    handshake::{
+        Random,
+        LEGACY_VERSION,
+    },
+    TlsError,
+};
 
 pub struct ClientHello<'config, CipherSuite>
 where

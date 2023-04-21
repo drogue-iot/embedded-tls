@@ -3,8 +3,11 @@ use core::ops::Range;
 use generic_array::ArrayLength;
 
 use crate::{
-    alert::AlertDescription, common::decrypted_buffer_info::DecryptedBufferInfo,
-    handshake::ServerHandshake, record::ServerRecord, TlsError,
+    alert::AlertDescription,
+    common::decrypted_buffer_info::DecryptedBufferInfo,
+    handshake::ServerHandshake,
+    record::ServerRecord,
+    TlsError,
 };
 
 pub struct DecryptedReadHandler<'a> {

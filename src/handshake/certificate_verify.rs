@@ -1,6 +1,8 @@
-use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
-use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
+use crate::{
+    extensions::extension_data::signature_algorithms::SignatureScheme,
+    parse_buffer::ParseBuffer,
+    TlsError,
+};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -1,20 +1,27 @@
 use generic_array::ArrayLength;
 
 //use p256::elliptic_curve::AffinePoint;
-use crate::buffer::*;
-use crate::config::TlsCipherSuite;
-use crate::handshake::certificate::CertificateRef;
-use crate::handshake::certificate_request::CertificateRequestRef;
-use crate::handshake::certificate_verify::CertificateVerify;
-use crate::handshake::client_hello::ClientHello;
-use crate::handshake::encrypted_extensions::EncryptedExtensions;
-use crate::handshake::finished::Finished;
-use crate::handshake::new_session_ticket::NewSessionTicket;
-use crate::handshake::server_hello::ServerHello;
-use crate::key_schedule::HashOutputSize;
-use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
-use core::fmt::{Debug, Formatter};
+use crate::{
+    buffer::*,
+    config::TlsCipherSuite,
+    handshake::{
+        certificate::CertificateRef,
+        certificate_request::CertificateRequestRef,
+        certificate_verify::CertificateVerify,
+        client_hello::ClientHello,
+        encrypted_extensions::EncryptedExtensions,
+        finished::Finished,
+        new_session_ticket::NewSessionTicket,
+        server_hello::ServerHello,
+    },
+    key_schedule::HashOutputSize,
+    parse_buffer::ParseBuffer,
+    TlsError,
+};
+use core::fmt::{
+    Debug,
+    Formatter,
+};
 use sha2::Digest;
 
 pub mod binder;

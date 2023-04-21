@@ -1,1 +1,4 @@
 edition = "2021"
+imports_granularity = "crate"
+imports_layout = "vertical"
+reorder_imports = true

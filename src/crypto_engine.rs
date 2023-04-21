@@ -1,5 +1,6 @@
 use crate::{
-    application_data::ApplicationData, extensions::extension_data::supported_groups::NamedGroup,
+    application_data::ApplicationData,
+    extensions::extension_data::supported_groups::NamedGroup,
 };
 use p256::ecdh::SharedSecret;
 

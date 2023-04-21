@@ -1,12 +1,21 @@
-use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
-use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
-use crate::handshake::{
-    certificate::{
-        Certificate as OwnedCertificate, CertificateEntryRef, CertificateRef as ServerCertificate,
+use crate::{
+    config::{
+        Certificate,
+        TlsCipherSuite,
+        TlsClock,
+        TlsVerifier,
     },
-    certificate_verify::CertificateVerify,
+    extensions::extension_data::signature_algorithms::SignatureScheme,
+    handshake::{
+        certificate::{
+            Certificate as OwnedCertificate,
+            CertificateEntryRef,
+            CertificateRef as ServerCertificate,
+        },
+        certificate_verify::CertificateVerify,
+    },
+    TlsError,
 };
-use crate::TlsError;
 use core::marker::PhantomData;
 use digest::Digest;
 use heapless::Vec;

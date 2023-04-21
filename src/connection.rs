@@ -1,22 +1,46 @@
-use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
-use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::key_schedule::{HashOutputSize, KeySchedule, ReadKeySchedule, WriteKeySchedule};
-use crate::record::{ClientRecord, ServerRecord};
-use crate::record_reader::RecordReader;
-use crate::write_buffer::WriteBuffer;
-use crate::TlsError;
 use crate::{
     alert::*,
-    handshake::{certificate::CertificateRef, certificate_request::CertificateRequest},
+    config::{
+        TlsCipherSuite,
+        TlsConfig,
+        TlsVerifier,
+    },
+    handshake::{
+        certificate::CertificateRef,
+        certificate_request::CertificateRequest,
+        ClientHandshake,
+        ServerHandshake,
+    },
+    key_schedule::{
+        HashOutputSize,
+        KeySchedule,
+        ReadKeySchedule,
+        WriteKeySchedule,
+    },
+    record::{
+        ClientRecord,
+        ServerRecord,
+    },
+    record_reader::RecordReader,
+    write_buffer::WriteBuffer,
+    TlsError,
 };
 use core::fmt::Debug;
 use embedded_io::Error as _;
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{
+    CryptoRng,
+    RngCore,
+};
 
-use embedded_io::blocking::{Read as BlockingRead, Write as BlockingWrite};
+use embedded_io::blocking::{
+    Read as BlockingRead,
+    Write as BlockingWrite,
+};
 
 #[cfg(feature = "async")]
-use embedded_io::asynch::{Read as AsyncRead, Write as AsyncWrite};
+use embedded_io::asynch::Read as AsyncRead;
+#[cfg(feature = "async")]
+use embedded_io::asynch::Write as AsyncWrite;
 
 use crate::application_data::ApplicationData;
 // use crate::handshake::certificate_request::CertificateRequest;
@@ -38,7 +62,11 @@ use crate::content_types::ContentType;
 // use crate::handshake::new_session_ticket::NewSessionTicket;
 // use crate::handshake::server_hello::ServerHello;
 use crate::parse_buffer::ParseBuffer;
-use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
+use aes_gcm::aead::{
+    AeadCore,
+    AeadInPlace,
+    KeyInit,
+};
 
 pub(crate) fn decrypt_record<CipherSuite>(
     key_schedule: &mut ReadKeySchedule<CipherSuite>,

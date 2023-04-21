@@ -1,14 +1,23 @@
 use heapless::Vec;
 
-use crate::cipher_suites::CipherSuite;
-use crate::crypto_engine::CryptoEngine;
-use crate::extensions::extension_data::key_share::KeyShareEntry;
-use crate::extensions::messages::ServerHelloExtension;
-use crate::handshake::Random;
-use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
-use p256::ecdh::{EphemeralSecret, SharedSecret};
-use p256::PublicKey;
+use crate::{
+    cipher_suites::CipherSuite,
+    crypto_engine::CryptoEngine,
+    extensions::{
+        extension_data::key_share::KeyShareEntry,
+        messages::ServerHelloExtension,
+    },
+    handshake::Random,
+    parse_buffer::ParseBuffer,
+    TlsError,
+};
+use p256::{
+    ecdh::{
+        EphemeralSecret,
+        SharedSecret,
+    },
+    PublicKey,
+};
 use sha2::Digest;
 
 #[derive(Debug)]

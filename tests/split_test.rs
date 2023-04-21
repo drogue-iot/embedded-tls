@@ -2,11 +2,21 @@
 #![allow(incomplete_features)]
 #![feature(async_fn_in_trait)]
 #![feature(impl_trait_projections)]
-use embedded_io::adapters::FromStd;
-use embedded_io::blocking::{Read, Write};
+use embedded_io::{
+    adapters::FromStd,
+    blocking::{
+        Read,
+        Write,
+    },
+};
 use rand_core::OsRng;
-use std::net::{SocketAddr, TcpStream};
-use std::sync::Once;
+use std::{
+    net::{
+        SocketAddr,
+        TcpStream,
+    },
+    sync::Once,
+};
 
 mod tlsserver;
 
@@ -66,8 +76,10 @@ impl embedded_io::blocking::Write for Clonable<TcpStream> {
 #[test]
 fn test_blocking_borrowed() {
     use embedded_tls::blocking::*;
-    use std::net::TcpStream;
-    use std::sync::Arc;
+    use std::{
+        net::TcpStream,
+        sync::Arc,
+    };
     let addr = setup();
     let pem = include_str!("data/ca-cert.pem");
     let der = pem_parser::pem_to_der(pem);
@@ -114,8 +126,10 @@ fn test_blocking_borrowed() {
 #[test]
 fn test_blocking_managed() {
     use embedded_tls::blocking::*;
-    use std::net::TcpStream;
-    use std::sync::Arc;
+    use std::{
+        net::TcpStream,
+        sync::Arc,
+    };
     let addr = setup();
     let pem = include_str!("data/ca-cert.pem");
     let der = pem_parser::pem_to_der(pem);

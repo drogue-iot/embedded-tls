@@ -5,26 +5,45 @@ use crate::{
     extensions::extension_data::{
         application_layer_protocol_negotiation::ApplicationLayerProtocolNegotiation,
         certificate_authorities::CertificateAuthorities,
-        certificate_type::{CertTypeRequest, CertTypeResponse},
+        certificate_type::{
+            CertTypeRequest,
+            CertTypeResponse,
+        },
         cookie::Cookie,
-        early_data::{EarlyDataIndication, EarlyDataIndicationInNewSessionTicket},
+        early_data::{
+            EarlyDataIndication,
+            EarlyDataIndicationInNewSessionTicket,
+        },
         heartbeat::Heartbeat,
-        key_share::{KeyShareClientHello, KeyShareServerHello},
+        key_share::{
+            KeyShareClientHello,
+            KeyShareServerHello,
+        },
         max_fragment_length::MaxFragmentLength,
         oid_filters::OidFilters,
         padding::Padding,
         post_handshake_auth::PostHandshakeAuth,
-        pre_shared_key::{PreSharedKeyClientHello, PreSharedKeyServerHello},
+        pre_shared_key::{
+            PreSharedKeyClientHello,
+            PreSharedKeyServerHello,
+        },
         psk_key_exchange_modes::PskKeyExchangeModes,
-        server_name::{ServerNameList, ServerNameResponse},
+        server_name::{
+            ServerNameList,
+            ServerNameResponse,
+        },
         signature_algorithms::SignatureAlgorithms,
         signature_algorithms_cert::SignatureAlgorithmsCert,
         signed_certificate_timestamp::{
-            SignedCertificateTimestampIndication, SignedCertificateTimestamps,
+            SignedCertificateTimestampIndication,
+            SignedCertificateTimestamps,
         },
         status_request::CertificateStatusRequest,
         supported_groups::SupportedGroups,
-        supported_versions::{SupportedVersionsClientHello, SupportedVersionsServerHello},
+        supported_versions::{
+            SupportedVersionsClientHello,
+            SupportedVersionsServerHello,
+        },
         use_srtp::UseSrtp,
     },
 };

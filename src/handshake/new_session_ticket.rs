@@ -1,9 +1,13 @@
 use heapless::Vec;
 
-use crate::extensions::messages::NewSessionTicketExtension;
-use crate::extensions::ExtensionType;
-use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
+use crate::{
+    extensions::{
+        messages::NewSessionTicketExtension,
+        ExtensionType,
+    },
+    parse_buffer::ParseBuffer,
+    TlsError,
+};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
