@@ -73,7 +73,6 @@ mod crypto_engine;
 mod extensions;
 mod handshake;
 mod key_schedule;
-mod max_fragment_length;
 mod named_groups;
 mod parse_buffer;
 pub mod read_buffer;

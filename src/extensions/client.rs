@@ -1,10 +1,10 @@
 use crate::extensions::types::key_share::KeyShare;
+use crate::extensions::types::max_fragment_length::MaxFragmentLength;
 use crate::extensions::types::server_name::ServerNameList;
 use crate::extensions::ExtensionType;
 use crate::signature_schemes::SignatureScheme;
 
 use crate::buffer::*;
-use crate::max_fragment_length::MaxFragmentLength;
 use crate::named_groups::NamedGroup;
 use crate::supported_versions::ProtocolVersions;
 use crate::TlsError;
@@ -131,9 +131,7 @@ impl ClientExtension<'_> {
 
                     Ok(())
                 }
-                ClientExtension::MaxFragmentLength(len) => {
-                    buf.push(*len as u8).map_err(|_| TlsError::EncodeError)
-                }
+                ClientExtension::MaxFragmentLength(len) => len.encode(buf),
             }
         })
     }
