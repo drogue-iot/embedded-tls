@@ -1,6 +1,7 @@
 use crate::extensions::types::key_share::KeyShare;
 use crate::extensions::types::max_fragment_length::MaxFragmentLength;
 use crate::extensions::types::server_name::ServerNameList;
+use crate::extensions::types::status_request::CertificateStatusRequest;
 use crate::extensions::ExtensionType;
 use crate::signature_schemes::SignatureScheme;
 
@@ -33,6 +34,7 @@ pub enum ClientExtension<'a> {
         supported_signature_algorithms: Vec<SignatureScheme, 16>,
     },
     MaxFragmentLength(MaxFragmentLength),
+    StatusRequest(CertificateStatusRequest),
 }
 
 #[derive(Clone, Copy)]
@@ -56,6 +58,7 @@ impl ClientExtension<'_> {
             ClientExtension::PskKeyExchangeModes { .. } => ExtensionType::PskKeyExchangeModes,
             ClientExtension::PreSharedKey { .. } => ExtensionType::PreSharedKey,
             ClientExtension::MaxFragmentLength(_) => ExtensionType::MaxFragmentLength,
+            ClientExtension::StatusRequest(_) => ExtensionType::StatusRequest,
         }
     }
 
@@ -132,6 +135,7 @@ impl ClientExtension<'_> {
                     Ok(())
                 }
                 ClientExtension::MaxFragmentLength(len) => len.encode(buf),
+                ClientExtension::StatusRequest(request) => request.encode(buf),
             }
         })
     }
