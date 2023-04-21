@@ -26,24 +26,20 @@ pub enum NamedGroup {
 }
 
 impl NamedGroup {
-    pub fn of(num: u16) -> Option<NamedGroup> {
-        match num {
-            0x0017 => Some(Self::Secp256r1),
-            0x0018 => Some(Self::Secp384r1),
-            0x0019 => Some(Self::Secp521r1),
-            0x001D => Some(Self::X25519),
-            0x001E => Some(Self::X448),
-            0x0100 => Some(Self::Ffdhe2048),
-            0x0101 => Some(Self::Ffdhe3072),
-            0x0102 => Some(Self::Ffdhe4096),
-            0x0103 => Some(Self::Ffdhe6144),
-            0x0104 => Some(Self::Ffdhe8192),
-            _ => None,
-        }
-    }
-
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
-        Self::of(buf.read_u16()?).ok_or(ParseError::InvalidData)
+        match buf.read_u16()? {
+            v if v == Self::Secp256r1 as u16 => Ok(Self::Secp256r1),
+            v if v == Self::Secp384r1 as u16 => Ok(Self::Secp384r1),
+            v if v == Self::Secp521r1 as u16 => Ok(Self::Secp521r1),
+            v if v == Self::X25519 as u16 => Ok(Self::X25519),
+            v if v == Self::X448 as u16 => Ok(Self::X448),
+            v if v == Self::Ffdhe2048 as u16 => Ok(Self::Ffdhe2048),
+            v if v == Self::Ffdhe3072 as u16 => Ok(Self::Ffdhe3072),
+            v if v == Self::Ffdhe4096 as u16 => Ok(Self::Ffdhe4096),
+            v if v == Self::Ffdhe6144 as u16 => Ok(Self::Ffdhe6144),
+            v if v == Self::Ffdhe8192 as u16 => Ok(Self::Ffdhe8192),
+            _ => Err(ParseError::InvalidData),
+        }
     }
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
