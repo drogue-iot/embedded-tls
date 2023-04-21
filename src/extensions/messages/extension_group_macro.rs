@@ -26,13 +26,25 @@ macro_rules! extension_group {
             }
 
             pub fn parse(buf: &mut crate::parse_buffer::ParseBuffer<'a>) -> Result<Self, crate::TlsError> {
-                match crate::extensions::ExtensionType::parse(buf).map_err(|err| {
+                let ext_type = crate::extensions::ExtensionType::parse(buf).map_err(|err| {
+                    warn!("Failed to read extension type: {:?}", err);
                     match err {
                         crate::parse_buffer::ParseError::InvalidData => crate::TlsError::UnknownExtensionType,
                         _ => crate::TlsError::DecodeError,
                     }
-                })? {
-                    $(crate::extensions::ExtensionType::$extension => Ok(Self::$extension(<$extension_data>::parse(buf).map_err(|_| crate::TlsError::DecodeError)?)),)+
+                })?;
+
+                debug!("Read extension type {:?}", ext_type);
+
+                let data_len = buf.read_u16().map_err(|_| crate::TlsError::DecodeError)? as usize;
+                let mut ext_data = buf.slice(data_len).map_err(|_| crate::TlsError::DecodeError)?;
+
+                match ext_type {
+                    $(crate::extensions::ExtensionType::$extension => Ok(Self::$extension(<$extension_data>::parse(&mut ext_data).map_err(|err| {
+                        warn!("Failed to parse extension data: {:?}", err);
+                        crate::TlsError::DecodeError
+                    })?)),)+
+
                     #[allow(unreachable_patterns)]
                     other => {
                         warn!("Read unexpected ExtensionType: {:?}", other);
@@ -41,10 +53,10 @@ macro_rules! extension_group {
                         // which it recognizes and which is not specified for the message in
                         // which it appears, it MUST abort the handshake with an
                         // "illegal_parameter" alert.
-                        return Err(crate::TlsError::AbortHandshake(
+                        Err(crate::TlsError::AbortHandshake(
                             crate::alert::AlertLevel::Fatal,
                             crate::alert::AlertDescription::IllegalParameter,
-                        ));
+                        ))
                     }
                 }
             }
