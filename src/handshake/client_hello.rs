@@ -9,6 +9,7 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::extensions::client::{ClientExtension, PskKeyExchangeMode};
 use crate::extensions::types::key_share::{KeyShare, KeyShareEntry};
 use crate::extensions::types::server_name::ServerNameList;
+use crate::extensions::types::signature_algorithms::SignatureAlgorithms;
 use crate::extensions::types::supported_groups::{NamedGroup, SupportedGroups};
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::supported_versions::TLS13;
@@ -77,9 +78,9 @@ where
             }
             .encode(buf)?;
 
-            ClientExtension::SignatureAlgorithms {
+            ClientExtension::SignatureAlgorithms(SignatureAlgorithms {
                 supported_signature_algorithms: self.config.signature_schemes.clone(),
-            }
+            })
             .encode(buf)?;
 
             if let Some(max_fragment_length) = self.config.max_fragment_length {

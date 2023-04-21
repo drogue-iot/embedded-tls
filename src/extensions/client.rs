@@ -1,10 +1,10 @@
 use crate::extensions::types::key_share::KeyShare;
 use crate::extensions::types::max_fragment_length::MaxFragmentLength;
 use crate::extensions::types::server_name::ServerNameList;
+use crate::extensions::types::signature_algorithms::{SignatureAlgorithms, SignatureScheme};
 use crate::extensions::types::status_request::CertificateStatusRequest;
 use crate::extensions::types::supported_groups::SupportedGroups;
 use crate::extensions::ExtensionType;
-use crate::signature_schemes::SignatureScheme;
 
 use crate::buffer::*;
 use crate::supported_versions::ProtocolVersions;
@@ -16,9 +16,7 @@ pub enum ClientExtension<'a> {
     SupportedVersions {
         versions: ProtocolVersions,
     },
-    SignatureAlgorithms {
-        supported_signature_algorithms: Vec<SignatureScheme, 16>,
-    },
+    SignatureAlgorithms(SignatureAlgorithms<16>),
     SupportedGroups(SupportedGroups<16>),
     KeyShare(KeyShare<'a>),
     PreSharedKey {
@@ -80,14 +78,7 @@ impl ClientExtension<'_> {
                     }
                     Ok(())
                 }),
-                ClientExtension::SignatureAlgorithms {
-                    supported_signature_algorithms,
-                } => buf.with_u16_length(|buf| {
-                    for &a in supported_signature_algorithms {
-                        buf.push_u16(a as u16).map_err(|_| TlsError::EncodeError)?;
-                    }
-                    Ok(())
-                }),
+                ClientExtension::SignatureAlgorithms(algorithms) => algorithms.encode(buf),
                 ClientExtension::SignatureAlgorithmsCert {
                     supported_signature_algorithms,
                 } => buf.with_u16_length(|buf| {

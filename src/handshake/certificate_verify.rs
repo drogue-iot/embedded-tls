@@ -1,5 +1,5 @@
+use crate::extensions::types::signature_algorithms::SignatureScheme;
 use crate::parse_buffer::ParseBuffer;
-use crate::signature_schemes::SignatureScheme;
 use crate::TlsError;
 
 #[derive(Debug)]
@@ -11,11 +11,8 @@ pub struct CertificateVerify<'a> {
 
 impl<'a> CertificateVerify<'a> {
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<CertificateVerify<'a>, TlsError> {
-        let signature_scheme = SignatureScheme::of(
-            buf.read_u16()
-                .map_err(|_| TlsError::InvalidSignatureScheme)?,
-        )
-        .ok_or(TlsError::InvalidSignatureScheme)?;
+        let signature_scheme =
+            SignatureScheme::parse(buf).map_err(|_| TlsError::InvalidSignatureScheme)?;
 
         let len = buf.read_u16().map_err(|_| TlsError::InvalidSignature)?;
         let signature = buf
