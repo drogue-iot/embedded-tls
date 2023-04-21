@@ -1,11 +1,11 @@
 use crate::{
     buffer::CryptoBuffer,
     extensions::{
-        messages::unexpected_extension_type,
-        types::{
+        extension_data::{
             key_share::KeyShareServerHello, pre_shared_key::PreSharedKeyServerHello,
             supported_versions::SupportedVersionsServerHello,
         },
+        messages::unexpected_extension_type,
         ExtensionType,
     },
     parse_buffer::{ParseBuffer, ParseError},

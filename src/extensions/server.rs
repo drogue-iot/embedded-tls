@@ -1,7 +1,7 @@
 use crate::alert::{AlertDescription, AlertLevel};
-use crate::extensions::types::key_share::KeyShareServerHello;
-use crate::extensions::types::server_name::ServerNameResponse;
-use crate::extensions::types::supported_versions::SupportedVersionsServerHello;
+use crate::extensions::extension_data::key_share::KeyShareServerHello;
+use crate::extensions::extension_data::server_name::ServerNameResponse;
+use crate::extensions::extension_data::supported_versions::SupportedVersionsServerHello;
 use crate::extensions::ExtensionType;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;

@@ -1,5 +1,5 @@
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
-use crate::extensions::types::signature_algorithms::SignatureScheme;
+use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
     certificate::{
         Certificate as OwnedCertificate, CertificateEntryRef, CertificateRef as ServerCertificate,

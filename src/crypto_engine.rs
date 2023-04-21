@@ -1,4 +1,6 @@
-use crate::{application_data::ApplicationData, extensions::types::supported_groups::NamedGroup};
+use crate::{
+    application_data::ApplicationData, extensions::extension_data::supported_groups::NamedGroup,
+};
 use p256::ecdh::SharedSecret;
 
 pub struct CryptoEngine {

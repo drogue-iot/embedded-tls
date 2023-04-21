@@ -1,13 +1,13 @@
 use crate::{
     buffer::CryptoBuffer,
     extensions::{
-        messages::unexpected_extension_type,
-        types::{
+        extension_data::{
             application_layer_protocol_negotiation::ApplicationLayerProtocolNegotiation,
             certificate_type::CertTypeResponse, early_data::EarlyDataIndication,
             heartbeat::Heartbeat, max_fragment_length::MaxFragmentLength,
             server_name::ServerNameList, supported_groups::SupportedGroups, use_srtp::UseSrtp,
         },
+        messages::unexpected_extension_type,
         ExtensionType,
     },
     parse_buffer::{ParseBuffer, ParseError},

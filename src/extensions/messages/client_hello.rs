@@ -1,7 +1,7 @@
 use crate::{
     buffer::CryptoBuffer,
     extensions::{
-        types::{
+        extension_data::{
             application_layer_protocol_negotiation::ApplicationLayerProtocolNegotiation,
             certificate_authorities::CertificateAuthorities, certificate_type::CertTypeRequest,
             cookie::Cookie, early_data::EarlyDataIndication, heartbeat::Heartbeat,

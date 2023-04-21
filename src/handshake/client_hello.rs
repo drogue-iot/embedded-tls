@@ -6,14 +6,16 @@ use p256::EncodedPoint;
 
 use crate::buffer::*;
 use crate::config::{TlsCipherSuite, TlsConfig};
+use crate::extensions::extension_data::key_share::{KeyShareClientHello, KeyShareEntry};
+use crate::extensions::extension_data::pre_shared_key::PreSharedKeyClientHello;
+use crate::extensions::extension_data::psk_key_exchange_modes::{
+    PskKeyExchangeMode, PskKeyExchangeModes,
+};
+use crate::extensions::extension_data::server_name::ServerNameList;
+use crate::extensions::extension_data::signature_algorithms::SignatureAlgorithms;
+use crate::extensions::extension_data::supported_groups::{NamedGroup, SupportedGroups};
+use crate::extensions::extension_data::supported_versions::{SupportedVersionsClientHello, TLS13};
 use crate::extensions::messages::client_hello::ClientHelloExtension;
-use crate::extensions::types::key_share::{KeyShareClientHello, KeyShareEntry};
-use crate::extensions::types::pre_shared_key::PreSharedKeyClientHello;
-use crate::extensions::types::psk_key_exchange_modes::{PskKeyExchangeMode, PskKeyExchangeModes};
-use crate::extensions::types::server_name::ServerNameList;
-use crate::extensions::types::signature_algorithms::SignatureAlgorithms;
-use crate::extensions::types::supported_groups::{NamedGroup, SupportedGroups};
-use crate::extensions::types::supported_versions::{SupportedVersionsClientHello, TLS13};
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::TlsError;
 

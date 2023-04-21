@@ -1,7 +1,7 @@
 use heapless::Vec;
 
 use crate::buffer::CryptoBuffer;
-use crate::extensions::types::supported_groups::NamedGroup;
+use crate::extensions::extension_data::supported_groups::NamedGroup;
 
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;

@@ -4,9 +4,9 @@ use crate::{
     TlsError,
 };
 
+pub mod extension_data;
 pub mod messages;
 pub mod server;
-pub mod types;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
