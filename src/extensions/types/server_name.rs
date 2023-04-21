@@ -88,17 +88,11 @@ impl<'a, const N: usize> ServerNameList<'a, N> {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::ServerName;
 
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<ServerNameList<'a, N>, ParseError> {
-        let mut names = Vec::new();
+        let data_length = buf.read_u16()? as usize;
 
-        let len = buf.read_u16()?;
-        let mut data = buf.slice(len as usize)?;
-
-        while !data.is_empty() {
-            names
-                .push(ServerName::parse(&mut data)?)
-                .map_err(|_| ParseError::InsufficientSpace)?;
-        }
-        Ok(ServerNameList { names })
+        Ok(Self {
+            names: buf.read_list::<_, N>(data_length, ServerName::parse)?,
+        })
     }
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {

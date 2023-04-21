@@ -56,17 +56,11 @@ impl<const N: usize> SupportedGroups<N> {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SupportedGroups;
 
     pub fn parse<'a>(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
-        let data_length = buf.read_u16()?;
+        let data_length = buf.read_u16()? as usize;
 
-        let mut data = buf.slice(data_length as usize)?;
-        let mut supported_groups = Vec::new();
-        while !data.is_empty() {
-            supported_groups
-                .push(NamedGroup::parse(&mut data)?)
-                .map_err(|_| ParseError::InsufficientSpace)?;
-        }
-
-        Ok(Self { supported_groups })
+        Ok(Self {
+            supported_groups: buf.read_list::<_, N>(data_length, NamedGroup::parse)?,
+        })
     }
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {

@@ -32,17 +32,11 @@ impl<const N: usize> SupportedVersions<N> {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SupportedVersions;
 
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
-        let data_length = buf.read_u8()?;
+        let data_length = buf.read_u8()? as usize;
 
-        let mut data = buf.slice(data_length as usize)?;
-        let mut versions = Vec::new();
-        while !data.is_empty() {
-            versions
-                .push(ProtocolVersion::parse(&mut data)?)
-                .map_err(|_| ParseError::InsufficientSpace)?;
-        }
-
-        Ok(Self { versions })
+        Ok(Self {
+            versions: buf.read_list::<_, N>(data_length, ProtocolVersion::parse)?,
+        })
     }
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {

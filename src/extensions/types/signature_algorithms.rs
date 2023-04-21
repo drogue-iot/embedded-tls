@@ -80,18 +80,11 @@ impl<const N: usize> SignatureAlgorithms<N> {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SignatureAlgorithms;
 
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
-        let data_length = buf.read_u16()?;
-
-        let mut data = buf.slice(data_length as usize)?;
-        let mut supported_signature_algorithms = Vec::new();
-        while !data.is_empty() {
-            supported_signature_algorithms
-                .push(SignatureScheme::parse(&mut data)?)
-                .map_err(|_| ParseError::InsufficientSpace)?;
-        }
+        let data_length = buf.read_u16()? as usize;
 
         Ok(Self {
-            supported_signature_algorithms,
+            supported_signature_algorithms: buf
+                .read_list::<_, N>(data_length, SignatureScheme::parse)?,
         })
     }
 

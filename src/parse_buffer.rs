@@ -131,6 +131,23 @@ impl<'b> ParseBuffer<'b> {
             Err(ParseError::InsufficientBytes)
         }
     }
+
+    pub fn read_list<T, const N: usize>(
+        &mut self,
+        data_length: usize,
+        read: impl Fn(&mut ParseBuffer<'b>) -> Result<T, ParseError>,
+    ) -> Result<Vec<T, N>, ParseError> {
+        let mut result = Vec::new();
+
+        let mut data = self.slice(data_length as usize)?;
+        while !data.is_empty() {
+            result
+                .push(read(&mut data)?)
+                .map_err(|_| ParseError::InsufficientSpace)?;
+        }
+
+        Ok(result)
+    }
 }
 
 impl From<ParseError> for TlsError {

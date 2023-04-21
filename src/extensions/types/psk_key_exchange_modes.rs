@@ -35,17 +35,11 @@ impl<const N: usize> PskKeyExchangeModes<N> {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::PskKeyExchangeModes;
 
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
-        let data_length = buf.read_u8()?;
+        let data_length = buf.read_u8()? as usize;
 
-        let mut data = buf.slice(data_length as usize)?;
-        let mut modes = Vec::new();
-        while !data.is_empty() {
-            modes
-                .push(PskKeyExchangeMode::parse(&mut data)?)
-                .map_err(|_| ParseError::InsufficientSpace)?;
-        }
-
-        Ok(Self { modes })
+        Ok(Self {
+            modes: buf.read_list::<_, N>(data_length, PskKeyExchangeMode::parse)?,
+        })
     }
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
