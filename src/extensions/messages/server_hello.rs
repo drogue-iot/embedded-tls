@@ -12,7 +12,6 @@ use crate::{
     TlsError,
 };
 
-// TODO: check if these are the correct data types
 pub enum ServerHelloExtension<'a> {
     KeyShare(KeyShareServerHello<'a>),
     PreSharedKey(PreSharedKeyServerHello),
