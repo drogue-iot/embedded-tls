@@ -6,11 +6,17 @@ use p256::EncodedPoint;
 
 use crate::buffer::*;
 use crate::config::{TlsCipherSuite, TlsConfig};
-use crate::extensions::client::{ClientExtension, PskKeyExchangeMode};
-use crate::extensions::common::{KeyShare, KeyShareEntry};
+use crate::extensions::extension_data::key_share::{KeyShareClientHello, KeyShareEntry};
+use crate::extensions::extension_data::pre_shared_key::PreSharedKeyClientHello;
+use crate::extensions::extension_data::psk_key_exchange_modes::{
+    PskKeyExchangeMode, PskKeyExchangeModes,
+};
+use crate::extensions::extension_data::server_name::ServerNameList;
+use crate::extensions::extension_data::signature_algorithms::SignatureAlgorithms;
+use crate::extensions::extension_data::supported_groups::{NamedGroup, SupportedGroups};
+use crate::extensions::extension_data::supported_versions::{SupportedVersionsClientHello, TLS13};
+use crate::extensions::messages::ClientHelloExtension;
 use crate::handshake::{Random, LEGACY_VERSION};
-use crate::named_groups::NamedGroup;
-use crate::supported_versions::TLS13;
 use crate::TlsError;
 
 pub struct ClientHello<'config, CipherSuite>
@@ -71,39 +77,42 @@ where
             // Implementations of this specification MUST send this extension in the
             // ClientHello containing all versions of TLS which they are prepared to
             // negotiate
-            ClientExtension::SupportedVersions {
+            ClientHelloExtension::SupportedVersions(SupportedVersionsClientHello {
                 versions: Vec::from_slice(&[TLS13]).unwrap(),
-            }
+            })
             .encode(buf)?;
 
-            ClientExtension::SignatureAlgorithms {
+            ClientHelloExtension::SignatureAlgorithms(SignatureAlgorithms {
                 supported_signature_algorithms: self.config.signature_schemes.clone(),
-            }
+            })
             .encode(buf)?;
 
             if let Some(max_fragment_length) = self.config.max_fragment_length {
-                ClientExtension::MaxFragmentLength(max_fragment_length).encode(buf)?;
+                ClientHelloExtension::MaxFragmentLength(max_fragment_length).encode(buf)?;
             }
 
-            ClientExtension::SupportedGroups {
+            ClientHelloExtension::SupportedGroups(SupportedGroups {
                 supported_groups: self.config.named_groups.clone(),
-            }
+            })
             .encode(buf)?;
 
-            ClientExtension::PskKeyExchangeModes {
+            ClientHelloExtension::PskKeyExchangeModes(PskKeyExchangeModes {
                 modes: Vec::from_slice(&[PskKeyExchangeMode::PskDheKe]).unwrap(),
-            }
+            })
             .encode(buf)?;
 
-            ClientExtension::KeyShare(KeyShare(KeyShareEntry {
-                group: NamedGroup::Secp256r1,
-                opaque: public_key,
-            }))
+            ClientHelloExtension::KeyShare(KeyShareClientHello {
+                client_shares: Vec::from_slice(&[KeyShareEntry {
+                    group: NamedGroup::Secp256r1,
+                    opaque: public_key,
+                }])
+                .unwrap(),
+            })
             .encode(buf)?;
 
             if let Some(server_name) = self.config.server_name {
-                // TODO Add SNI extension
-                ClientExtension::ServerName { server_name }.encode(buf)?;
+                ClientHelloExtension::ServerName(ServerNameList::single(server_name))
+                    .encode(buf)?;
             }
 
             // Section 4.2
@@ -112,10 +121,10 @@ where
             // "pre_shared_key" which MUST be the last extension in
             // the ClientHello.
             if let Some((_, identities)) = &self.config.psk {
-                ClientExtension::PreSharedKey {
+                ClientHelloExtension::PreSharedKey(PreSharedKeyClientHello {
                     identities: identities.clone(),
                     hash_size: <CipherSuite::Hash as OutputSizeUser>::output_size(),
-                }
+                })
                 .encode(buf)?;
             }
 

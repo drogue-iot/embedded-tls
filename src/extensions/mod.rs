@@ -1,8 +1,15 @@
-pub mod client;
-pub mod common;
-pub mod server;
+use crate::{
+    buffer::CryptoBuffer,
+    parse_buffer::{ParseBuffer, ParseError},
+    TlsError,
+};
 
-#[derive(Debug, PartialEq)]
+mod extension_group_macro;
+
+pub mod extension_data;
+pub mod messages;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ExtensionType {
     ServerName = 0,
@@ -30,32 +37,43 @@ pub enum ExtensionType {
 }
 
 impl ExtensionType {
-    pub fn of(num: u16) -> Option<Self> {
-        //info!("extension type of {:x}", num);
-        match num {
-            0 => Some(Self::ServerName),
-            1 => Some(Self::MaxFragmentLength),
-            5 => Some(Self::StatusRequest),
-            10 => Some(Self::SupportedGroups),
-            13 => Some(Self::SignatureAlgorithms),
-            14 => Some(Self::UseSrtp),
-            15 => Some(Self::Heartbeat),
-            16 => Some(Self::ApplicationLayerProtocolNegotiation),
-            18 => Some(Self::SignedCertificateTimestamp),
-            19 => Some(Self::ClientCertificateType),
-            20 => Some(Self::ServerCertificateType),
-            21 => Some(Self::Padding),
-            41 => Some(Self::PreSharedKey),
-            42 => Some(Self::EarlyData),
-            43 => Some(Self::SupportedVersions),
-            44 => Some(Self::Cookie),
-            45 => Some(Self::PskKeyExchangeModes),
-            47 => Some(Self::CertificateAuthorities),
-            48 => Some(Self::OidFilters),
-            49 => Some(Self::PostHandshakeAuth),
-            50 => Some(Self::SignatureAlgorithmsCert),
-            51 => Some(Self::KeyShare),
-            _ => None,
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
+        match buf.read_u16()? {
+            v if v == Self::ServerName as u16 => Ok(Self::ServerName),
+            v if v == Self::MaxFragmentLength as u16 => Ok(Self::MaxFragmentLength),
+            v if v == Self::StatusRequest as u16 => Ok(Self::StatusRequest),
+            v if v == Self::SupportedGroups as u16 => Ok(Self::SupportedGroups),
+            v if v == Self::SignatureAlgorithms as u16 => Ok(Self::SignatureAlgorithms),
+            v if v == Self::UseSrtp as u16 => Ok(Self::UseSrtp),
+            v if v == Self::Heartbeat as u16 => Ok(Self::Heartbeat),
+            v if v == Self::ApplicationLayerProtocolNegotiation as u16 => {
+                Ok(Self::ApplicationLayerProtocolNegotiation)
+            }
+            v if v == Self::SignedCertificateTimestamp as u16 => {
+                Ok(Self::SignedCertificateTimestamp)
+            }
+            v if v == Self::ClientCertificateType as u16 => Ok(Self::ClientCertificateType),
+            v if v == Self::ServerCertificateType as u16 => Ok(Self::ServerCertificateType),
+            v if v == Self::Padding as u16 => Ok(Self::Padding),
+            v if v == Self::PreSharedKey as u16 => Ok(Self::PreSharedKey),
+            v if v == Self::EarlyData as u16 => Ok(Self::EarlyData),
+            v if v == Self::SupportedVersions as u16 => Ok(Self::SupportedVersions),
+            v if v == Self::Cookie as u16 => Ok(Self::Cookie),
+            v if v == Self::PskKeyExchangeModes as u16 => Ok(Self::PskKeyExchangeModes),
+            v if v == Self::CertificateAuthorities as u16 => Ok(Self::CertificateAuthorities),
+            v if v == Self::OidFilters as u16 => Ok(Self::OidFilters),
+            v if v == Self::PostHandshakeAuth as u16 => Ok(Self::PostHandshakeAuth),
+            v if v == Self::SignatureAlgorithmsCert as u16 => Ok(Self::SignatureAlgorithmsCert),
+            v if v == Self::KeyShare as u16 => Ok(Self::KeyShare),
+            other => {
+                warn!("Read unknown ExtensionType: {}", other);
+                Err(ParseError::InvalidData)
+            }
         }
+    }
+
+    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        buf.push_u16(*self as u16)
+            .map_err(|_| TlsError::EncodeError)
     }
 }
