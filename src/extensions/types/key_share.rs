@@ -3,6 +3,16 @@ use crate::parse_buffer::{ParseBuffer, ParseError};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct KeyShare<'a>(pub(crate) KeyShareEntry<'a>);
+
+impl<'a> KeyShare<'a> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShare<'a>, ParseError> {
+        Ok(KeyShare(KeyShareEntry::parse(buf)?))
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyShareEntry<'a> {
     pub(crate) group: NamedGroup,
     pub(crate) opaque: &'a [u8],
@@ -33,7 +43,8 @@ impl<'a> KeyShareEntry<'a> {
 mod tests {
     extern crate std;
 
-    use crate::extensions::common::KeyShareEntry;
+    use super::*;
+
     use crate::named_groups::NamedGroup;
     use crate::parse_buffer::ParseBuffer;
     use std::sync::Once;

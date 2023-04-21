@@ -2,8 +2,8 @@ use heapless::Vec;
 
 use crate::cipher_suites::CipherSuite;
 use crate::crypto_engine::CryptoEngine;
-use crate::extensions::common::KeyShareEntry;
 use crate::extensions::server::ServerExtension;
+use crate::extensions::types::key_share::KeyShareEntry;
 use crate::extensions::ExtensionType;
 use crate::handshake::Random;
 use crate::parse_buffer::ParseBuffer;

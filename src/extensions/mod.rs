@@ -1,5 +1,5 @@
 pub mod client;
-pub mod common;
+pub mod types;
 pub mod server;
 
 #[derive(Debug, PartialEq)]
