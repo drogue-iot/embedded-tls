@@ -1,3 +1,4 @@
+use crate::alert::{AlertDescription, AlertLevel};
 use crate::extensions::common::KeyShareEntry;
 use crate::extensions::ExtensionType;
 use crate::parse_buffer::{ParseBuffer, ParseError};
@@ -78,16 +79,16 @@ impl<'a> ServerExtension<'a> {
                 "{:?} extension is not allowed in this context",
                 extension_type
             );
+
             // Section 4.2.  Extensions
             // If an implementation receives an extension
             // which it recognizes and which is not specified for the message in
             // which it appears, it MUST abort the handshake with an
             // "illegal_parameter" alert.
-
-            // TODO: indicate to caller that we have to abort
-            // return Err(TlsError::AbortHandshake(AlertDescription::IllegalParameter))
-
-            return Err(TlsError::InvalidHandshake);
+            return Err(TlsError::AbortHandshake(
+                AlertLevel::Fatal,
+                AlertDescription::IllegalParameter,
+            ));
         }
 
         let extension_length = buf
