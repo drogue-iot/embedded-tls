@@ -5,12 +5,12 @@ use crate::TlsError;
 
 use heapless::Vec;
 
-pub struct PreSharedKey<'a, const N: usize> {
+pub struct PreSharedKeyClientHello<'a, const N: usize> {
     pub identities: Vec<&'a [u8], N>,
     pub hash_size: usize,
 }
 
-impl<const N: usize> PreSharedKey<'_, N> {
+impl<const N: usize> PreSharedKeyClientHello<'_, N> {
     pub fn parse(_buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         unimplemented!()
     }
@@ -38,5 +38,22 @@ impl<const N: usize> PreSharedKey<'_, N> {
         }
 
         Ok(())
+    }
+}
+
+pub struct PreSharedKeyServerHello {
+    pub selected_identity: u16,
+}
+
+impl PreSharedKeyServerHello {
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
+        Ok(Self {
+            selected_identity: buf.read_u16()?,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        buf.push_u16(self.selected_identity)
+            .map_err(|_| TlsError::EncodeError)
     }
 }

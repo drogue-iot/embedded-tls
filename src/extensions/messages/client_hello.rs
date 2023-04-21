@@ -5,10 +5,10 @@ use crate::{
             application_layer_protocol_negotiation::ApplicationLayerProtocolNegotiation,
             certificate_authorities::CertificateAuthorities, certificate_type::CertTypeRequest,
             cookie::Cookie, early_data::EarlyDataIndication, heartbeat::Heartbeat,
-            key_share::KeyShare, max_fragment_length::MaxFragmentLength, oid_filters::OidFilters,
-            padding::Padding, post_handshake_auth::PostHandshakeAuth, pre_shared_key::PreSharedKey,
-            psk_key_exchange_modes::PskKeyExchangeModes, server_name::ServerNameList,
-            signature_algorithms::SignatureAlgorithms,
+            key_share::KeyShareClientHello, max_fragment_length::MaxFragmentLength,
+            oid_filters::OidFilters, padding::Padding, post_handshake_auth::PostHandshakeAuth,
+            pre_shared_key::PreSharedKeyClientHello, psk_key_exchange_modes::PskKeyExchangeModes,
+            server_name::ServerNameList, signature_algorithms::SignatureAlgorithms,
             signature_algorithms_cert::SignatureAlgorithmsCert,
             signed_certificate_timestamp::SignedCertificateTimestampIndication,
             status_request::CertificateStatusRequest, supported_groups::SupportedGroups,
@@ -26,8 +26,8 @@ pub enum ClientHelloExtension<'a> {
     SupportedVersions(SupportedVersions<16>),
     SignatureAlgorithms(SignatureAlgorithms<16>),
     SupportedGroups(SupportedGroups<16>),
-    KeyShare(KeyShare<'a>),
-    PreSharedKey(PreSharedKey<'a, 4>),
+    KeyShare(KeyShareClientHello<'a, 1>),
+    PreSharedKey(PreSharedKeyClientHello<'a, 4>),
     PskKeyExchangeModes(PskKeyExchangeModes<4>),
     SignatureAlgorithmsCert(SignatureAlgorithmsCert<16>),
     MaxFragmentLength(MaxFragmentLength),
@@ -108,7 +108,9 @@ impl<'a> ClientHelloExtension<'a> {
                 Ok(Self::ServerCertificateType(CertTypeRequest::parse(buf)?))
             }
             ExtensionType::Padding => Ok(Self::Padding(Padding::parse(buf)?)),
-            ExtensionType::PreSharedKey => Ok(Self::PreSharedKey(PreSharedKey::parse(buf)?)),
+            ExtensionType::PreSharedKey => {
+                Ok(Self::PreSharedKey(PreSharedKeyClientHello::parse(buf)?))
+            }
             ExtensionType::EarlyData => Ok(Self::EarlyData(EarlyDataIndication::parse(buf)?)),
             ExtensionType::SupportedVersions => {
                 Ok(Self::SupportedVersions(SupportedVersions::parse(buf)?))
@@ -127,7 +129,7 @@ impl<'a> ClientHelloExtension<'a> {
             ExtensionType::SignatureAlgorithmsCert => Ok(Self::SignatureAlgorithmsCert(
                 SignatureAlgorithmsCert::parse(buf)?,
             )),
-            ExtensionType::KeyShare => Ok(Self::KeyShare(KeyShare::parse(buf)?)),
+            ExtensionType::KeyShare => Ok(Self::KeyShare(KeyShareClientHello::parse(buf)?)),
         }
     }
 

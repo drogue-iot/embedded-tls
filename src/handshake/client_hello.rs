@@ -7,8 +7,8 @@ use p256::EncodedPoint;
 use crate::buffer::*;
 use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::extensions::messages::client_hello::ClientHelloExtension;
-use crate::extensions::types::key_share::{KeyShare, KeyShareEntry};
-use crate::extensions::types::pre_shared_key::PreSharedKey;
+use crate::extensions::types::key_share::{KeyShareClientHello, KeyShareEntry};
+use crate::extensions::types::pre_shared_key::PreSharedKeyClientHello;
 use crate::extensions::types::psk_key_exchange_modes::{PskKeyExchangeMode, PskKeyExchangeModes};
 use crate::extensions::types::server_name::ServerNameList;
 use crate::extensions::types::signature_algorithms::SignatureAlgorithms;
@@ -99,10 +99,13 @@ where
             })
             .encode(buf)?;
 
-            ClientHelloExtension::KeyShare(KeyShare(KeyShareEntry {
-                group: NamedGroup::Secp256r1,
-                opaque: public_key,
-            }))
+            ClientHelloExtension::KeyShare(KeyShareClientHello {
+                client_shares: Vec::from_slice(&[KeyShareEntry {
+                    group: NamedGroup::Secp256r1,
+                    opaque: public_key,
+                }])
+                .unwrap(),
+            })
             .encode(buf)?;
 
             if let Some(server_name) = self.config.server_name {
@@ -117,7 +120,7 @@ where
             // "pre_shared_key" which MUST be the last extension in
             // the ClientHello.
             if let Some((_, identities)) = &self.config.psk {
-                ClientHelloExtension::PreSharedKey(PreSharedKey {
+                ClientHelloExtension::PreSharedKey(PreSharedKeyClientHello {
                     identities: identities.clone(),
                     hash_size: <CipherSuite::Hash as OutputSizeUser>::output_size(),
                 })

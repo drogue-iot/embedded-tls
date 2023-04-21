@@ -1,5 +1,5 @@
 use crate::alert::{AlertDescription, AlertLevel};
-use crate::extensions::types::key_share::KeyShare;
+use crate::extensions::types::key_share::KeyShareServerHello;
 use crate::extensions::types::server_name::ServerNameResponse;
 use crate::extensions::types::supported_versions::SupportedVersion;
 use crate::extensions::ExtensionType;
@@ -11,7 +11,7 @@ use heapless::Vec;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ServerExtension<'a> {
     SupportedVersion(SupportedVersion),
-    KeyShare(KeyShare<'a>),
+    KeyShare(KeyShareServerHello<'a>),
     PreSharedKey(u16),
 
     SupportedGroups,
@@ -112,7 +112,7 @@ impl<'a> ServerExtension<'a> {
                 SupportedVersion::parse(data).map_err(|_| TlsError::InvalidSupportedVersions)?,
             ),
             ExtensionType::KeyShare => ServerExtension::KeyShare(
-                KeyShare::parse(data).map_err(|_| TlsError::InvalidKeyShare)?,
+                KeyShareServerHello::parse(data).map_err(|_| TlsError::InvalidKeyShare)?,
             ),
             ExtensionType::PreSharedKey => {
                 let value = data.read_u16()?;

@@ -1,3 +1,5 @@
+use heapless::Vec;
+
 use crate::buffer::CryptoBuffer;
 use crate::extensions::types::supported_groups::NamedGroup;
 
@@ -6,15 +8,67 @@ use crate::TlsError;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct KeyShare<'a>(pub(crate) KeyShareEntry<'a>);
+pub struct KeyShareServerHello<'a>(pub KeyShareEntry<'a>);
 
-impl<'a> KeyShare<'a> {
-    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShare<'a>, ParseError> {
-        Ok(KeyShare(KeyShareEntry::parse(buf)?))
+impl<'a> KeyShareServerHello<'a> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
+        Ok(KeyShareServerHello(KeyShareEntry::parse(buf)?))
     }
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         self.0.encode(buf)
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct KeyShareClientHello<'a, const N: usize> {
+    pub client_shares: Vec<KeyShareEntry<'a>, N>,
+}
+
+impl<'a, const N: usize> KeyShareClientHello<'a, N> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
+        //let len = buf.read_u16()? as usize;
+        let len = buf.remaining();
+        Ok(KeyShareClientHello {
+            client_shares: buf.read_list(len, KeyShareEntry::parse)?,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        // FIXME: RFC states the following, but enconding the length breaks integration tests.
+
+        // In the ClientHello message, the "extension_data" field of this
+        // extension contains a "KeyShareClientHello" value:
+        //
+        // struct {
+        //     KeyShareEntry client_shares<0..2^16-1>;
+        // } KeyShareClientHello;
+
+        //buf.with_u16_length(|buf| {
+        for client_share in self.client_shares.iter() {
+            client_share.encode(buf)?;
+        }
+        Ok(())
+        //})
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct KeyShareHelloRetryRequest {
+    pub selected_group: NamedGroup,
+}
+
+impl KeyShareHelloRetryRequest {
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
+        Ok(Self {
+            selected_group: NamedGroup::parse(buf)?,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        self.selected_group.encode(buf)
     }
 }
 
@@ -35,7 +89,7 @@ impl Clone for KeyShareEntry<'_> {
 }
 
 impl<'a> KeyShareEntry<'a> {
-    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShareEntry<'a>, ParseError> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
         let group = NamedGroup::parse(buf)?;
 
         let opaque_len = buf.read_u16()?;
