@@ -47,6 +47,8 @@ impl<'a> SerializedSct<'a> {
 // the extension in the ClientHello, in which case the SCTs are sent by
 // setting the "extension_data" to a "SignedCertificateTimestampList".
 
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 // struct {
 //     SerializedSCT sct_list <1..2^16-1>;
 // } SignedCertificateTimestampList;

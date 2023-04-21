@@ -41,7 +41,6 @@ impl<'a> OidFilter<'a> {
 // struct {
 //     OIDFilter filters<0..2^16-1>;
 // } OIDFilterExtension;
-
 pub struct OidFilters<'a, const N: usize> {
     pub filters: Vec<OidFilter<'a>, N>,
 }

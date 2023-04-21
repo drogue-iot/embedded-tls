@@ -19,7 +19,9 @@ use crate::{
         server_name::ServerNameList,
         signature_algorithms::SignatureAlgorithms,
         signature_algorithms_cert::SignatureAlgorithmsCert,
-        signed_certificate_timestamp::SignedCertificateTimestampIndication,
+        signed_certificate_timestamp::{
+            SignedCertificateTimestampIndication, SignedCertificateTimestamps,
+        },
         status_request::CertificateStatusRequest,
         supported_groups::SupportedGroups,
         supported_versions::{SupportedVersionsClientHello, SupportedVersionsServerHello},
@@ -88,5 +90,18 @@ extension_group! {
         ClientCertificateType(CertTypeResponse),
         ServerCertificateType(CertTypeResponse),
         EarlyData(EarlyDataIndication)
+    }
+}
+
+// TODO: check if these are the correct data types
+// Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with CR
+extension_group! {
+    pub enum CertificateRequestExtension<'a> {
+        StatusRequest(CertificateStatusRequest),
+        SignatureAlgorithms(SignatureAlgorithms<4>),
+        SignedCertificateTimestamp(SignedCertificateTimestamps<'a, 4>),
+        CertificateAuthorities(CertificateAuthorities<'a, 1>),
+        OidFilters(OidFilters<'a, 4>),
+        SignatureAlgorithmsCert(SignatureAlgorithmsCert<1>)
     }
 }
