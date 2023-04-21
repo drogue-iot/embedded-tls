@@ -31,11 +31,12 @@ impl SupportedVersion {
 
 pub struct ServerExtensionParserIterator<'a, 'b> {
     buffer: &'b mut ParseBuffer<'a>,
+    allowed: &'b [ExtensionType],
 }
 
 impl<'a, 'b> ServerExtensionParserIterator<'a, 'b> {
-    pub fn new(buffer: &'b mut ParseBuffer<'a>) -> Self {
-        Self { buffer }
+    pub fn new(buffer: &'b mut ParseBuffer<'a>, allowed: &'b [ExtensionType]) -> Self {
+        Self { buffer, allowed }
     }
 }
 
@@ -47,7 +48,7 @@ impl<'a, 'b> Iterator for ServerExtensionParserIterator<'a, 'b> {
             return None;
         }
 
-        Some(ServerExtension::parse(&mut self.buffer))
+        Some(ServerExtension::parse(&mut self.buffer, &self.allowed))
     }
 }
 
@@ -62,12 +63,32 @@ impl<'a> KeyShare<'a> {
 }
 
 impl<'a> ServerExtension<'a> {
-    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Option<ServerExtension<'a>>, TlsError> {
+    pub fn parse(
+        buf: &mut ParseBuffer<'a>,
+        allowed: &[ExtensionType],
+    ) -> Result<Option<ServerExtension<'a>>, TlsError> {
         let extension_type =
             ExtensionType::of(buf.read_u16().map_err(|_| TlsError::UnknownExtensionType)?)
                 .ok_or(TlsError::UnknownExtensionType)?;
 
         trace!("extension type {:?}", extension_type);
+
+        if !allowed.contains(&extension_type) {
+            warn!(
+                "{:?} extension is not allowed in this context",
+                extension_type
+            );
+            // Section 4.2.  Extensions
+            // If an implementation receives an extension
+            // which it recognizes and which is not specified for the message in
+            // which it appears, it MUST abort the handshake with an
+            // "illegal_parameter" alert.
+
+            // TODO: indicate to caller that we have to abort
+            // return Err(TlsError::AbortHandshake(AlertDescription::IllegalParameter))
+
+            return Err(TlsError::InvalidHandshake);
+        }
 
         let extension_length = buf
             .read_u16()
@@ -80,8 +101,15 @@ impl<'a> ServerExtension<'a> {
 
     pub fn parse_vector<const N: usize>(
         buf: &mut ParseBuffer<'a>,
+        allowed: &[ExtensionType],
     ) -> Result<Vec<ServerExtension<'a>, N>, TlsError> {
-        let mut iter = ServerExtensionParserIterator::new(buf);
+        let extensions_len = buf
+            .read_u16()
+            .map_err(|_| TlsError::InvalidExtensionsLength)?;
+
+        let mut ext_buf = buf.slice(extensions_len as usize)?;
+
+        let mut iter = ServerExtensionParserIterator::new(&mut ext_buf, allowed);
 
         let mut extensions = Vec::new();
 

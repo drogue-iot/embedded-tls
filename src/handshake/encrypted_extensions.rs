@@ -1,4 +1,5 @@
 use crate::extensions::server::ServerExtension;
+use crate::extensions::ExtensionType;
 
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
@@ -11,14 +12,21 @@ pub struct EncryptedExtensions<'a> {
 }
 
 impl<'a> EncryptedExtensions<'a> {
+    // Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with EE
+    const ALLOWED_EXTENSIONS: &[ExtensionType] = &[
+        ExtensionType::ServerName,
+        ExtensionType::MaxFragmentLength,
+        ExtensionType::SupportedGroups,
+        ExtensionType::UseSrtp,
+        ExtensionType::Heartbeat,
+        ExtensionType::ApplicationLayerProtocolNegotiation,
+        ExtensionType::ClientCertificateType,
+        ExtensionType::ServerCertificateType,
+        ExtensionType::EarlyData,
+    ];
+
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<EncryptedExtensions<'a>, TlsError> {
-        //let extensions_len = u16::from_be_bytes([buf[0], buf[1]]) as usize;
-        let extensions_len = buf
-            .read_u16()
-            .map_err(|_| TlsError::InvalidExtensionsLength)?;
-        // info!("extensions length: {}", extensions_len);
-        let extensions =
-            ServerExtension::parse_vector(&mut buf.slice(extensions_len as usize).unwrap())?;
-        Ok(Self { extensions })
+        ServerExtension::parse_vector(buf, Self::ALLOWED_EXTENSIONS)
+            .map(|extensions| Self { extensions })
     }
 }
