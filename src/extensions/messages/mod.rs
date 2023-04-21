@@ -16,7 +16,7 @@ use crate::{
         post_handshake_auth::PostHandshakeAuth,
         pre_shared_key::{PreSharedKeyClientHello, PreSharedKeyServerHello},
         psk_key_exchange_modes::PskKeyExchangeModes,
-        server_name::ServerNameList,
+        server_name::{ServerNameList, ServerNameResponse},
         signature_algorithms::SignatureAlgorithms,
         signature_algorithms_cert::SignatureAlgorithmsCert,
         signed_certificate_timestamp::{
@@ -71,7 +71,7 @@ extension_group! {
 // Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with EE
 extension_group! {
     pub enum EncryptedExtensionsExtension<'a> {
-        ServerName(ServerNameList<'a, 1>), // TODO clarify - may be empty or contains a single name - still a list?
+        ServerName(ServerNameResponse), // TODO clarify - may be empty or contains a single name - still a list?
         MaxFragmentLength(MaxFragmentLength),
         SupportedGroups(SupportedGroups<1>), // TODO clarify - https://www.rfc-editor.org/rfc/rfc7919#page-8
         // https://www.rfc-editor.org/rfc/rfc5764#page-7
