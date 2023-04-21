@@ -13,7 +13,7 @@ pub enum CertificateStatusRequest {
 impl CertificateStatusRequest {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::StatusRequest;
 
-    pub fn parse<'a>(_buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
+    pub fn parse(_buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         unimplemented!()
     }
 

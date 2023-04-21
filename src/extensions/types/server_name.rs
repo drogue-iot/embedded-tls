@@ -14,7 +14,7 @@ pub enum NameType {
 }
 
 impl NameType {
-    pub fn parse<'a>(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         match buf.read_u8()? {
             0 => Ok(Self::HostName),
             other => {
@@ -119,7 +119,7 @@ pub struct ServerNameResponse;
 impl ServerNameResponse {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::ServerName;
 
-    pub fn parse<'a>(buf: &mut ParseBuffer<'a>) -> Result<ServerNameResponse, ParseError> {
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         if !buf.is_empty() {
             Err(ParseError::InvalidData)
         } else {

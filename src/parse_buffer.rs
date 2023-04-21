@@ -139,7 +139,7 @@ impl<'b> ParseBuffer<'b> {
     ) -> Result<Vec<T, N>, ParseError> {
         let mut result = Vec::new();
 
-        let mut data = self.slice(data_length as usize)?;
+        let mut data = self.slice(data_length)?;
         while !data.is_empty() {
             result
                 .push(read(&mut data)?)

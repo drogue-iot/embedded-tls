@@ -28,7 +28,7 @@ pub enum MaxFragmentLength {
 impl MaxFragmentLength {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::MaxFragmentLength;
 
-    pub fn parse<'a>(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let byte = buf.read_u8()?;
 
         match byte {

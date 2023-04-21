@@ -55,7 +55,7 @@ pub struct SupportedGroups<const N: usize> {
 impl<const N: usize> SupportedGroups<N> {
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::SupportedGroups;
 
-    pub fn parse<'a>(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.read_u16()? as usize;
 
         Ok(Self {
