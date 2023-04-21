@@ -1,5 +1,7 @@
+use crate::buffer::CryptoBuffer;
 use crate::named_groups::NamedGroup;
 use crate::parse_buffer::{ParseBuffer, ParseError};
+use crate::TlsError;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -8,6 +10,10 @@ pub struct KeyShare<'a>(pub(crate) KeyShareEntry<'a>);
 impl<'a> KeyShare<'a> {
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShare<'a>, ParseError> {
         Ok(KeyShare(KeyShareEntry::parse(buf)?))
+    }
+
+    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        self.0.encode(buf)
     }
 }
 
@@ -30,11 +36,23 @@ impl Clone for KeyShareEntry<'_> {
 impl<'a> KeyShareEntry<'a> {
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShareEntry<'a>, ParseError> {
         let group = NamedGroup::of(buf.read_u16()?).ok_or(ParseError::InvalidData)?;
+
         let opaque_len = buf.read_u16()?;
         let opaque = buf.slice(opaque_len as usize)?;
+
         Ok(Self {
             group,
             opaque: opaque.as_slice(),
+        })
+    }
+
+    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        buf.with_u16_length(|buf| {
+            buf.push_u16(self.group as u16)
+                .map_err(|_| TlsError::EncodeError)?;
+
+            buf.with_u16_length(|buf| buf.extend_from_slice(self.opaque))
+                .map_err(|_| TlsError::EncodeError)
         })
     }
 }

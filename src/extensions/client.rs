@@ -1,3 +1,4 @@
+use crate::extensions::types::key_share::KeyShare;
 use crate::extensions::ExtensionType;
 use crate::signature_schemes::SignatureScheme;
 
@@ -21,10 +22,7 @@ pub enum ClientExtension<'a> {
     SupportedGroups {
         supported_groups: Vec<NamedGroup, 16>,
     },
-    KeyShare {
-        group: NamedGroup,
-        opaque: &'a [u8],
-    },
+    KeyShare(KeyShare<'a>),
     PreSharedKey {
         identities: Vec<&'a [u8], 4>,
         hash_size: usize,
@@ -125,17 +123,7 @@ impl ClientExtension<'_> {
                         Ok(())
                     })
                 }
-                ClientExtension::KeyShare { group, opaque } => {
-                    //info!("key_share ext");
-                    buf.with_u16_length(|buf| {
-                        // one key-share
-                        buf.push_u16(*group as u16)
-                            .map_err(|_| TlsError::EncodeError)?;
-
-                        buf.with_u16_length(|buf| buf.extend_from_slice(opaque.as_ref()))
-                            .map_err(|_| TlsError::EncodeError)
-                    })
-                }
+                ClientExtension::KeyShare(key_share) => key_share.encode(buf),
                 ClientExtension::PreSharedKey {
                     identities,
                     hash_size,
