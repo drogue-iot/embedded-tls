@@ -15,7 +15,7 @@ use crate::extensions::extension_data::server_name::ServerNameList;
 use crate::extensions::extension_data::signature_algorithms::SignatureAlgorithms;
 use crate::extensions::extension_data::supported_groups::{NamedGroup, SupportedGroups};
 use crate::extensions::extension_data::supported_versions::{SupportedVersionsClientHello, TLS13};
-use crate::extensions::messages::client_hello::ClientHelloExtension;
+use crate::extensions::messages::ClientHelloExtension;
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::TlsError;
 
