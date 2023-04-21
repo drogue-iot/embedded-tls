@@ -1,5 +1,6 @@
 pub mod application_layer_protocol_negotiation;
 pub mod certificate_authorities;
+pub mod certificate_type;
 pub mod key_share;
 pub mod max_fragment_length;
 pub mod oid_filters;
