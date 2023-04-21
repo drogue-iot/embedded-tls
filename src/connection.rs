@@ -240,7 +240,7 @@ impl<'a> State {
                     .await?;
                 let result = process_server_hello(handshake, key_schedule, record);
 
-                handle_processing_error(result, transport, key_schedule, tx_buf).await
+                handle_processing_error(result, transport, key_schedule, record_reader).await
             }
             State::ServerVerify => {
                 let record = record_reader
@@ -249,7 +249,7 @@ impl<'a> State {
 
                 let result = process_server_verify(handshake, key_schedule, config, record);
 
-                handle_processing_error(result, transport, key_schedule, tx_buf).await
+                handle_processing_error(result, transport, key_schedule, record_reader).await
             }
             State::ClientCert => {
                 let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
@@ -301,14 +301,14 @@ impl<'a> State {
 
                 let result = process_server_hello(handshake, key_schedule, record);
 
-                handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
+                handle_processing_error_blocking(result, transport, key_schedule, record_reader)
             }
             State::ServerVerify => {
                 let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
 
                 let result = process_server_verify(handshake, key_schedule, config, record);
 
-                handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
+                handle_processing_error_blocking(result, transport, key_schedule, record_reader)
             }
             State::ClientCert => {
                 let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
@@ -335,12 +335,15 @@ fn handle_processing_error_blocking<CipherSuite>(
     result: Result<State, TlsError>,
     transport: &mut impl BlockingWrite,
     key_schedule: &mut KeySchedule<CipherSuite>,
-    tx_buf: &mut WriteBuffer,
+    record_reader: &mut RecordReader<CipherSuite>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,
 {
     if let Err(TlsError::AbortHandshake(level, description)) = result {
+        record_reader.discard_pending();
+        let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+
         let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
         let tx = tx_buf.write_record(
             &ClientRecord::Alert(Alert { level, description }, false),
@@ -378,12 +381,15 @@ async fn handle_processing_error<'a, CipherSuite>(
     result: Result<State, TlsError>,
     transport: &mut impl AsyncWrite,
     key_schedule: &mut KeySchedule<CipherSuite>,
-    tx_buf: &mut WriteBuffer<'a>,
+    record_reader: &mut RecordReader<'a, CipherSuite>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,
 {
     if let Err(TlsError::AbortHandshake(level, description)) = result {
+        record_reader.discard_pending();
+        let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+
         let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
         let tx = tx_buf.write_record(
             &ClientRecord::Alert(Alert { level, description }, false),

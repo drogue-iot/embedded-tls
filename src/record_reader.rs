@@ -132,6 +132,10 @@ where
 
         Ok(())
     }
+
+    pub(crate) fn discard_pending(&mut self) {
+        self.pending = 0;
+    }
 }
 
 #[cfg(test)]
