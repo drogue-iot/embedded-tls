@@ -3,6 +3,7 @@ pub mod certificate_authorities;
 pub mod key_share;
 pub mod max_fragment_length;
 pub mod oid_filters;
+pub mod padding;
 pub mod post_handshake_auth;
 pub mod pre_shared_key;
 pub mod psk_key_exchange_modes;
