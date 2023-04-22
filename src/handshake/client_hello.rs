@@ -6,7 +6,7 @@ use p256::EncodedPoint;
 
 use crate::buffer::*;
 use crate::config::{TlsCipherSuite, TlsConfig};
-use crate::extensions::{ClientExtension, PskKeyExchangeMode};
+use crate::extensions::client::{ClientExtension, PskKeyExchangeMode};
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::named_groups::NamedGroup;
 use crate::supported_versions::TLS13;
