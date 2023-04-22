@@ -49,7 +49,7 @@ impl<'a, 'b> Iterator for ServerExtensionParserIterator<'a, 'b> {
             return None;
         }
 
-        Some(ServerExtension::parse(&mut self.buffer, &self.allowed))
+        Some(ServerExtension::parse(self.buffer, self.allowed))
     }
 }
 
@@ -110,11 +110,9 @@ impl<'a> ServerExtension<'a> {
 
         let mut ext_buf = buf.slice(extensions_len as usize)?;
 
-        let mut iter = ServerExtensionParserIterator::new(&mut ext_buf, allowed);
-
         let mut extensions = Vec::new();
 
-        while let Some(extension) = iter.next() {
+        for extension in ServerExtensionParserIterator::new(&mut ext_buf, allowed) {
             if let Some(extension) = extension? {
                 extensions
                     .push(extension)
