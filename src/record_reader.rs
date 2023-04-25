@@ -1,14 +1,23 @@
 use core::marker::PhantomData;
 
-use crate::key_schedule::{HashOutputSize, ReadKeySchedule};
-use embedded_io::{blocking::Read as BlockingRead, Error};
+use crate::key_schedule::{
+    HashOutputSize,
+    ReadKeySchedule,
+};
+use embedded_io::{
+    blocking::Read as BlockingRead,
+    Error,
+};
 
 #[cfg(feature = "async")]
 use embedded_io::asynch::Read as AsyncRead;
 
 use crate::{
     config::TlsCipherSuite,
-    record::{RecordHeader, ServerRecord},
+    record::{
+        RecordHeader,
+        ServerRecord,
+    },
     TlsError,
 };
 
@@ -137,7 +146,11 @@ mod tests {
     use core::convert::Infallible;
 
     use super::*;
-    use crate::{content_types::ContentType, key_schedule::KeySchedule, Aes128GcmSha256};
+    use crate::{
+        content_types::ContentType,
+        key_schedule::KeySchedule,
+        Aes128GcmSha256,
+    };
 
     struct ChunkRead<'a>(&'a [u8], usize);
 

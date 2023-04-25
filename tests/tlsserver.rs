@@ -1,12 +1,24 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::Arc,
+};
 
-use mio::net::{TcpListener, TcpStream};
+use mio::net::{
+    TcpListener,
+    TcpStream,
+};
 
-use std::collections::HashMap;
-use std::fs;
-use std::io;
-use std::io::{BufReader, Read, Write};
-use std::net;
+use std::{
+    collections::HashMap,
+    fs,
+    io,
+    io::{
+        BufReader,
+        Read,
+        Write,
+    },
+    net,
+};
 
 // Token for our listening socket.
 pub const LISTENER: mio::Token = mio::Token(0);

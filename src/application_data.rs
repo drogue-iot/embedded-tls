@@ -1,6 +1,11 @@
-use crate::buffer::*;
-use crate::record::RecordHeader;
-use core::fmt::{Debug, Formatter};
+use crate::{
+    buffer::*,
+    record::RecordHeader,
+};
+use core::fmt::{
+    Debug,
+    Formatter,
+};
 
 pub struct ApplicationData<'a> {
     pub(crate) header: RecordHeader,

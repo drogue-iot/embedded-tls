@@ -1,8 +1,9 @@
-use crate::buffer::CryptoBuffer;
-use crate::extensions::server::ServerExtension;
-use crate::extensions::ExtensionType;
-use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
+use crate::{
+    buffer::CryptoBuffer,
+    extensions::messages::CertificateExtension,
+    parse_buffer::ParseBuffer,
+    TlsError,
+};
 use heapless::Vec;
 
 #[derive(Debug)]
@@ -70,40 +71,34 @@ pub enum CertificateEntryRef<'a> {
 }
 
 impl<'a> CertificateEntryRef<'a> {
-    // Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with CT
-    const ALLOWED_EXTENSIONS: &[ExtensionType] = &[
-        ExtensionType::StatusRequest,
-        ExtensionType::SignedCertificateTimestamp,
-    ];
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, TlsError> {
+        let entry_len = buf
+            .read_u24()
+            .map_err(|_| TlsError::InvalidCertificateEntry)?;
+        let cert = buf
+            .slice(entry_len as usize)
+            .map_err(|_| TlsError::InvalidCertificateEntry)?;
 
-    pub fn parse_vector(
+        let entry = CertificateEntryRef::X509(cert.as_slice());
+
+        // Validate extensions
+        CertificateExtension::parse_vector::<2>(buf)?;
+
+        Ok(entry)
+    }
+
+    pub fn parse_vector<const N: usize>(
         buf: &mut ParseBuffer<'a>,
-    ) -> Result<Vec<CertificateEntryRef<'a>, 16>, TlsError> {
-        let mut entries = Vec::new();
-        loop {
-            let entry_len = buf
-                .read_u24()
-                .map_err(|_| TlsError::InvalidCertificateEntry)?;
-            //info!("cert len: {}", entry_len);
-            let cert = buf
-                .slice(entry_len as usize)
-                .map_err(|_| TlsError::InvalidCertificateEntry)?;
+    ) -> Result<Vec<Self, N>, TlsError> {
+        let mut result = Vec::new();
 
-            //let cert: Result<Vec<u8, _>, ()> = cert.into();
-            // let cert: Result<Vec<u8, _>, ()> = Ok(Vec::new());
-
-            entries
-                .push(CertificateEntryRef::X509(cert.as_slice()))
+        while !buf.is_empty() {
+            result
+                .push(Self::parse(buf)?)
                 .map_err(|_| TlsError::DecodeError)?;
-
-            // Validate extensions
-            ServerExtension::parse_vector::<2>(buf, Self::ALLOWED_EXTENSIONS)?;
-
-            if buf.is_empty() {
-                break;
-            }
         }
-        Ok(entries)
+
+        Ok(result)
     }
 
     pub(crate) fn encode(&self, _buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {

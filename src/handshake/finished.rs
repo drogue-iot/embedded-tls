@@ -1,9 +1,17 @@
-use crate::buffer::*;
-use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
-use core::fmt::{Debug, Formatter};
+use crate::{
+    buffer::*,
+    parse_buffer::ParseBuffer,
+    TlsError,
+};
+use core::fmt::{
+    Debug,
+    Formatter,
+};
 //use digest::generic_array::{ArrayLength, GenericArray};
-use generic_array::{ArrayLength, GenericArray};
+use generic_array::{
+    ArrayLength,
+    GenericArray,
+};
 // use heapless::Vec;
 
 pub struct Finished<N: ArrayLength<u8>> {

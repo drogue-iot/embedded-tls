@@ -1,9 +1,18 @@
 use crate::{
     buffer::CryptoBuffer,
-    config::{TlsCipherSuite, TLS_RECORD_OVERHEAD},
+    config::{
+        TlsCipherSuite,
+        TLS_RECORD_OVERHEAD,
+    },
     connection::encrypt,
-    key_schedule::{ReadKeySchedule, WriteKeySchedule},
-    record::{ClientRecord, ClientRecordHeader},
+    key_schedule::{
+        ReadKeySchedule,
+        WriteKeySchedule,
+    },
+    record::{
+        ClientRecord,
+        ClientRecordHeader,
+    },
     TlsError,
 };
 

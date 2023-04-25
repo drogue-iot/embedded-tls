@@ -1,26 +1,48 @@
-use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
-use crate::common::decrypted_read_handler::DecryptedReadHandler;
-use crate::connection::*;
-use crate::key_schedule::KeySchedule;
-use crate::key_schedule::{ReadKeySchedule, SharedState, WriteKeySchedule};
-use crate::read_buffer::ReadBuffer;
-use crate::record::{ClientRecord, ClientRecordHeader};
-use crate::record_reader::RecordReader;
-use crate::split::{SplitState, SplitStateContainer};
-use crate::write_buffer::WriteBuffer;
-use crate::TlsError;
-use embedded_io::asynch::BufRead;
-use embedded_io::Error as _;
+use crate::{
+    common::{
+        decrypted_buffer_info::DecryptedBufferInfo,
+        decrypted_read_handler::DecryptedReadHandler,
+    },
+    connection::*,
+    key_schedule::{
+        KeySchedule,
+        ReadKeySchedule,
+        SharedState,
+        WriteKeySchedule,
+    },
+    read_buffer::ReadBuffer,
+    record::{
+        ClientRecord,
+        ClientRecordHeader,
+    },
+    record_reader::RecordReader,
+    split::{
+        SplitState,
+        SplitStateContainer,
+    },
+    write_buffer::WriteBuffer,
+    TlsError,
+};
 use embedded_io::{
-    asynch::{Read as AsyncRead, Write as AsyncWrite},
+    asynch::{
+        BufRead,
+        Read as AsyncRead,
+        Write as AsyncWrite,
+    },
+    Error as _,
     Io,
 };
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{
+    CryptoRng,
+    RngCore,
+};
 
-pub use crate::config::*;
 #[cfg(feature = "std")]
 pub use crate::split::ManagedSplitState;
-pub use crate::split::SplitConnectionState;
+pub use crate::{
+    config::*,
+    split::SplitConnectionState,
+};
 
 /// Type representing an async TLS connection. An instance of this type can
 /// be used to establish a TLS connection, write and read encrypted data over this connection,

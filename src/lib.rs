@@ -1,4 +1,4 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![allow(dead_code)]
 #![cfg_attr(feature = "async", allow(incomplete_features))]
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
@@ -62,7 +62,6 @@ pub mod alert;
 mod application_data;
 pub mod blocking;
 mod buffer;
-mod certificate_types;
 mod change_cipher_spec;
 mod cipher_suites;
 mod common;
@@ -73,15 +72,11 @@ mod crypto_engine;
 mod extensions;
 mod handshake;
 mod key_schedule;
-mod max_fragment_length;
-mod named_groups;
 mod parse_buffer;
 pub mod read_buffer;
 mod record;
 mod record_reader;
-mod signature_schemes;
 mod split;
-mod supported_versions;
 mod write_buffer;
 
 #[cfg(feature = "webpki")]

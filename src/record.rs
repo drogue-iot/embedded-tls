@@ -1,16 +1,32 @@
-use crate::application_data::ApplicationData;
-use crate::buffer::*;
-use crate::change_cipher_spec::ChangeCipherSpec;
-use crate::config::{TlsCipherSuite, TlsConfig};
-use crate::content_types::ContentType;
-use crate::handshake::client_hello::ClientHello;
-use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::key_schedule::{HashOutputSize, ReadKeySchedule, WriteKeySchedule};
-use crate::TlsError;
-use crate::{alert::*, parse_buffer::ParseBuffer};
+use crate::{
+    alert::*,
+    application_data::ApplicationData,
+    buffer::*,
+    change_cipher_spec::ChangeCipherSpec,
+    config::{
+        TlsCipherSuite,
+        TlsConfig,
+    },
+    content_types::ContentType,
+    handshake::{
+        client_hello::ClientHello,
+        ClientHandshake,
+        ServerHandshake,
+    },
+    key_schedule::{
+        HashOutputSize,
+        ReadKeySchedule,
+        WriteKeySchedule,
+    },
+    parse_buffer::ParseBuffer,
+    TlsError,
+};
 use core::fmt::Debug;
 use generic_array::ArrayLength;
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{
+    CryptoRng,
+    RngCore,
+};
 use sha2::Digest;
 use typenum::Unsigned;
 

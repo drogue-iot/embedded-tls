@@ -1,8 +1,16 @@
-use crate::buffer::*;
-use crate::TlsError;
-use core::fmt::{Debug, Formatter};
+use crate::{
+    buffer::*,
+    TlsError,
+};
+use core::fmt::{
+    Debug,
+    Formatter,
+};
 //use digest::generic_array::{ArrayLength, GenericArray};
-use generic_array::{ArrayLength, GenericArray};
+use generic_array::{
+    ArrayLength,
+    GenericArray,
+};
 // use heapless::Vec;
 
 pub struct PskBinder<N: ArrayLength<u8>> {

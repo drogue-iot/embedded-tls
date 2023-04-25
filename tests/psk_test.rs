@@ -6,14 +6,25 @@ use embedded_io::adapters::FromTokio;
 use embedded_tls::*;
 use openssl::ssl;
 use rand::rngs::OsRng;
-use std::io::{Read, Write};
-use std::net::SocketAddr;
-use std::net::TcpListener;
-use std::sync::Once;
-use tokio::net::TcpStream;
-use tokio::task::JoinHandle;
-use tokio::time::timeout;
-use tokio::time::Duration;
+use std::{
+    io::{
+        Read,
+        Write,
+    },
+    net::{
+        SocketAddr,
+        TcpListener,
+    },
+    sync::Once,
+};
+use tokio::{
+    net::TcpStream,
+    task::JoinHandle,
+    time::{
+        timeout,
+        Duration,
+    },
+};
 
 static INIT: Once = Once::new();
 
