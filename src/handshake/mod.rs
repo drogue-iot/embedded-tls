@@ -200,7 +200,7 @@ impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
             HandshakeType::of(buf.read_u8().map_err(|_| TlsError::InvalidHandshake)?)
                 .ok_or(TlsError::InvalidHandshake)?;
 
-        // info!("Handshake type {:?}", handshake_type);
+        trace!("handshake = {:?}", handshake_type);
 
         let content_len = buf.read_u24().map_err(|_| TlsError::InvalidHandshake)?;
 

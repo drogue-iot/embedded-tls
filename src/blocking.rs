@@ -86,7 +86,7 @@ where
             Handshake::new(Verifier::new(context.config.server_name));
         let mut state = State::ClientHello;
 
-        loop {
+        while state != State::ApplicationData {
             let next_state = state.process_blocking(
                 &mut self.delegate,
                 &mut handshake,
@@ -98,11 +98,8 @@ where
             )?;
             trace!("State {:?} -> {:?}", state, next_state);
             state = next_state;
-            if let State::ApplicationData = state {
-                self.opened = true;
-                break;
-            }
         }
+        self.opened = true;
 
         Ok(())
     }
