@@ -65,7 +65,7 @@ impl TlsCipherSuite for Aes256GcmSha384 {
 /// The verifier is responsible for verifying certificates and signatures. Since certificate verification is
 /// an expensive process, this trait allows clients to choose how much verification should take place,
 /// and also to skip the verification if the server is verified through other means (I.e. a pre-shared key).
-pub trait TlsVerifier<'a, CipherSuite>
+pub trait TlsVerifier<'a, 'c, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
@@ -74,7 +74,7 @@ where
     /// This method is called for every TLS handshake.
     ///
     /// Host verification is enabled by passing a server hostname.
-    fn new(host: Option<&'a str>) -> Self;
+    fn new(buffer: &'a mut [u8], host: Option<&'c str>) -> Self;
 
     /// Verify a certificate.
     ///
@@ -96,11 +96,11 @@ where
 
 pub struct NoVerify;
 
-impl<'a, CipherSuite> TlsVerifier<'a, CipherSuite> for NoVerify
+impl<'a, 'c, CipherSuite> TlsVerifier<'a, 'c, CipherSuite> for NoVerify
 where
     CipherSuite: TlsCipherSuite,
 {
-    fn new(_host: Option<&str>) -> Self {
+    fn new(_buffer: &'a mut [u8], _host: Option<&'c str>) -> Self {
         Self
     }
 

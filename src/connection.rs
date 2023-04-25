@@ -170,10 +170,10 @@ where
     verifier: Verifier,
 }
 
-impl<'v, CipherSuite, Verifier> Handshake<CipherSuite, Verifier>
+impl<'v, 'c, CipherSuite, Verifier> Handshake<CipherSuite, Verifier>
 where
     CipherSuite: TlsCipherSuite,
-    Verifier: TlsVerifier<'v, CipherSuite>,
+    Verifier: TlsVerifier<'v, 'c, CipherSuite>,
 {
     pub fn new(verifier: Verifier) -> Handshake<CipherSuite, Verifier> {
         Handshake {
@@ -199,25 +199,25 @@ pub enum State {
 impl<'a> State {
     #[cfg(feature = "async")]
     #[allow(clippy::too_many_arguments)]
-    pub async fn process<'v, Transport, CipherSuite, RNG, Verifier>(
+    pub async fn process<'v, 'c, Transport, CipherSuite, RNG, Verifier>(
         self,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
-        tx_buf: &mut WriteBuffer<'_>,
         key_schedule: &mut KeySchedule<CipherSuite>,
-        config: &TlsConfig<'a, CipherSuite>,
+        config: &TlsConfig<'c, CipherSuite>,
         rng: &mut RNG,
     ) -> Result<State, TlsError>
     where
-        Transport: AsyncRead + AsyncWrite + 'a,
-        RNG: CryptoRng + RngCore + 'a,
+        Transport: AsyncRead + AsyncWrite,
+        RNG: CryptoRng + RngCore,
         CipherSuite: TlsCipherSuite,
-        Verifier: TlsVerifier<'v, CipherSuite>,
+        Verifier: TlsVerifier<'v, 'c, CipherSuite>,
     {
         match self {
             State::ClientHello => {
-                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let (state, tx) = client_hello(key_schedule, config, rng, &mut tx_buf, handshake)?;
 
                 respond(tx, transport, key_schedule).await?;
 
@@ -229,7 +229,7 @@ impl<'a> State {
                     .await?;
                 let result = process_server_hello(handshake, key_schedule, record);
 
-                handle_processing_error(result, transport, key_schedule, tx_buf).await
+                handle_processing_error(result, transport, key_schedule, record_reader).await
             }
             State::ServerVerify => {
                 let record = record_reader
@@ -238,17 +238,19 @@ impl<'a> State {
 
                 let result = process_server_verify(handshake, key_schedule, config, record);
 
-                handle_processing_error(result, transport, key_schedule, tx_buf).await
+                handle_processing_error(result, transport, key_schedule, record_reader).await
             }
             State::ClientCert => {
-                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let (state, tx) = client_cert(handshake, key_schedule, config, &mut tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
                 Ok(state)
             }
             State::ClientFinished => {
-                let tx = client_finished(key_schedule, tx_buf)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let tx = client_finished(key_schedule, &mut tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
@@ -259,25 +261,25 @@ impl<'a> State {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn process_blocking<'v, Transport, CipherSuite, RNG, Verifier>(
+    pub fn process_blocking<'v, 'c, Transport, CipherSuite, RNG, Verifier>(
         self,
         transport: &mut Transport,
         handshake: &mut Handshake<CipherSuite, Verifier>,
         record_reader: &mut RecordReader<'_, CipherSuite>,
-        tx_buf: &mut WriteBuffer,
         key_schedule: &mut KeySchedule<CipherSuite>,
-        config: &TlsConfig<'a, CipherSuite>,
+        config: &TlsConfig<'c, CipherSuite>,
         rng: &mut RNG,
     ) -> Result<State, TlsError>
     where
-        Transport: BlockingRead + BlockingWrite + 'a,
+        Transport: BlockingRead + BlockingWrite,
         RNG: CryptoRng + RngCore,
         CipherSuite: TlsCipherSuite + 'static,
-        Verifier: TlsVerifier<'v, CipherSuite>,
+        Verifier: TlsVerifier<'v, 'c, CipherSuite>,
     {
         match self {
             State::ClientHello => {
-                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let (state, tx) = client_hello(key_schedule, config, rng, &mut tx_buf, handshake)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -288,24 +290,26 @@ impl<'a> State {
 
                 let result = process_server_hello(handshake, key_schedule, record);
 
-                handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
+                handle_processing_error_blocking(result, transport, key_schedule, record_reader)
             }
             State::ServerVerify => {
                 let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
 
                 let result = process_server_verify(handshake, key_schedule, config, record);
 
-                handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
+                handle_processing_error_blocking(result, transport, key_schedule, record_reader)
             }
             State::ClientCert => {
-                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let (state, tx) = client_cert(handshake, key_schedule, config, &mut tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
                 Ok(state)
             }
             State::ClientFinished => {
-                let tx = client_finished(key_schedule, tx_buf)?;
+                let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+                let tx = client_finished(key_schedule, &mut tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -320,12 +324,15 @@ fn handle_processing_error_blocking<CipherSuite>(
     result: Result<State, TlsError>,
     transport: &mut impl BlockingWrite,
     key_schedule: &mut KeySchedule<CipherSuite>,
-    tx_buf: &mut WriteBuffer,
+    record_reader: &mut RecordReader<CipherSuite>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,
 {
     if let Err(TlsError::AbortHandshake(level, description)) = result {
+        record_reader.discard_pending();
+        let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+
         let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
         let tx = tx_buf.write_record(
             &ClientRecord::Alert(Alert { level, description }, false),
@@ -363,12 +370,15 @@ async fn handle_processing_error<'a, CipherSuite>(
     result: Result<State, TlsError>,
     transport: &mut impl AsyncWrite,
     key_schedule: &mut KeySchedule<CipherSuite>,
-    tx_buf: &mut WriteBuffer<'a>,
+    record_reader: &mut RecordReader<'a, CipherSuite>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,
 {
     if let Err(TlsError::AbortHandshake(level, description)) = result {
+        record_reader.discard_pending();
+        let mut tx_buf = WriteBuffer::new(record_reader.take_buffer()?);
+
         let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
         let tx = tx_buf.write_record(
             &ClientRecord::Alert(Alert { level, description }, false),
@@ -458,7 +468,7 @@ where
     }
 }
 
-fn process_server_verify<'a, 'v, CipherSuite, Verifier>(
+fn process_server_verify<'a, 'v, 'c, CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
     config: &TlsConfig<'a, CipherSuite>,
@@ -466,7 +476,7 @@ fn process_server_verify<'a, 'v, CipherSuite, Verifier>(
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,
-    Verifier: TlsVerifier<'v, CipherSuite>,
+    Verifier: TlsVerifier<'v, 'c, CipherSuite>,
 {
     let mut state = State::ServerVerify;
     decrypt_record(key_schedule.read_state(), record, |key_schedule, record| {
