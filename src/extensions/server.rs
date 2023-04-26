@@ -1,5 +1,5 @@
 use crate::alert::{AlertDescription, AlertLevel};
-use crate::extensions::common::KeyShareEntry;
+use crate::extensions::common::KeyShare;
 use crate::extensions::ExtensionType;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::supported_versions::ProtocolVersion;
@@ -14,6 +14,15 @@ pub enum ServerExtension<'a> {
     PreSharedKey(u16),
 
     SupportedGroups,
+
+    // RFC 6066, Section 3.  Server Name Indication
+    // A server that receives a client hello containing the "server_name"
+    // extension MAY use the information contained in the extension to guide
+    // its selection of an appropriate certificate to return to the client,
+    // and/or other aspects of security policy.  In this event, the server
+    // SHALL include an extension of type "server_name" in the (extended)
+    // server hello.  The "extension_data" field of this extension SHALL be
+    // empty.
     ServerName,
 }
 
@@ -49,17 +58,7 @@ impl<'a, 'b> Iterator for ServerExtensionParserIterator<'a, 'b> {
             return None;
         }
 
-        Some(ServerExtension::parse(&mut self.buffer, &self.allowed))
-    }
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct KeyShare<'a>(pub(crate) KeyShareEntry<'a>);
-
-impl<'a> KeyShare<'a> {
-    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<KeyShare<'a>, ParseError> {
-        Ok(KeyShare(KeyShareEntry::parse(buf)?))
+        Some(ServerExtension::parse(self.buffer, self.allowed))
     }
 }
 
@@ -110,11 +109,9 @@ impl<'a> ServerExtension<'a> {
 
         let mut ext_buf = buf.slice(extensions_len as usize)?;
 
-        let mut iter = ServerExtensionParserIterator::new(&mut ext_buf, allowed);
-
         let mut extensions = Vec::new();
 
-        while let Some(extension) = iter.next() {
+        for extension in ServerExtensionParserIterator::new(&mut ext_buf, allowed) {
             if let Some(extension) = extension? {
                 extensions
                     .push(extension)
