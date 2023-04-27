@@ -47,6 +47,7 @@ extension_group! {
     pub enum ServerHelloExtension<'a> {
         KeyShare(KeyShareServerHello<'a>),
         PreSharedKey(PreSharedKeyServerHello),
+        Cookie(Unimplemented<'a>), // temporary so we don't trip up on HelloRetryRequests
         SupportedVersions(SupportedVersionsServerHello)
     }
 }
