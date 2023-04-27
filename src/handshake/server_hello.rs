@@ -40,8 +40,7 @@ impl<'a> ServerHello<'a> {
             .map_err(|_| TlsError::InvalidSessionIdLength)?;
         //info!("sh 2");
 
-        let cipher_suite = buf.read_u16().map_err(|_| TlsError::InvalidCipherSuite)?;
-        let cipher_suite = CipherSuite::of(cipher_suite).ok_or(TlsError::InvalidCipherSuite)?;
+        let cipher_suite = CipherSuite::parse(buf).map_err(|_| TlsError::InvalidCipherSuite)?;
 
         ////info!("sh 3");
         // skip compression method, it's 0.

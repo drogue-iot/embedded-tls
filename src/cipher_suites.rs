@@ -1,3 +1,5 @@
+use crate::parse_buffer::{ParseBuffer, ParseError};
+
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum CipherSuite {
@@ -10,15 +12,15 @@ pub enum CipherSuite {
 }
 
 impl CipherSuite {
-    pub fn of(num: u16) -> Option<Self> {
-        match num {
-            0x1301 => Some(Self::TlsAes128GcmSha256),
-            0x1302 => Some(Self::TlsAes256GcmSha384),
-            0x1303 => Some(Self::TlsChacha20Poly1305Sha256),
-            0x1304 => Some(Self::TlsAes128CcmSha256),
-            0x1305 => Some(Self::TlsAes128Ccm8Sha256),
-            0x00A8 => Some(Self::TlsPskAes128GcmSha256),
-            _ => None,
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
+        match buf.read_u16()? {
+            v if v == Self::TlsAes128GcmSha256 as u16 => Ok(Self::TlsAes128GcmSha256),
+            v if v == Self::TlsAes256GcmSha384 as u16 => Ok(Self::TlsAes256GcmSha384),
+            v if v == Self::TlsChacha20Poly1305Sha256 as u16 => Ok(Self::TlsChacha20Poly1305Sha256),
+            v if v == Self::TlsAes128CcmSha256 as u16 => Ok(Self::TlsAes128CcmSha256),
+            v if v == Self::TlsAes128Ccm8Sha256 as u16 => Ok(Self::TlsAes128Ccm8Sha256),
+            v if v == Self::TlsPskAes128GcmSha256 as u16 => Ok(Self::TlsPskAes128GcmSha256),
+            _ => Err(ParseError::InvalidData),
         }
     }
 }
