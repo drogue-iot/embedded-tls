@@ -1,8 +1,9 @@
-use digest::OutputSizeUser;
+use digest::{Digest, OutputSizeUser};
 use heapless::Vec;
 use p256::ecdh::EphemeralSecret;
 use p256::elliptic_curve::rand_core::{CryptoRng, RngCore};
 use p256::EncodedPoint;
+use typenum::Unsigned;
 
 use crate::buffer::*;
 use crate::config::{TlsCipherSuite, TlsConfig};
@@ -17,6 +18,7 @@ use crate::extensions::extension_data::supported_groups::{NamedGroup, SupportedG
 use crate::extensions::extension_data::supported_versions::{SupportedVersionsClientHello, TLS13};
 use crate::extensions::messages::ClientHelloExtension;
 use crate::handshake::{Random, LEGACY_VERSION};
+use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
 use crate::TlsError;
 
 pub struct ClientHello<'config, CipherSuite>
@@ -130,6 +132,44 @@ where
 
             Ok(())
         })?;
+
+        Ok(())
+    }
+
+    pub fn finalize(
+        &self,
+        enc_buf: &mut [u8],
+        transcript: &mut CipherSuite::Hash,
+        write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
+    ) -> Result<(), TlsError> {
+        // Special case for PSK which needs to:
+        //
+        // 1. Add the client hello without the binders to the transcript
+        // 2. Create the binders for each identity using the transcript
+        // 3. Add the rest of the client hello.
+        //
+        // This causes a few issues since lengths must be correctly inside the payload,
+        // but won't actually be added to the record buffer until the end.
+        if let Some((_, identities)) = &self.config.psk {
+            let binders_len = identities.len() * (1 + HashOutputSize::<CipherSuite>::to_usize());
+
+            let binders_pos = enc_buf.len() - binders_len;
+
+            // NOTE: Exclude the binders_len itself from the digest
+            transcript.update(&enc_buf[0..binders_pos - 2]);
+
+            // Append after the client hello data. Sizes have already been set.
+            let mut buf = CryptoBuffer::wrap(&mut enc_buf[binders_pos..]);
+            // Create a binder and encode for each identity
+            for _id in identities {
+                let binder = write_key_schedule.create_psk_binder(transcript)?;
+                binder.encode(&mut buf)?;
+            }
+
+            transcript.update(&enc_buf[binders_pos - 2..]);
+        } else {
+            transcript.update(enc_buf);
+        }
 
         Ok(())
     }

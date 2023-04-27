@@ -1,7 +1,6 @@
 use generic_array::ArrayLength;
 
 //use p256::elliptic_curve::AffinePoint;
-use crate::buffer::*;
 use crate::config::TlsCipherSuite;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_request::CertificateRequestRef;
@@ -14,6 +13,7 @@ use crate::handshake::server_hello::ServerHello;
 use crate::key_schedule::HashOutputSize;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
+use crate::{buffer::*, key_schedule::WriteKeySchedule};
 use core::fmt::{Debug, Formatter};
 use sha2::Digest;
 
@@ -101,6 +101,33 @@ where
             .map_err(|_| TlsError::EncodeError)?;
 
         buf.with_u24_length(|buf| self.encode_inner(buf))
+    }
+
+    pub fn finalize(
+        &self,
+        buf: &mut CryptoBuffer,
+        transcript: &mut CipherSuite::Hash,
+        write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
+    ) -> Result<(), TlsError> {
+        let enc_buf = buf.as_mut_slice();
+        if let ClientHandshake::ClientHello(hello) = self {
+            hello.finalize(enc_buf, transcript, write_key_schedule)
+        } else {
+            transcript.update(enc_buf);
+            Ok(())
+        }
+    }
+
+    pub fn finalize_encrypted(
+        &self,
+        buf: &mut CryptoBuffer,
+        transcript: &mut CipherSuite::Hash,
+    ) -> Result<(), TlsError> {
+        let enc_buf = buf.as_slice();
+        let end = enc_buf.len();
+        // Don't include the content type in the slice
+        transcript.update(&enc_buf[0..end - 1]);
+        Ok(())
     }
 }
 
