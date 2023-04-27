@@ -5,7 +5,7 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::key_schedule::{HashOutputSize, ReadKeySchedule, WriteKeySchedule};
+use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
 use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
@@ -145,16 +145,12 @@ where
     pub fn finish_record(
         &self,
         buf: &mut CryptoBuffer,
-        read_key_schedule: Option<&mut ReadKeySchedule<CipherSuite>>,
+        transcript: &mut CipherSuite::Hash,
         write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
     ) -> Result<(), TlsError> {
         match self {
             ClientRecord::Handshake(handshake, false) => {
-                let enc_buf = &mut buf.as_mut_slice();
-                let transcript = read_key_schedule
-                    .ok_or(TlsError::InternalError)?
-                    .transcript_hash();
-
+                let enc_buf = buf.as_mut_slice();
                 if let ClientHandshake::ClientHello(hello) = handshake {
                     // Special case for PSK which needs to:
                     //
@@ -190,13 +186,10 @@ where
                 }
             }
             ClientRecord::Handshake(_, true) => {
-                let transcript = read_key_schedule
-                    .ok_or(TlsError::InternalError)?
-                    .transcript_hash();
-
-                let end = buf.len();
+                let enc_buf = buf.as_slice();
+                let end = enc_buf.len();
                 // Don't include the content type in the slice
-                transcript.update(&buf.as_slice()[0..end - 1]);
+                transcript.update(&enc_buf[0..end - 1]);
             }
             _ => {}
         };
