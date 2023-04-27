@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::key_schedule::{HashOutputSize, ReadKeySchedule};
+use crate::key_schedule::ReadKeySchedule;
 use embedded_io::{blocking::Read as BlockingRead, Error};
 
 #[cfg(feature = "async")]
@@ -14,7 +14,7 @@ use crate::{
 
 pub struct RecordReader<'a, CipherSuite>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    CipherSuite: TlsCipherSuite,
 {
     pub(crate) buf: &'a mut [u8],
     /// The number of decoded bytes in the buffer
@@ -26,7 +26,7 @@ where
 
 impl<'a, CipherSuite> RecordReader<'a, CipherSuite>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    CipherSuite: TlsCipherSuite,
 {
     pub fn new(buf: &'a mut [u8]) -> Self {
         Self {
@@ -42,10 +42,7 @@ where
         &'m mut self,
         transport: &mut impl AsyncRead,
         key_schedule: &mut ReadKeySchedule<CipherSuite>,
-    ) -> Result<ServerRecord<'m, HashOutputSize<CipherSuite>>, TlsError>
-    where
-        CipherSuite: TlsCipherSuite + 'static,
-    {
+    ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
         let header = self.advance(transport, 5).await?;
         let header = RecordHeader::decode(header.try_into().unwrap())?;
 
@@ -83,10 +80,7 @@ where
         &'m mut self,
         transport: &mut impl BlockingRead,
         key_schedule: &mut ReadKeySchedule<CipherSuite>,
-    ) -> Result<ServerRecord<'m, HashOutputSize<CipherSuite>>, TlsError>
-    where
-        CipherSuite: TlsCipherSuite + 'static,
-    {
+    ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
         let header = self.advance_blocking(transport, 5)?;
         let header = RecordHeader::decode(header.try_into().unwrap())?;
 

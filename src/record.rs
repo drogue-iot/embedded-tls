@@ -9,9 +9,7 @@ use crate::key_schedule::WriteKeySchedule;
 use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
-use generic_array::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
-use sha2::Digest;
 
 pub type Encrypted = bool;
 
@@ -162,8 +160,8 @@ where
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[allow(clippy::large_enum_variant)]
-pub enum ServerRecord<'a, N: ArrayLength<u8>> {
-    Handshake(ServerHandshake<'a, N>),
+pub enum ServerRecord<'a, CipherSuite: TlsCipherSuite> {
+    Handshake(ServerHandshake<'a, CipherSuite>),
     ChangeCipherSpec(ChangeCipherSpec),
     Alert(Alert),
     ApplicationData(ApplicationData<'a>),
@@ -196,7 +194,7 @@ impl RecordHeader {
     }
 }
 
-impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
+impl<'a, CipherSuite: TlsCipherSuite> ServerRecord<'a, CipherSuite> {
     pub fn content_type(&self) -> ContentType {
         match self {
             ServerRecord::Handshake(_) => ContentType::Handshake,
@@ -206,14 +204,11 @@ impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
         }
     }
 
-    pub fn decode<D>(
+    pub fn decode(
         header: RecordHeader,
         data: &'a mut [u8],
-        digest: &mut D,
-    ) -> Result<ServerRecord<'a, N>, TlsError>
-    where
-        D: Digest,
-    {
+        digest: &mut CipherSuite::Hash,
+    ) -> Result<ServerRecord<'a, CipherSuite>, TlsError> {
         assert_eq!(header.content_length(), data.len());
         match header.content_type() {
             ContentType::Invalid => Err(TlsError::Unimplemented),
@@ -225,9 +220,12 @@ impl<'a, N: ArrayLength<u8>> ServerRecord<'a, N> {
                 let alert = Alert::parse(&mut parse)?;
                 Ok(ServerRecord::Alert(alert))
             }
-            ContentType::Handshake => Ok(ServerRecord::Handshake(ServerHandshake::read(
-                data, digest,
-            )?)),
+            ContentType::Handshake => {
+                let mut parse = ParseBuffer::new(data);
+                Ok(ServerRecord::Handshake(ServerHandshake::read(
+                    &mut parse, digest,
+                )?))
+            }
             ContentType::ApplicationData => {
                 let buf = CryptoBuffer::wrap_with_pos(data, data.len());
                 Ok(ServerRecord::ApplicationData(ApplicationData::new(

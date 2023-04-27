@@ -1,6 +1,6 @@
 use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::key_schedule::{HashOutputSize, KeySchedule, ReadKeySchedule, WriteKeySchedule};
+use crate::key_schedule::{KeySchedule, ReadKeySchedule, WriteKeySchedule};
 use crate::record::{ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
 use crate::write_buffer::WriteBuffer;
@@ -28,7 +28,6 @@ use crate::application_data::ApplicationData;
 use crate::buffer::CryptoBuffer;
 use digest::generic_array::typenum::Unsigned;
 use p256::ecdh::EphemeralSecret;
-use sha2::Digest;
 
 use crate::content_types::ContentType;
 // use crate::handshake::certificate_request::CertificateRequest;
@@ -42,10 +41,10 @@ use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 
 pub(crate) fn decrypt_record<CipherSuite>(
     key_schedule: &mut ReadKeySchedule<CipherSuite>,
-    record: ServerRecord<'_, HashOutputSize<CipherSuite>>,
+    record: ServerRecord<'_, CipherSuite>,
     mut cb: impl FnMut(
         &mut ReadKeySchedule<CipherSuite>,
-        ServerRecord<'_, HashOutputSize<CipherSuite>>,
+        ServerRecord<'_, CipherSuite>,
     ) -> Result<(), TlsError>,
 ) -> Result<(), TlsError>
 where
@@ -81,28 +80,12 @@ where
         // Remove the content type
         app_data.truncate(app_data.len() - 1);
 
+        let mut buf = ParseBuffer::new(app_data.as_slice());
         match content_type {
             ContentType::Handshake => {
-                // Decode potentially coaleced handshake messages
-                let data = app_data.as_slice();
-                let mut buf = ParseBuffer::new(data);
-                let mut offset = 0;
-                while buf.remaining() > 1 {
-                    let remaining = buf.remaining();
-                    let mut inner = ServerHandshake::parse(&mut buf)?;
-                    let handshake_length = remaining - buf.remaining();
-
-                    if let ServerHandshake::Finished(ref mut finished) = inner {
-                        finished
-                            .hash
-                            .replace(key_schedule.transcript_hash().clone().finalize());
-                    }
-
-                    key_schedule
-                        .transcript_hash()
-                        .update(&data[offset..offset + handshake_length]);
-                    offset += handshake_length;
-
+                // Decode potentially coalesced handshake messages
+                while buf.remaining() > 0 {
+                    let inner = ServerHandshake::read(&mut buf, key_schedule.transcript_hash())?;
                     cb(key_schedule, ServerRecord::Handshake(inner))?;
                 }
             }
@@ -111,7 +94,6 @@ where
                 cb(key_schedule, ServerRecord::ApplicationData(inner))?;
             }
             ContentType::Alert => {
-                let mut buf = ParseBuffer::new(app_data.as_slice());
                 let alert = Alert::parse(&mut buf)?;
                 cb(key_schedule, ServerRecord::Alert(alert))?;
             }
@@ -227,6 +209,7 @@ impl<'a> State {
                 let record = record_reader
                     .read(transport, key_schedule.read_state())
                     .await?;
+
                 let result = process_server_hello(handshake, key_schedule, record);
 
                 handle_processing_error(result, transport, key_schedule, tx_buf).await
@@ -433,7 +416,7 @@ where
 fn process_server_hello<CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
-    record: ServerRecord<'_, HashOutputSize<CipherSuite>>,
+    record: ServerRecord<'_, CipherSuite>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,
@@ -462,7 +445,7 @@ fn process_server_verify<'a, 'v, CipherSuite, Verifier>(
     handshake: &mut Handshake<CipherSuite, Verifier>,
     key_schedule: &mut KeySchedule<CipherSuite>,
     config: &TlsConfig<'a, CipherSuite>,
-    record: ServerRecord<'_, HashOutputSize<CipherSuite>>,
+    record: ServerRecord<'_, CipherSuite>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,

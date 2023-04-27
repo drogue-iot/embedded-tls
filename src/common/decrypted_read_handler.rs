@@ -1,10 +1,8 @@
 use core::ops::Range;
 
-use generic_array::ArrayLength;
-
 use crate::{
     alert::AlertDescription, common::decrypted_buffer_info::DecryptedBufferInfo,
-    handshake::ServerHandshake, record::ServerRecord, TlsError,
+    handshake::ServerHandshake, record::ServerRecord, config::TlsCipherSuite, TlsError,
 };
 
 pub struct DecryptedReadHandler<'a> {
@@ -14,9 +12,9 @@ pub struct DecryptedReadHandler<'a> {
 }
 
 impl DecryptedReadHandler<'_> {
-    pub fn handle<N: ArrayLength<u8>>(
+    pub fn handle<CipherSuite: TlsCipherSuite>(
         &mut self,
-        record: ServerRecord<'_, N>,
+        record: ServerRecord<'_, CipherSuite>,
     ) -> Result<(), TlsError> {
         match record {
             ServerRecord::ApplicationData(data) => {
