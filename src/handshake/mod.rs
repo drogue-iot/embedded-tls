@@ -187,15 +187,15 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
         buf: &mut ParseBuffer<'a>,
         digest: &mut CipherSuite::Hash,
     ) -> Result<Self, TlsError> {
-        let len = buf.remaining();
+        let handshake_start = buf.offset();
         let mut handshake = Self::parse(buf)?;
-        let consumed = len - buf.remaining();
+        let handshake_end = buf.offset();
 
         if let ServerHandshake::Finished(finished) = &mut handshake {
             finished.hash.replace(digest.clone().finalize());
         }
 
-        digest.update(&buf.as_slice()[0..consumed]);
+        digest.update(&buf.as_slice()[handshake_start..handshake_end]);
 
         Ok(handshake)
     }

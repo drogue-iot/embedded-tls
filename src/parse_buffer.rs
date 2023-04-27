@@ -39,6 +39,10 @@ impl<'b> ParseBuffer<'b> {
         self.buffer.len() - self.pos
     }
 
+    pub fn offset(&self) -> usize {
+        self.pos
+    }
+
     pub fn as_slice(&self) -> &'b [u8] {
         self.buffer
     }
