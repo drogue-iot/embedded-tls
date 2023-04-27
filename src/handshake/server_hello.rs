@@ -16,7 +16,7 @@ pub struct ServerHello<'a> {
     random: Random,
     legacy_session_id_echo: &'a [u8],
     cipher_suite: CipherSuite,
-    extensions: Vec<ServerHelloExtension<'a>, 16>,
+    extensions: Vec<ServerHelloExtension<'a>, 4>,
 }
 
 impl<'a> ServerHello<'a> {
