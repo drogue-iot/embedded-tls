@@ -26,9 +26,7 @@ pub enum MaxFragmentLength {
 
 impl MaxFragmentLength {
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
-        let byte = buf.read_u8()?;
-
-        match byte {
+        match buf.read_u8()? {
             1 => Ok(Self::Bits9),
             2 => Ok(Self::Bits10),
             3 => Ok(Self::Bits11),

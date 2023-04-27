@@ -1,5 +1,3 @@
-use generic_array::ArrayLength;
-
 //use p256::elliptic_curve::AffinePoint;
 use crate::config::TlsCipherSuite;
 use crate::handshake::certificate::CertificateRef;
@@ -11,7 +9,7 @@ use crate::handshake::finished::Finished;
 use crate::handshake::new_session_ticket::NewSessionTicket;
 use crate::handshake::server_hello::ServerHello;
 use crate::key_schedule::HashOutputSize;
-use crate::parse_buffer::ParseBuffer;
+use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
 use crate::{buffer::*, key_schedule::WriteKeySchedule};
 use core::fmt::{Debug, Formatter};
@@ -48,20 +46,20 @@ pub enum HandshakeType {
 }
 
 impl HandshakeType {
-    pub fn of(num: u8) -> Option<Self> {
-        match num {
-            1 => Some(HandshakeType::ClientHello),
-            2 => Some(HandshakeType::ServerHello),
-            4 => Some(HandshakeType::NewSessionTicket),
-            5 => Some(HandshakeType::EndOfEarlyData),
-            8 => Some(HandshakeType::EncryptedExtensions),
-            11 => Some(HandshakeType::Certificate),
-            13 => Some(HandshakeType::CertificateRequest),
-            15 => Some(HandshakeType::CertificateVerify),
-            20 => Some(HandshakeType::Finished),
-            24 => Some(HandshakeType::KeyUpdate),
-            254 => Some(HandshakeType::MessageHash),
-            _ => None,
+    pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
+        match buf.read_u8()? {
+            1 => Ok(HandshakeType::ClientHello),
+            2 => Ok(HandshakeType::ServerHello),
+            4 => Ok(HandshakeType::NewSessionTicket),
+            5 => Ok(HandshakeType::EndOfEarlyData),
+            8 => Ok(HandshakeType::EncryptedExtensions),
+            11 => Ok(HandshakeType::Certificate),
+            13 => Ok(HandshakeType::CertificateRequest),
+            15 => Ok(HandshakeType::CertificateVerify),
+            20 => Ok(HandshakeType::Finished),
+            24 => Ok(HandshakeType::KeyUpdate),
+            254 => Ok(HandshakeType::MessageHash),
+            _ => Err(ParseError::InvalidData),
         }
     }
 }
@@ -131,17 +129,17 @@ where
     }
 }
 
-pub enum ServerHandshake<'a, N: ArrayLength<u8>> {
+pub enum ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
     ServerHello(ServerHello<'a>),
     EncryptedExtensions(EncryptedExtensions<'a>),
     NewSessionTicket(NewSessionTicket<'a>),
     Certificate(CertificateRef<'a>),
     CertificateRequest(CertificateRequestRef<'a>),
     CertificateVerify(CertificateVerify<'a>),
-    Finished(Finished<N>),
+    Finished(Finished<HashOutputSize<CipherSuite>>),
 }
 
-impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
+impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
     pub fn handshake_type(&self) -> HandshakeType {
         match self {
             ServerHandshake::ServerHello(_) => HandshakeType::ServerHello,
@@ -155,7 +153,7 @@ impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
     }
 }
 
-impl<'a, N: ArrayLength<u8>> Debug for ServerHandshake<'a, N> {
+impl<'a, CipherSuite: TlsCipherSuite> Debug for ServerHandshake<'a, CipherSuite> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             ServerHandshake::ServerHello(inner) => Debug::fmt(inner, f),
@@ -170,7 +168,7 @@ impl<'a, N: ArrayLength<u8>> Debug for ServerHandshake<'a, N> {
 }
 
 #[cfg(feature = "defmt")]
-impl<'a, N: ArrayLength<u8>> defmt::Format for ServerHandshake<'a, N> {
+impl<'a, CipherSuite: TlsCipherSuite> defmt::Format for ServerHandshake<'a, CipherSuite> {
     fn format(&self, f: defmt::Formatter<'_>) {
         match self {
             ServerHandshake::ServerHello(inner) => defmt::write!(f, "{}", inner),
@@ -184,87 +182,61 @@ impl<'a, N: ArrayLength<u8>> defmt::Format for ServerHandshake<'a, N> {
     }
 }
 
-impl<'a, N: ArrayLength<u8>> ServerHandshake<'a, N> {
-    pub fn read<D: Digest>(
-        rx_buf: &'a mut [u8],
-        digest: &mut D,
-    ) -> Result<ServerHandshake<'a, N>, TlsError> {
-        let header = rx_buf.get(0..4).ok_or(TlsError::InvalidHandshake)?;
-        match HandshakeType::of(header[0]) {
-            None => Err(TlsError::InvalidHandshake),
-            Some(handshake_type) => {
-                let length = u32::from_be_bytes([0, header[1], header[2], header[3]]) as usize;
-                match handshake_type {
-                    HandshakeType::ServerHello => {
-                        // info!("hash [{:x?}]", &header);
-                        digest.update(header);
-                        Ok(ServerHandshake::ServerHello(ServerHello::read(
-                            rx_buf
-                                .get(4..length + 4)
-                                .ok_or(TlsError::InvalidHandshake)?,
-                            digest,
-                        )?))
-                    }
-                    _ => Err(TlsError::Unimplemented), /*
-                                                       HandshakeType::ClientHello => Err(TlsError::Unimplemented),
-                                                       HandshakeType::NewSessionTicket => Err(TlsError::Unimplemented),
-                                                       HandshakeType::EndOfEarlyData => Err(TlsError::Unimplemented),
-                                                       HandshakeType::EncryptedExtensions => Err(TlsError::Unimplemented),
-                                                       HandshakeType::Certificate => Err(TlsError::Unimplemented),
-                                                       HandshakeType::CertificateRequest => Err(TlsError::Unimplemented),
-                                                       HandshakeType::CertificateVerify => Err(TlsError::Unimplemented),
-                                                       HandshakeType::Finished => Err(TlsError::Unimplemented),
-                                                       HandshakeType::KeyUpdate => Err(TlsError::Unimplemented),
-                                                       HandshakeType::MessageHash => Err(TlsError::Unimplemented),
-                                                       */
-                }
-            }
+impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
+    pub fn read(
+        buf: &mut ParseBuffer<'a>,
+        digest: &mut CipherSuite::Hash,
+    ) -> Result<Self, TlsError> {
+        let len = buf.remaining();
+        let mut handshake = Self::parse(buf)?;
+        let consumed = len - buf.remaining();
+
+        if let ServerHandshake::Finished(finished) = &mut handshake {
+            finished.hash.replace(digest.clone().finalize());
         }
+
+        digest.update(&buf.as_slice()[0..consumed]);
+
+        Ok(handshake)
     }
 
-    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<ServerHandshake<'a, N>, TlsError> {
-        let handshake_type =
-            HandshakeType::of(buf.read_u8().map_err(|_| TlsError::InvalidHandshake)?)
-                .ok_or(TlsError::InvalidHandshake)?;
+    fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, TlsError> {
+        let handshake_type = HandshakeType::parse(buf).map_err(|_| TlsError::InvalidHandshake)?;
 
         trace!("handshake = {:?}", handshake_type);
 
         let content_len = buf.read_u24().map_err(|_| TlsError::InvalidHandshake)?;
 
-        match handshake_type {
+        let handshake = match handshake_type {
             //HandshakeType::ClientHello => {}
-            //HandshakeType::ServerHello => {}
-            HandshakeType::NewSessionTicket => Ok(ServerHandshake::NewSessionTicket(
-                NewSessionTicket::parse(buf)?,
-            )),
+            HandshakeType::ServerHello => ServerHandshake::ServerHello(ServerHello::parse(buf)?),
+            HandshakeType::NewSessionTicket => {
+                ServerHandshake::NewSessionTicket(NewSessionTicket::parse(buf)?)
+            }
             //HandshakeType::EndOfEarlyData => {}
             HandshakeType::EncryptedExtensions => {
-                // todo, move digesting up
-                Ok(ServerHandshake::EncryptedExtensions(
-                    EncryptedExtensions::parse(buf)?,
-                ))
+                ServerHandshake::EncryptedExtensions(EncryptedExtensions::parse(buf)?)
             }
-            HandshakeType::Certificate => {
-                Ok(ServerHandshake::Certificate(CertificateRef::parse(buf)?))
+            HandshakeType::Certificate => ServerHandshake::Certificate(CertificateRef::parse(buf)?),
+
+            HandshakeType::CertificateRequest => {
+                ServerHandshake::CertificateRequest(CertificateRequestRef::parse(buf)?)
             }
 
-            HandshakeType::CertificateRequest => Ok(ServerHandshake::CertificateRequest(
-                CertificateRequestRef::parse(buf)?,
-            )),
-
-            HandshakeType::CertificateVerify => Ok(ServerHandshake::CertificateVerify(
-                CertificateVerify::parse(buf)?,
-            )),
-            HandshakeType::Finished => Ok(ServerHandshake::Finished(Finished::parse(
-                buf,
-                content_len,
-            )?)),
+            HandshakeType::CertificateVerify => {
+                ServerHandshake::CertificateVerify(CertificateVerify::parse(buf)?)
+            }
+            HandshakeType::Finished => {
+                ServerHandshake::Finished(Finished::parse(buf, content_len)?)
+            }
             //HandshakeType::KeyUpdate => {}
             //HandshakeType::MessageHash => {}
             t => {
                 warn!("Unimplemented handshake type: {:?}", t);
-                Err(TlsError::Unimplemented)
+                return Err(TlsError::Unimplemented);
             }
-        }
+        };
+
+        Ok(handshake)
     }
 }

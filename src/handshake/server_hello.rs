@@ -9,7 +9,6 @@ use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use p256::ecdh::{EphemeralSecret, SharedSecret};
 use p256::PublicKey;
-use sha2::Digest;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -21,12 +20,6 @@ pub struct ServerHello<'a> {
 }
 
 impl<'a> ServerHello<'a> {
-    pub fn read<D: Digest>(buf: &'a [u8], digest: &mut D) -> Result<ServerHello<'a>, TlsError> {
-        //trace!("server hello hash [{:x?}]", &buf[..]);
-        digest.update(buf);
-        Self::parse(&mut ParseBuffer::new(buf))
-    }
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<ServerHello<'a>, TlsError> {
         //let mut buf = ParseBuffer::new(&buf[0..content_length]);
         //let mut buf = ParseBuffer::new(&buf);
