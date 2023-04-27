@@ -59,7 +59,7 @@ impl ClientRecordHeader {
     pub fn trailer_content_type(&self) -> ContentType {
         match self {
             Self::Handshake(_) => ContentType::Handshake,
-            Self::Alert(_) => ContentType::ChangeCipherSpec,
+            Self::Alert(_) => ContentType::Alert,
             Self::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
             Self::ApplicationData => ContentType::ApplicationData,
         }
