@@ -139,7 +139,12 @@ impl<'a> WriteBuffer<'a> {
         self.with_buffer(|buf| {
             let mut buf = buf.forward();
             record.encode_payload(&mut buf)?;
-            record.finish_record(&mut buf, read_key_schedule, write_key_schedule)?;
+
+            let transcript = read_key_schedule
+                .ok_or(TlsError::InternalError)?
+                .transcript_hash();
+
+            record.finish_record(&mut buf, transcript, write_key_schedule)?;
             Ok(buf.rewind())
         })?;
         self.close_record(write_key_schedule)

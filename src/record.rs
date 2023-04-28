@@ -5,14 +5,13 @@ use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
-use crate::key_schedule::{HashOutputSize, ReadKeySchedule, WriteKeySchedule};
+use crate::key_schedule::WriteKeySchedule;
 use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
 use core::fmt::Debug;
 use generic_array::ArrayLength;
 use rand_core::{CryptoRng, RngCore};
 use sha2::Digest;
-use typenum::Unsigned;
 
 pub type Encrypted = bool;
 
@@ -145,63 +144,18 @@ where
     pub fn finish_record(
         &self,
         buf: &mut CryptoBuffer,
-        read_key_schedule: Option<&mut ReadKeySchedule<CipherSuite>>,
+        transcript: &mut CipherSuite::Hash,
         write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
     ) -> Result<(), TlsError> {
         match self {
             ClientRecord::Handshake(handshake, false) => {
-                let enc_buf = &mut buf.as_mut_slice();
-                let transcript = read_key_schedule
-                    .ok_or(TlsError::InternalError)?
-                    .transcript_hash();
-
-                if let ClientHandshake::ClientHello(hello) = handshake {
-                    // Special case for PSK which needs to:
-                    //
-                    // 1. Add the client hello without the binders to the transcript
-                    // 2. Create the binders for each identity using the transcript
-                    // 3. Add the rest of the client hello.
-                    //
-                    // This causes a few issues since lengths must be correctly inside the payload,
-                    // but won't actually be added to the record buffer until the end.
-                    if let Some((_, identities)) = &hello.config.psk {
-                        let binders_len =
-                            identities.len() * (1 + HashOutputSize::<CipherSuite>::to_usize());
-
-                        let binders_pos = enc_buf.len() - binders_len;
-
-                        // NOTE: Exclude the binders_len itself from the digest
-                        transcript.update(&enc_buf[0..binders_pos - 2]);
-
-                        // Append after the client hello data. Sizes have already been set.
-                        let mut buf = CryptoBuffer::wrap(&mut enc_buf[binders_pos..]);
-                        // Create a binder and encode for each identity
-                        for _id in identities {
-                            let binder = write_key_schedule.create_psk_binder(transcript)?;
-                            binder.encode(&mut buf)?;
-                        }
-
-                        transcript.update(&enc_buf[binders_pos - 2..]);
-                    } else {
-                        transcript.update(enc_buf);
-                    }
-                } else {
-                    transcript.update(enc_buf);
-                }
+                handshake.finalize(buf, transcript, write_key_schedule)
             }
-            ClientRecord::Handshake(_, true) => {
-                let transcript = read_key_schedule
-                    .ok_or(TlsError::InternalError)?
-                    .transcript_hash();
-
-                let end = buf.len();
-                // Don't include the content type in the slice
-                transcript.update(&buf.as_slice()[0..end - 1]);
+            ClientRecord::Handshake(handshake, true) => {
+                handshake.finalize_encrypted(buf, transcript)
             }
-            _ => {}
-        };
-
-        Ok(())
+            _ => Ok(()),
+        }
     }
 }
 

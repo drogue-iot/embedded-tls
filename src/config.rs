@@ -1,9 +1,8 @@
 use crate::cipher_suites::CipherSuite;
+use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
+use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_verify::CertificateVerify;
-pub use crate::max_fragment_length::MaxFragmentLength;
-use crate::named_groups::NamedGroup;
-use crate::signature_schemes::SignatureScheme;
 use crate::TlsError;
 use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
 use core::marker::PhantomData;
@@ -15,6 +14,8 @@ use rand_core::{CryptoRng, RngCore};
 pub use sha2::Sha256;
 pub use sha2::Sha384;
 use typenum::{Sum, U10, U12, U16, U32};
+
+pub use crate::extensions::extension_data::max_fragment_length::MaxFragmentLength;
 
 const TLS_RECORD_MAX: usize = 16384;
 pub const TLS_RECORD_OVERHEAD: usize = 128;

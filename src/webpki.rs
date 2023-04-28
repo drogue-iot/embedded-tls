@@ -1,4 +1,5 @@
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
+use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
     certificate::{
         Certificate as OwnedCertificate, CertificateEntryRef, CertificateRef as ServerCertificate,
@@ -10,6 +11,77 @@ use core::marker::PhantomData;
 use digest::Digest;
 use heapless::Vec;
 use webpki::DnsNameRef;
+
+#[cfg(all(not(feature = "alloc"), feature = "webpki"))]
+impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
+    type Error = TlsError;
+    fn try_into(self) -> Result<&'static webpki::SignatureAlgorithm, Self::Error> {
+        // TODO: support other schemes via 'alloc' feature
+        match self {
+            SignatureScheme::RsaPkcs1Sha256 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPkcs1Sha384 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPkcs1Sha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* ECDSA algorithms */
+            SignatureScheme::EcdsaSecp256r1Sha256 => Ok(&webpki::ECDSA_P256_SHA256),
+            SignatureScheme::EcdsaSecp384r1Sha384 => Ok(&webpki::ECDSA_P384_SHA384),
+            SignatureScheme::EcdsaSecp521r1Sha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* RSASSA-PSS algorithms with public key OID rsaEncryption */
+            SignatureScheme::RsaPssRsaeSha256 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssRsaeSha384 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssRsaeSha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* EdDSA algorithms */
+            SignatureScheme::Ed25519 => Ok(&webpki::ED25519),
+            SignatureScheme::Ed448 => Err(TlsError::InvalidSignatureScheme),
+
+            /* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
+            SignatureScheme::RsaPssPssSha256 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssPssSha384 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssPssSha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* Legacy algorithms */
+            SignatureScheme::RsaPkcs1Sha1 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::EcdsaSha1 => Err(TlsError::InvalidSignatureScheme),
+        }
+    }
+}
+
+#[cfg(all(feature = "alloc", feature = "webpki"))]
+impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
+    type Error = TlsError;
+    fn try_into(self) -> Result<&'static webpki::SignatureAlgorithm, Self::Error> {
+        match self {
+            SignatureScheme::RsaPkcs1Sha256 => Ok(&webpki::RSA_PKCS1_2048_8192_SHA256),
+            SignatureScheme::RsaPkcs1Sha384 => Ok(&webpki::RSA_PKCS1_2048_8192_SHA384),
+            SignatureScheme::RsaPkcs1Sha512 => Ok(&webpki::RSA_PKCS1_2048_8192_SHA512),
+
+            /* ECDSA algorithms */
+            SignatureScheme::EcdsaSecp256r1Sha256 => Ok(&webpki::ECDSA_P256_SHA256),
+            SignatureScheme::EcdsaSecp384r1Sha384 => Ok(&webpki::ECDSA_P384_SHA384),
+            SignatureScheme::EcdsaSecp521r1Sha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* RSASSA-PSS algorithms with public key OID rsaEncryption */
+            SignatureScheme::RsaPssRsaeSha256 => Ok(&webpki::RSA_PSS_2048_8192_SHA256_LEGACY_KEY),
+            SignatureScheme::RsaPssRsaeSha384 => Ok(&webpki::RSA_PSS_2048_8192_SHA384_LEGACY_KEY),
+            SignatureScheme::RsaPssRsaeSha512 => Ok(&webpki::RSA_PSS_2048_8192_SHA512_LEGACY_KEY),
+
+            /* EdDSA algorithms */
+            SignatureScheme::Ed25519 => Ok(&webpki::ED25519),
+            SignatureScheme::Ed448 => Err(TlsError::InvalidSignatureScheme),
+
+            /* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
+            SignatureScheme::RsaPssPssSha256 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssPssSha384 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssPssSha512 => Err(TlsError::InvalidSignatureScheme),
+
+            /* Legacy algorithms */
+            SignatureScheme::RsaPkcs1Sha1 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::EcdsaSha1 => Err(TlsError::InvalidSignatureScheme),
+        }
+    }
+}
 
 static ALL_SIGALGS: &[&webpki::SignatureAlgorithm] = &[
     &webpki::ECDSA_P256_SHA256,

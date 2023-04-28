@@ -2,9 +2,8 @@ use heapless::Vec;
 
 use crate::cipher_suites::CipherSuite;
 use crate::crypto_engine::CryptoEngine;
-use crate::extensions::common::KeyShareEntry;
-use crate::extensions::server::ServerExtension;
-use crate::extensions::ExtensionType;
+use crate::extensions::extension_data::key_share::KeyShareEntry;
+use crate::extensions::messages::ServerHelloExtension;
 use crate::handshake::Random;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
@@ -18,18 +17,10 @@ pub struct ServerHello<'a> {
     random: Random,
     legacy_session_id_echo: &'a [u8],
     cipher_suite: CipherSuite,
-    extensions: Vec<ServerExtension<'a>, 16>,
+    extensions: Vec<ServerHelloExtension<'a>, 16>,
 }
 
 impl<'a> ServerHello<'a> {
-    // Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with SH
-    const ALLOWED_EXTENSIONS: &[ExtensionType] = &[
-        ExtensionType::KeyShare,
-        ExtensionType::PreSharedKey,
-        ExtensionType::SupportedVersions,
-        ExtensionType::PostHandshakeAuth,
-    ];
-
     pub fn read<D: Digest>(buf: &'a [u8], digest: &mut D) -> Result<ServerHello<'a>, TlsError> {
         //trace!("server hello hash [{:x?}]", &buf[..]);
         digest.update(buf);
@@ -63,7 +54,7 @@ impl<'a> ServerHello<'a> {
         // skip compression method, it's 0.
         buf.read_u8()?;
 
-        let extensions = ServerExtension::parse_vector(buf, Self::ALLOWED_EXTENSIONS)?;
+        let extensions = ServerHelloExtension::parse_vector(buf)?;
 
         // info!("server random {:x?}", random);
         // info!("server session-id {:x?}", session_id.as_slice());
@@ -80,7 +71,7 @@ impl<'a> ServerHello<'a> {
 
     pub fn key_share(&self) -> Option<&KeyShareEntry> {
         self.extensions.iter().find_map(|e| {
-            if let ServerExtension::KeyShare(entry) = e {
+            if let ServerHelloExtension::KeyShare(entry) = e {
                 Some(&entry.0)
             } else {
                 None

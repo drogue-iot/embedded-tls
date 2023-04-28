@@ -1,6 +1,6 @@
 use heapless::Vec;
 
-use crate::extensions::server::ServerExtension;
+use crate::extensions::messages::NewSessionTicketExtension;
 use crate::extensions::ExtensionType;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
@@ -12,7 +12,7 @@ pub struct NewSessionTicket<'a> {
     age_add: u32,
     nonce: &'a [u8],
     ticket: &'a [u8],
-    extensions: Vec<ServerExtension<'a>, 16>,
+    extensions: Vec<NewSessionTicketExtension<'a>, 1>,
 }
 
 impl<'a> NewSessionTicket<'a> {
@@ -33,7 +33,7 @@ impl<'a> NewSessionTicket<'a> {
             .slice(ticket_length as usize)
             .map_err(|_| TlsError::InvalidTicketLength)?;
 
-        let extensions = ServerExtension::parse_vector(buf, Self::ALLOWED_EXTENSIONS)?;
+        let extensions = NewSessionTicketExtension::parse_vector(buf)?;
 
         Ok(Self {
             lifetime,
