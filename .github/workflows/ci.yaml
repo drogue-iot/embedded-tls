@@ -27,3 +27,6 @@ jobs:
 
       - name: Build examples
         run: for i in embassy blocking tokio nrf52; do pushd examples/$i; cargo build; popd; done;
+
+      - name: Check semver
+        uses: obi1kenobi/cargo-semver-checks-action@v1
