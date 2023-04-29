@@ -9,14 +9,20 @@ use std::sync::Once;
 
 mod tlsserver;
 
+static LOG_INIT: Once = Once::new();
 static INIT: Once = Once::new();
 static mut ADDR: Option<SocketAddr> = None;
 
+fn init_log() {
+    LOG_INIT.call_once(|| {
+        env_logger::init();
+    });
+}
+
 fn setup() -> SocketAddr {
     use mio::net::TcpListener;
+    init_log();
     INIT.call_once(|| {
-        env_logger::init();
-
         let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
 
         let listener = TcpListener::bind(addr).expect("cannot listen on port");
@@ -30,6 +36,41 @@ fn setup() -> SocketAddr {
         unsafe { ADDR.replace(addr) };
     });
     unsafe { ADDR.unwrap() }
+}
+
+#[ignore]
+#[tokio::test]
+async fn test_google() {
+    use embedded_tls::*;
+    use tokio::net::TcpStream;
+
+    init_log();
+
+    let stream = TcpStream::connect("google.com:443")
+        .await
+        .expect("error connecting to server");
+
+    log::info!("Connected");
+    let mut read_record_buffer = [0; 16384];
+    let mut write_record_buffer = [0; 16384];
+    let config = TlsConfig::new().with_server_name("google.com");
+
+    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+        FromTokio::new(stream),
+        &mut read_record_buffer,
+        &mut write_record_buffer,
+    );
+
+    let mut rng = OsRng;
+    let open_fut = tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng));
+    log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
+    open_fut.await.expect("error establishing TLS connection");
+    log::info!("Established");
+
+    tls.close()
+        .await
+        .map_err(|(_, e)| e)
+        .expect("error closing session");
 }
 
 #[tokio::test]
@@ -57,8 +98,7 @@ async fn test_ping() {
         &mut write_record_buffer,
     );
 
-    let sz = core::mem::size_of::<TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256>>();
-    log::info!("SIZE of connection is {}", sz);
+    log::info!("SIZE of connection is {}", core::mem::size_of_val(&tls));
 
     let mut rng = OsRng;
     let open_fut = tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng));
@@ -120,8 +160,7 @@ async fn test_ping_nocopy() {
         &mut write_record_buffer,
     );
 
-    let sz = core::mem::size_of::<TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256>>();
-    log::info!("SIZE of connection is {}", sz);
+    log::info!("SIZE of connection is {}", core::mem::size_of_val(&tls));
 
     let mut rng = OsRng;
     let open_fut = tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng));
