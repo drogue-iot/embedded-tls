@@ -12,4 +12,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Properly flush write buffer after handshake.
 - Implement BufRead traits for connections.
 - Better handling of protocol violations and unsupported features. 
-- Correctly handle transcript of coaleced records.
+- Correctly handle transcript of coalesced records.
