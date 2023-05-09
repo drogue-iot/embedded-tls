@@ -35,6 +35,9 @@ macro_rules! extension_group {
                 debug!("Read extension type {:?}", ext_type);
 
                 let data_len = buf.read_u16().map_err(|_| crate::TlsError::DecodeError)? as usize;
+
+                trace!("Extension data length: {}", data_len);
+
                 let mut ext_data = buf.slice(data_len).map_err(|_| crate::TlsError::DecodeError)?;
 
                 match ext_type {
