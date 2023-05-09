@@ -24,7 +24,12 @@ macro_rules! extension_group {
             }
 
             pub fn parse(buf: &mut crate::parse_buffer::ParseBuffer$(<$lt>)?) -> Result<Self, crate::TlsError> {
-                let ext_type = crate::extensions::ExtensionType::parse(buf).map_err(|err| {
+                // Consume extension data even if we don't recognize the extension
+                let extension_type = crate::extensions::ExtensionType::parse(buf);
+                let data_len = buf.read_u16().map_err(|_| crate::TlsError::DecodeError)? as usize;
+                let mut ext_data = buf.slice(data_len).map_err(|_| crate::TlsError::DecodeError)?;
+
+                let ext_type = extension_type.map_err(|err| {
                     warn!("Failed to read extension type: {:?}", err);
                     match err {
                         crate::parse_buffer::ParseError::InvalidData => crate::TlsError::UnknownExtensionType,
@@ -33,9 +38,7 @@ macro_rules! extension_group {
                 })?;
 
                 debug!("Read extension type {:?}", ext_type);
-
-                let data_len = buf.read_u16().map_err(|_| crate::TlsError::DecodeError)? as usize;
-                let mut ext_data = buf.slice(data_len).map_err(|_| crate::TlsError::DecodeError)?;
+                trace!("Extension data length: {}", data_len);
 
                 match ext_type {
                     $(crate::extensions::ExtensionType::$extension => Ok(Self::$extension(<$extension_data>::parse(&mut ext_data).map_err(|err| {
@@ -71,6 +74,7 @@ macro_rules! extension_group {
                 let mut extensions = heapless::Vec::new();
 
                 while !ext_buf.is_empty() {
+                    trace!("Extension buffer: {}", ext_buf.remaining());
                     match Self::parse(&mut ext_buf) {
                         Ok(extension) => {
                             extensions
@@ -84,6 +88,7 @@ macro_rules! extension_group {
                     }
                 }
 
+                trace!("Read {} extensions", extensions.len());
                 Ok(extensions)
             }
         }

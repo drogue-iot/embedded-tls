@@ -1,7 +1,6 @@
 use heapless::Vec;
 
 use crate::extensions::messages::NewSessionTicketExtension;
-use crate::extensions::ExtensionType;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 
@@ -16,9 +15,6 @@ pub struct NewSessionTicket<'a> {
 }
 
 impl<'a> NewSessionTicket<'a> {
-    // Source: https://www.rfc-editor.org/rfc/rfc8446#section-4.2 table, rows marked with NST
-    const ALLOWED_EXTENSIONS: &[ExtensionType] = &[ExtensionType::EarlyData];
-
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<NewSessionTicket<'a>, TlsError> {
         let lifetime = buf.read_u32()?;
         let age_add = buf.read_u32()?;

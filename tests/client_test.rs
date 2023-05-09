@@ -3,6 +3,7 @@
 #![feature(async_fn_in_trait)]
 #![feature(impl_trait_projections)]
 use embedded_io::adapters::{FromStd, FromTokio};
+use embedded_io::asynch::Write;
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
 use std::sync::Once;
@@ -66,6 +67,15 @@ async fn test_google() {
     log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
     open_fut.await.expect("error establishing TLS connection");
     log::info!("Established");
+
+    tls.write_all(b"GET / HTTP/1.0\r\n\r\n")
+        .await
+        .expect("error writing data");
+    tls.flush().await.expect("error flushing data");
+
+    let mut rx_buf = [0; 4096];
+    let sz = tls.read(&mut rx_buf).await.expect("error reading data");
+    log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
 
     tls.close()
         .await
