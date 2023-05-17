@@ -84,7 +84,7 @@ impl<'a> ReadBuffer<'a> {
 impl Drop for ReadBuffer<'_> {
     #[inline]
     fn drop(&mut self) {
-        *self.decrypted_consumed = if self.used {
+        *self.decrypted_consumed += if self.used {
             self.consumed
         } else {
             // Consume all if dropped unused
@@ -99,12 +99,12 @@ mod test {
 
     #[test]
     fn dropping_unused_buffer_consumes_all() {
-        let mut consumed = 0;
+        let mut consumed = 1000;
         let buffer = [0, 1, 2, 3];
 
         _ = ReadBuffer::new(&buffer, &mut consumed);
 
-        assert_eq!(consumed, 4);
+        assert_eq!(consumed, 1004);
     }
 
     #[test]
