@@ -178,7 +178,7 @@ async fn test_ping_nocopy() {
     open_fut.await.expect("error establishing TLS connection");
     log::info!("Established");
 
-    let write_fut = tls.write(b"ping");
+    let write_fut = tls.write(b"data to echo");
     log::info!(
         "SIZE of write fut is {}",
         core::mem::size_of_val(&write_fut)
@@ -186,15 +186,27 @@ async fn test_ping_nocopy() {
     write_fut.await.expect("error writing data");
     tls.flush().await.expect("error flushing data");
 
-    let mut buf = tls.read_buffered().await.expect("error reading data");
-    log::info!("Read bytes: {:?}", buf.peek_all());
+    {
+        let mut buf = tls.read_buffered().await.expect("error reading data");
+        log::info!("Read bytes: {:?}", buf.peek_all());
 
-    let read_bytes = buf.pop(2);
-    assert_eq!(b"pi", read_bytes);
-    let read_bytes = buf.pop_all();
-    assert_eq!(b"ng", read_bytes);
+        let read_bytes = buf.pop(2);
+        assert_eq!(b"da", read_bytes);
 
-    core::mem::drop(buf);
+        let read_bytes = buf.pop(2);
+        assert_eq!(b"ta", read_bytes);
+    }
+
+    {
+        let mut buf = tls.read_buffered().await.expect("error reading data");
+        assert_eq!(b" to ", buf.pop(4));
+    }
+
+    {
+        let mut buf = tls.read_buffered().await.expect("error reading data");
+        let read_bytes = buf.pop_all();
+        assert_eq!(b"echo", read_bytes);
+    }
 
     tls.close()
         .await
