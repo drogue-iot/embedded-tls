@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Fix reading buffered data in multiple steps (#121, #122)
+- Fix error in NewSessionTicket message handling (#120)
+
 ## 0.14.1 - 2023-04-29
 
 - Correctly handle transcript of coalesced records, attempt 2.
