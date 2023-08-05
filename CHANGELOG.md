@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Updated p256 dependency from 0.11 to 0.13.2 (#124)
 - Fix reading buffered data in multiple steps (#121, #122)
 - Fix error in NewSessionTicket message handling (#120)
 
