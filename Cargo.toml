@@ -37,7 +37,7 @@ defmt = { version = "0.3", optional = true }
 env_logger = "0.10"
 tokio = { version = "1.7", features = ["full"] }
 mio = { version = "0.8.3", features = ["os-poll", "net"] }
-rustls = "0.20.6"
+rustls = "0.21.6"
 rustls-pemfile = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.8"
