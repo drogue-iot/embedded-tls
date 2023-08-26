@@ -6,25 +6,15 @@
 use clap::Parser;
 use embassy_executor::{Executor, Spawner};
 use embassy_net::tcp::TcpSocket;
-use embassy_net::{ConfigStrategy, Ipv4Address, Ipv4Cidr, Stack, StackResources};
-use embedded_io::asynch::Write as _;
+use embassy_net::{Config, Ipv4Address, Ipv4Cidr, Stack, StackResources};
+use embassy_net_tuntap::TunTapDevice;
+use embassy_time::Duration;
+use embedded_io_async::Write;
 use embedded_tls::{Aes128GcmSha256, NoVerify, TlsConfig, TlsConnection, TlsContext};
 use heapless::Vec;
 use log::*;
 use rand::{rngs::OsRng, RngCore};
-use static_cell::StaticCell;
-
-mod tuntap;
-
-use crate::tuntap::TunTapDevice;
-
-macro_rules! singleton {
-    ($val:expr) => {{
-        type T = impl Sized;
-        static STATIC_CELL: StaticCell<T> = StaticCell::new();
-        STATIC_CELL.init_with(move || $val)
-    }};
-}
+use static_cell::{make_static, StaticCell};
 
 #[derive(Parser)]
 #[clap(version = "1.0")]
@@ -51,13 +41,13 @@ async fn main_task(spawner: Spawner) {
 
     // Choose between dhcp or static ip
     let config = if opts.static_ip {
-        ConfigStrategy::Static(embassy_net::Config {
+        Config::ipv4_static(embassy_net::StaticConfigV4 {
             address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 69, 2), 24),
             dns_servers: Vec::new(),
             gateway: Some(Ipv4Address::new(192, 168, 69, 1)),
         })
     } else {
-        ConfigStrategy::Dhcp
+        Config::dhcpv4(Default::default())
     };
 
     // Generate random seed
@@ -66,10 +56,10 @@ async fn main_task(spawner: Spawner) {
     let seed = u64::from_le_bytes(seed);
 
     // Init network stack
-    let stack = &*singleton!(Stack::new(
+    let stack = &*make_static!(Stack::new(
         device,
         config,
-        singleton!(StackResources::<1, 2, 8>::new()),
+        make_static!(StackResources::<3>::new()),
         seed
     ));
 
@@ -81,7 +71,7 @@ async fn main_task(spawner: Spawner) {
     let mut tx_buffer = [0; 4096];
     let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
 
-    socket.set_timeout(Some(embassy_net::SmolDuration::from_secs(10)));
+    socket.set_timeout(Some(Duration::from_secs(10)));
 
     let remote_endpoint = (Ipv4Address::new(192, 168, 69, 100), 12345);
     log::info!("connecting to {:?}...", remote_endpoint);

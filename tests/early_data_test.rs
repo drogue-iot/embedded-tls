@@ -2,8 +2,8 @@
 #![allow(incomplete_features)]
 #![feature(async_fn_in_trait)]
 #![feature(impl_trait_projections)]
-use embedded_io::adapters::FromStd;
-use embedded_io::blocking::{Read, Write};
+use embedded_io::{Read, Write};
+use embedded_io_adapters::std::FromStd;
 use rand_core::OsRng;
 use std::net::SocketAddr;
 use std::sync::Once;

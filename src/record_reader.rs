@@ -1,10 +1,10 @@
 use core::marker::PhantomData;
 
 use crate::key_schedule::ReadKeySchedule;
-use embedded_io::{blocking::Read as BlockingRead, Error};
+use embedded_io::{Error, Read as BlockingRead};
 
 #[cfg(feature = "async")]
-use embedded_io::asynch::Read as AsyncRead;
+use embedded_io_async::Read as AsyncRead;
 
 use crate::{
     config::TlsCipherSuite,
@@ -135,7 +135,7 @@ mod tests {
 
     struct ChunkRead<'a>(&'a [u8], usize);
 
-    impl embedded_io::Io for ChunkRead<'_> {
+    impl embedded_io::ErrorType for ChunkRead<'_> {
         type Error = Infallible;
     }
 

@@ -2,8 +2,10 @@
 #![allow(incomplete_features)]
 #![feature(async_fn_in_trait)]
 #![feature(impl_trait_projections)]
-use embedded_io::adapters::{FromStd, FromTokio};
-use embedded_io::asynch::Write;
+use embedded_io::BufRead as _;
+use embedded_io_adapters::{std::FromStd, tokio_1::FromTokio};
+use embedded_io_async::BufRead as _;
+use embedded_io_async::Write;
 use rand::rngs::OsRng;
 use std::net::SocketAddr;
 use std::sync::Once;
@@ -216,7 +218,6 @@ async fn test_ping_nocopy() {
 
 #[tokio::test]
 async fn test_ping_nocopy_bufread() {
-    use embedded_io::asynch::BufRead;
     use embedded_tls::*;
     use tokio::net::TcpStream;
 
@@ -356,7 +357,6 @@ fn test_blocking_ping_nocopy() {
 
 #[test]
 fn test_blocking_ping_nocopy_bufread() {
-    use embedded_io::blocking::BufRead;
     use embedded_tls::blocking::*;
     use std::net::TcpStream;
 

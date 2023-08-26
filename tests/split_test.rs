@@ -2,8 +2,8 @@
 #![allow(incomplete_features)]
 #![feature(async_fn_in_trait)]
 #![feature(impl_trait_projections)]
-use embedded_io::adapters::FromStd;
-use embedded_io::blocking::{Read, Write};
+use embedded_io::{Read, Write};
+use embedded_io_adapters::std::FromStd;
 use rand_core::OsRng;
 use std::net::{SocketAddr, TcpStream};
 use std::sync::Once;
@@ -41,18 +41,18 @@ impl<T: ?Sized> Clone for Clonable<T> {
     }
 }
 
-impl embedded_io::Io for Clonable<TcpStream> {
+impl embedded_io::ErrorType for Clonable<TcpStream> {
     type Error = std::io::Error;
 }
 
-impl embedded_io::blocking::Read for Clonable<TcpStream> {
+impl embedded_io::Read for Clonable<TcpStream> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         let mut stream = FromStd::new(self.0.as_ref());
         stream.read(buf)
     }
 }
 
-impl embedded_io::blocking::Write for Clonable<TcpStream> {
+impl embedded_io::Write for Clonable<TcpStream> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         let mut stream = FromStd::new(self.0.as_ref());
         stream.write(buf)

@@ -23,7 +23,9 @@ digest = { version = "0.10.3", default-features = false, features = ["core-api"]
 typenum = { version = "1.15.0", default-features = false }
 heapless = { version = "0.7", default-features = false }
 heapless_typenum = { package = "heapless", version = "0.6", default-features = false }
-embedded-io = "0.4"
+embedded-io = "0.5"
+embedded-io-async = { version = "0.5", optional = true }
+embedded-io-adapters = { version = "0.5", optional = true }
 generic-array = { version = "0.14", default-features = false }
 #webpki = { version = "0.22.0", default-features = false }
 #webpki = { path = "../../webpki", default-features = false }
@@ -47,8 +49,8 @@ openssl = "0.10.44"
 
 [features]
 default = ["std", "async", "log", "tokio"]
-defmt = ["dep:defmt", "embedded-io/defmt", "heapless/defmt-impl"]
-std = ["embedded-io/std"]
-tokio = ["embedded-io/tokio"]
-async = ["embedded-io/async"]
+defmt = ["dep:defmt", "embedded-io/defmt-03", "heapless/defmt-impl"]
+std = ["embedded-io/std", "embedded-io-async/std"]
+tokio = ["embedded-io-adapters/tokio-1"]
+async = ["embedded-io-async"]
 alloc = []

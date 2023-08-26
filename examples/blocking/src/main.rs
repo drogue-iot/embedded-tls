@@ -1,5 +1,5 @@
-use embedded_io::adapters::FromStd;
-use embedded_io::blocking::Write as _;
+use embedded_io::Write as _;
+use embedded_io_adapters::std::FromStd;
 use embedded_tls::blocking::*;
 use embedded_tls::webpki::CertVerifier;
 use rand::rngs::OsRng;

@@ -9,20 +9,24 @@ embedded-tls = { path = "../..", features = ["async", "alloc", "std", "log"], de
 env_logger = "0.10"
 rand = "0.8"
 log = "0.4"
-static_cell = "1"
-embassy-net = { version = "0.1.0", features = ["std", "tcp", "dhcpv4", "medium-ethernet", "log", "pool-16", "nightly"] }
+static_cell = { version = "1", features = ["nightly"] }
 embassy-executor = { version = "0.1.0", default-features = false, features = ["std", "log", "integrated-timers", "nightly"] }
 embassy-time = { version = "0.1.0", default-features = false, features = ["std"] }
-smoltcp = { version = "0.8.0", git = "https://github.com/smoltcp-rs/smoltcp", rev = "ed0cf16750a42f30e31fcaf5347915592924b1e3" }
+smoltcp = { version = "0.10.0", features = ["dns-max-server-count-4"] }
+embassy-net = { version = "0.1.0", features=[ "std", "nightly", "log", "medium-ethernet", "medium-ip", "tcp", "udp", "dns", "dhcpv4", "proto-ipv6"] }
+embassy-net-tuntap = { version = "0.1.0" }
+
 async-io = "1.6.0"
 futures = { version = "0.3.17" }
 libc = "0.2.101"
 clap = { version = "3.0", features = ["derive", "color"] }
 heapless = { version = "0.7.5", default-features = false }
-embedded-io = { version = "0.4.0", features = ["async", "std", "futures"] }
+embedded-io-async = { version = "0.5.0" }
+embedded-io-adapters = { version = "0.5.0", features = ["futures-03"] }
 critical-section = { version = "1.1", features = ["std"] }
 
 [patch.crates-io]
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "cea29d7de3169cf2212128e0386e5d57053cc12d" }
-embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "cea29d7de3169cf2212128e0386e5d57053cc12d" }
-embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "cea29d7de3169cf2212128e0386e5d57053cc12d" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "ca738d6c99cb72fc32d012f99af4254d6c6312ed" }
+embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "ca738d6c99cb72fc32d012f99af4254d6c6312ed" }
+embassy-net-tuntap = { git = "https://github.com/embassy-rs/embassy.git", rev = "ca738d6c99cb72fc32d012f99af4254d6c6312ed" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "ca738d6c99cb72fc32d012f99af4254d6c6312ed" }

@@ -9,12 +9,9 @@ use crate::record_reader::RecordReader;
 use crate::split::{SplitState, SplitStateContainer};
 use crate::write_buffer::WriteBuffer;
 use crate::TlsError;
-use embedded_io::asynch::BufRead;
 use embedded_io::Error as _;
-use embedded_io::{
-    asynch::{Read as AsyncRead, Write as AsyncWrite},
-    Io,
-};
+use embedded_io::ErrorType;
+use embedded_io_async::{BufRead, Read as AsyncRead, Write as AsyncWrite};
 use rand_core::{CryptoRng, RngCore};
 
 pub use crate::config::*;
@@ -144,10 +141,7 @@ where
             let key_schedule = self.key_schedule.write_state();
             let slice = self.record_write_buf.close_record(key_schedule)?;
 
-            self.delegate
-                .write_all(slice)
-                .await
-                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.delegate.write_all(slice).await?;
 
             key_schedule.increment_counter();
 
@@ -219,10 +213,7 @@ where
             Some(read_key_schedule),
         )?;
 
-        self.delegate
-            .write_all(slice)
-            .await
-            .map_err(|e| TlsError::Io(e.kind()))?;
+        self.delegate.write_all(slice).await?;
 
         self.key_schedule.write_state().increment_counter();
 
@@ -309,7 +300,7 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite> Io for TlsConnection<'a, Socket, CipherSuite>
+impl<'a, Socket, CipherSuite> ErrorType for TlsConnection<'a, Socket, CipherSuite>
 where
     Socket: AsyncRead + AsyncWrite + 'a,
     CipherSuite: TlsCipherSuite + 'static,
@@ -442,14 +433,14 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite, State> Io for TlsWriter<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite, State> ErrorType for TlsWriter<'a, Socket, CipherSuite, State>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
     type Error = TlsError;
 }
 
-impl<'a, Socket, CipherSuite, State> Io for TlsReader<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite, State> ErrorType for TlsReader<'a, Socket, CipherSuite, State>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -520,10 +511,7 @@ where
         if !self.record_write_buf.is_empty() {
             let slice = self.record_write_buf.close_record(&mut self.key_schedule)?;
 
-            self.delegate
-                .write_all(slice)
-                .await
-                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.delegate.write_all(slice).await?;
 
             self.key_schedule.increment_counter();
 

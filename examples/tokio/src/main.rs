@@ -1,7 +1,7 @@
 #![macro_use]
 
-use embedded_io::adapters::FromTokio;
-use embedded_io::asynch::Write as _;
+use embedded_io_adapters::tokio_1::FromTokio;
+use embedded_io_async::Write as _;
 use embedded_tls::*;
 use rand::rngs::OsRng;
 use std::error::Error;
