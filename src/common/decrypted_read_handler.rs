@@ -2,7 +2,7 @@ use core::ops::Range;
 
 use crate::{
     alert::AlertDescription, common::decrypted_buffer_info::DecryptedBufferInfo,
-    handshake::ServerHandshake, record::ServerRecord, config::TlsCipherSuite, TlsError,
+    config::TlsCipherSuite, handshake::ServerHandshake, record::ServerRecord, TlsError,
 };
 
 pub struct DecryptedReadHandler<'a> {

@@ -8,12 +8,8 @@ use crate::record::{ClientRecord, ClientRecordHeader};
 use crate::record_reader::RecordReader;
 use crate::split::{SplitState, SplitStateContainer};
 use crate::write_buffer::WriteBuffer;
-use embedded_io::blocking::BufRead;
 use embedded_io::Error as _;
-use embedded_io::{
-    blocking::{Read, Write},
-    Io,
-};
+use embedded_io::{BufRead, ErrorType, Read, Write};
 use rand_core::{CryptoRng, RngCore};
 
 pub use crate::config::*;
@@ -142,9 +138,7 @@ where
             let key_schedule = self.key_schedule.write_state();
             let slice = self.record_write_buf.close_record(key_schedule)?;
 
-            self.delegate
-                .write_all(slice)
-                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.delegate.write_all(slice)?;
 
             key_schedule.increment_counter();
 
@@ -210,9 +204,7 @@ where
             Some(read_key_schedule),
         )?;
 
-        self.delegate
-            .write_all(slice)
-            .map_err(|e| TlsError::Io(e.kind()))?;
+        self.delegate.write_all(slice)?;
 
         self.key_schedule.write_state().increment_counter();
 
@@ -301,7 +293,7 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite> Io for TlsConnection<'a, Socket, CipherSuite>
+impl<'a, Socket, CipherSuite> ErrorType for TlsConnection<'a, Socket, CipherSuite>
 where
     Socket: Read + Write + 'a,
     CipherSuite: TlsCipherSuite + 'static,
@@ -433,14 +425,14 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite, State> Io for TlsWriter<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite, State> ErrorType for TlsWriter<'a, Socket, CipherSuite, State>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
     type Error = TlsError;
 }
 
-impl<'a, Socket, CipherSuite, State> Io for TlsReader<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite, State> ErrorType for TlsReader<'a, Socket, CipherSuite, State>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -511,9 +503,7 @@ where
         if !self.record_write_buf.is_empty() {
             let slice = self.record_write_buf.close_record(&mut self.key_schedule)?;
 
-            self.delegate
-                .write_all(slice)
-                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.delegate.write_all(slice)?;
 
             self.key_schedule.increment_counter();
 

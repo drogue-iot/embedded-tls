@@ -31,7 +31,7 @@
 
 ```
 use embedded_tls::*;
-use embedded_io::adapters::FromTokio;
+use embedded_io_adapters::FromTokio;
 use rand::rngs::OsRng;
 use tokio::net::TcpStream;
 
@@ -130,6 +130,19 @@ impl embedded_io::Error for TlsError {
         match self {
             Self::Io(k) => *k,
             _ => embedded_io::ErrorKind::Other,
+        }
+    }
+}
+
+use embedded_io::WriteAllError;
+impl<E> From<WriteAllError<E>> for TlsError
+where
+    E: embedded_io::Error,
+{
+    fn from(e: WriteAllError<E>) -> Self {
+        match e {
+            WriteAllError::WriteZero => Self::IoError,
+            WriteAllError::Other(e) => Self::Io(e.kind()),
         }
     }
 }
