@@ -174,11 +174,11 @@ pub struct RecordHeader {
 impl RecordHeader {
     pub fn content_type(&self) -> ContentType {
         // Content type already validated in read
-        ContentType::of(self.header[0]).unwrap()
+        unwrap!(ContentType::of(self.header[0]))
     }
 
     pub fn content_length(&self) -> usize {
-        // Content lenth already validated in read
+        // Content length already validated in read
         u16::from_be_bytes([self.header[3], self.header[4]]) as usize
     }
 

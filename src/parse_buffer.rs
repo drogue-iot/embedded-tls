@@ -124,11 +124,22 @@ impl<'b> ParseBuffer<'b> {
         dest: &mut Vec<u8, N>,
         num_bytes: usize,
     ) -> Result<(), ParseError> {
-        if (dest.capacity() - dest.len()) < num_bytes {
+        let space = dest.capacity() - dest.len();
+        if space < num_bytes {
+            error!(
+                "Insufficient space in destination buffer. Space: {} required: {}",
+                space, num_bytes
+            );
             Err(ParseError::InsufficientSpace)
         } else if self.pos + num_bytes <= self.buffer.len() {
             dest.extend_from_slice(&self.buffer[self.pos..self.pos + num_bytes])
-                .map_err(|_| ParseError::InsufficientSpace)?;
+                .map_err(|_| {
+                    error!(
+                        "Failed to extend destination buffer. Space: {} required: {}",
+                        space, num_bytes
+                    );
+                    ParseError::InsufficientSpace
+                })?;
             self.pos += num_bytes;
             Ok(())
         } else {
@@ -145,9 +156,10 @@ impl<'b> ParseBuffer<'b> {
 
         let mut data = self.slice(data_length)?;
         while !data.is_empty() {
-            result
-                .push(read(&mut data)?)
-                .map_err(|_| ParseError::InsufficientSpace)?;
+            result.push(read(&mut data)?).map_err(|_| {
+                error!("Failed to store parse result");
+                ParseError::InsufficientSpace
+            })?;
         }
 
         Ok(result)

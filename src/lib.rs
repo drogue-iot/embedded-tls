@@ -129,7 +129,10 @@ impl embedded_io::Error for TlsError {
     fn kind(&self) -> embedded_io::ErrorKind {
         match self {
             Self::Io(k) => *k,
-            _ => embedded_io::ErrorKind::Other,
+            _ => {
+                error!("TLS error: {:?}", self);
+                embedded_io::ErrorKind::Other
+            }
         }
     }
 }

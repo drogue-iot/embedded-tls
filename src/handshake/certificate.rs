@@ -23,9 +23,10 @@ impl<'a> CertificateRef<'a> {
     }
 
     pub fn add(&mut self, entry: CertificateEntryRef<'a>) -> Result<(), TlsError> {
-        self.entries
-            .push(entry)
-            .map_err(|_| TlsError::InsufficientSpace)
+        self.entries.push(entry).map_err(|_| {
+            error!("CertificateRef: InsufficientSpace");
+            TlsError::InsufficientSpace
+        })
     }
 
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, TlsError> {

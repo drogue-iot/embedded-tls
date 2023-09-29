@@ -47,6 +47,11 @@ where
         let header = RecordHeader::decode(header.try_into().unwrap())?;
 
         let content_length = header.content_length();
+        debug!(
+            "advance: {:?} - content_length = {} bytes",
+            header.content_type(),
+            content_length
+        );
         let data = self.advance(transport, content_length).await?;
         ServerRecord::decode(header, data, key_schedule.transcript_hash())
     }
@@ -115,6 +120,11 @@ where
     fn ensure_contiguous(&mut self, len: usize) -> Result<(), TlsError> {
         if self.decoded + len > self.buf.len() {
             if len > self.buf.len() {
+                error!(
+                    "Record too large for buffer. Size: {} Buffer size: {}",
+                    len,
+                    self.buf.len()
+                );
                 return Err(TlsError::InsufficientSpace);
             }
             self.buf

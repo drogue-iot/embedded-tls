@@ -48,10 +48,10 @@ impl<'a> ServerHello<'a> {
 
         let extensions = ServerHelloExtension::parse_vector(buf)?;
 
-        // info!("server random {:x?}", random);
-        // info!("server session-id {:x?}", session_id.as_slice());
-        // info!("server cipher_suite {:x?}", cipher_suite);
-        // info!("server extensions {:?}", extensions);
+        // debug!("server random {:x}", random);
+        // debug!("server session-id {:x}", session_id.as_slice());
+        debug!("server cipher_suite {:?}", cipher_suite);
+        debug!("server extensions {:?}", extensions);
 
         Ok(Self {
             random,
