@@ -43,12 +43,12 @@ where
     /// Create a new TLS connection with the provided context and a async I/O implementation
     ///
     /// NOTE: The record read buffer should be sized to fit an encrypted TLS record. The size of this record
-    /// depends on the server configuration, but the maximum allowed value for a TLS record is 16 kB, which
-    /// should be a safe value to use.
+    /// depends on the server configuration, but the maximum allowed value for a TLS record is 16640 bytes,
+    /// which should be a safe value to use.
     ///
-    /// The write record buffer can be smaller than the read buffer. During write [`TLS_RECORD_OVERHEAD`] over overhead
-    /// is added per record, so the buffer must at least be this large. Large writes are split into multiple records if
-    /// depending on the size of the write buffer.
+    /// The write record buffer can be smaller than the read buffer. During writes [`TLS_RECORD_OVERHEAD`] bytes of
+    /// overhead is added per record, so the buffer must at least be this large. Large writes are split into multiple
+    /// records if depending on the size of the write buffer.
     /// The largest of the two buffers will be used to encode the TLS handshake record, hence either of the
     /// buffers must at least be large enough to encode a handshake.
     pub fn new(
