@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Corrected recommended read buffer size (16640 bytes instead of 16384)
+
+## 0.15.0 - 2023-08-26
+
 - Updated p256 dependency from 0.11 to 0.13.2 (#124)
 - Fix reading buffered data in multiple steps (#121, #122)
 - Fix error in NewSessionTicket message handling (#120)

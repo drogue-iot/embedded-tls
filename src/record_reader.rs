@@ -29,6 +29,9 @@ where
     CipherSuite: TlsCipherSuite,
 {
     pub fn new(buf: &'a mut [u8]) -> Self {
+        if buf.len() < 16640 {
+            warn!("Read buffer is smaller than 16640 bytes, which may cause problems!");
+        }
         Self {
             buf,
             decoded: 0,
