@@ -17,7 +17,7 @@ use typenum::{Sum, U10, U12, U16, U32};
 
 pub use crate::extensions::extension_data::max_fragment_length::MaxFragmentLength;
 
-const TLS_RECORD_MAX: usize = 16384;
+pub(crate) const TLS_RECORD_MAX: usize = 16384;
 pub const TLS_RECORD_OVERHEAD: usize = 128;
 
 // longest label is 12b -> buf <= 2 + 1 + 6 + longest + 1 + hash_out = hash_out + 22

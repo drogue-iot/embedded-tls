@@ -39,6 +39,7 @@ impl<'b> CryptoBuffer<'b> {
             self.len += 1;
             Ok(())
         } else {
+            error!("Failed to push byte");
             Err(TlsError::InsufficientSpace)
         }
     }
@@ -63,6 +64,10 @@ impl<'b> CryptoBuffer<'b> {
             self.buf[self.offset + idx] = val;
             Ok(())
         } else {
+            error!(
+                "Failed to set byte: index {} is out of range for {} elements",
+                idx, self.len
+            );
             Err(TlsError::InsufficientSpace)
         }
     }
@@ -92,6 +97,11 @@ impl<'b> CryptoBuffer<'b> {
 
     fn extend_internal(&mut self, other: &[u8]) -> Result<(), TlsError> {
         if self.space() < other.len() {
+            error!(
+                "Failed to extend buffer. Space: {} required: {}",
+                self.space(),
+                other.len()
+            );
             Err(TlsError::InsufficientSpace)
         } else {
             let start = self.offset + self.len;
