@@ -137,19 +137,6 @@ impl embedded_io::Error for TlsError {
     }
 }
 
-use embedded_io::WriteAllError;
-impl<E> From<WriteAllError<E>> for TlsError
-where
-    E: embedded_io::Error,
-{
-    fn from(e: WriteAllError<E>) -> Self {
-        match e {
-            WriteAllError::WriteZero => Self::IoError,
-            WriteAllError::Other(e) => Self::Io(e.kind()),
-        }
-    }
-}
-
 #[cfg(feature = "std")]
 mod stdlib {
     use crate::config::TlsClock;

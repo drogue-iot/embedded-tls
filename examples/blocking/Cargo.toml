@@ -9,8 +9,8 @@ authors = [
 
 [dependencies]
 embedded-tls = { path = "../..", features = ["log", "std", "webpki"], default-features = false }
-embedded-io = { version = "0.5.0" }
-embedded-io-adapters = { version = "0.5.0", features = ["std"] }
+embedded-io = { version = "0.6.0" }
+embedded-io-adapters = { version = "0.6.0", features = ["std"] }
 pem-parser = "0.1"
 env_logger = "0.10"
 rand = "0.8"

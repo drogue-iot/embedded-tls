@@ -141,7 +141,10 @@ where
             let key_schedule = self.key_schedule.write_state();
             let slice = self.record_write_buf.close_record(key_schedule)?;
 
-            self.delegate.write_all(slice).await?;
+            self.delegate
+                .write_all(slice)
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
 
             key_schedule.increment_counter();
 
@@ -213,7 +216,10 @@ where
             Some(read_key_schedule),
         )?;
 
-        self.delegate.write_all(slice).await?;
+        self.delegate
+            .write_all(slice)
+            .await
+            .map_err(|e| TlsError::Io(e.kind()))?;
 
         self.key_schedule.write_state().increment_counter();
 
@@ -511,7 +517,10 @@ where
         if !self.record_write_buf.is_empty() {
             let slice = self.record_write_buf.close_record(&mut self.key_schedule)?;
 
-            self.delegate.write_all(slice).await?;
+            self.delegate
+                .write_all(slice)
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
 
             self.key_schedule.increment_counter();
 
