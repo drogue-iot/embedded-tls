@@ -1,7 +1,6 @@
 #![allow(incomplete_features)]
 #![feature(type_alias_impl_trait)]
 #![feature(async_fn_in_trait)]
-#![feature(impl_trait_projections)]
 
 use clap::Parser;
 use embassy_executor::{Executor, Spawner};
