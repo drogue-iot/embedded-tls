@@ -330,7 +330,9 @@ fn respond_blocking<CipherSuite>(
 where
     CipherSuite: TlsCipherSuite,
 {
-    transport.write_all(tx)?;
+    transport
+        .write_all(tx)
+        .map_err(|e| TlsError::Io(e.kind()))?;
 
     key_schedule.write_state().increment_counter();
 
@@ -372,7 +374,10 @@ async fn respond<CipherSuite>(
 where
     CipherSuite: TlsCipherSuite,
 {
-    transport.write_all(tx).await?;
+    transport
+        .write_all(tx)
+        .await
+        .map_err(|e| TlsError::Io(e.kind()))?;
 
     key_schedule.write_state().increment_counter();
 
