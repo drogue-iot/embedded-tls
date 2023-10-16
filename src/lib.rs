@@ -1,7 +1,10 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![allow(dead_code)]
-#![cfg_attr(feature = "async", allow(incomplete_features))]
-#![cfg_attr(feature = "async", feature(async_fn_in_trait))]
+#![cfg_attr(
+    feature = "async",
+    allow(stable_features, incomplete_features, unknown_lints, async_fn_in_trait)
+)]
+#![cfg_attr(feature = "async", feature(impl_trait_projections, async_fn_in_trait))]
 
 //! Embedded-TLS is a Rust-native TLS 1.3 implementation that works in a no-std environment. The
 //! implementation is work in progress, but the [example clients](https://github.com/drogue-iot/embedded-tls/tree/main/examples) should work against the [rustls](https://github.com/ctz/rustls) echo server.

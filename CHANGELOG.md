@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.16.2 - 2023-11-02
+
+- Re-add `impl_trait_projections` to support older nightly rustc versions
+
 ## 0.16.1 - 2023-10-30
 
 - Corrected recommended read buffer size (16640 bytes instead of 16384)
