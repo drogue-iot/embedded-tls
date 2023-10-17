@@ -47,7 +47,7 @@ where
         key_schedule: &mut ReadKeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
         let header = self.advance(transport, 5).await?;
-        let header = RecordHeader::decode(header.try_into().unwrap())?;
+        let header = RecordHeader::decode(unwrap!(header.try_into().ok()))?;
 
         let content_length = header.content_length();
         debug!(
@@ -87,7 +87,7 @@ where
         key_schedule: &mut ReadKeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
         let header = self.advance_blocking(transport, 5)?;
-        let header = RecordHeader::decode(header.try_into().unwrap())?;
+        let header = RecordHeader::decode(unwrap!(header.try_into().ok()))?;
 
         let content_length = header.content_length();
         let data = self.advance_blocking(transport, content_length)?;

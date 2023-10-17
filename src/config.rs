@@ -192,44 +192,47 @@ where
             config = config.enable_rsa_signatures();
         }
 
-        config
+        unwrap!(config
             .signature_schemes
             .push(SignatureScheme::EcdsaSecp256r1Sha256)
-            .unwrap();
-        config
+            .ok());
+        unwrap!(config
             .signature_schemes
             .push(SignatureScheme::EcdsaSecp384r1Sha384)
-            .unwrap();
-        config
-            .signature_schemes
-            .push(SignatureScheme::Ed25519)
-            .unwrap();
+            .ok());
+        unwrap!(config.signature_schemes.push(SignatureScheme::Ed25519).ok());
 
-        config.named_groups.push(NamedGroup::Secp256r1).unwrap();
+        unwrap!(config.named_groups.push(NamedGroup::Secp256r1));
 
         config
     }
 
     /// Enable RSA ciphers even if they might not be supported.
     pub fn enable_rsa_signatures(mut self) -> Self {
-        self.signature_schemes
+        unwrap!(self
+            .signature_schemes
             .push(SignatureScheme::RsaPkcs1Sha256)
-            .unwrap();
-        self.signature_schemes
+            .ok());
+        unwrap!(self
+            .signature_schemes
             .push(SignatureScheme::RsaPkcs1Sha384)
-            .unwrap();
-        self.signature_schemes
+            .ok());
+        unwrap!(self
+            .signature_schemes
             .push(SignatureScheme::RsaPkcs1Sha512)
-            .unwrap();
-        self.signature_schemes
+            .ok());
+        unwrap!(self
+            .signature_schemes
             .push(SignatureScheme::RsaPssRsaeSha256)
-            .unwrap();
-        self.signature_schemes
+            .ok());
+        unwrap!(self
+            .signature_schemes
             .push(SignatureScheme::RsaPssRsaeSha384)
-            .unwrap();
-        self.signature_schemes
+            .ok());
+        unwrap!(self
+            .signature_schemes
             .push(SignatureScheme::RsaPssRsaeSha512)
-            .unwrap();
+            .ok());
         self
     }
 
@@ -279,7 +282,7 @@ where
 
     pub fn with_psk(mut self, psk: &'a [u8], identities: &[&'a [u8]]) -> Self {
         // TODO: Remove potential panic
-        self.psk = Some((psk, Vec::from_slice(identities).unwrap()));
+        self.psk = Some((psk, unwrap!(Vec::from_slice(identities).ok())));
         self
     }
 }

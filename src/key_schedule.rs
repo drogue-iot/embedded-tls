@@ -179,7 +179,7 @@ where
     }
 
     pub fn increment_counter(&mut self) {
-        self.counter = self.counter.checked_add(1).unwrap();
+        self.counter = unwrap!(self.counter.checked_add(1));
     }
 }
 
