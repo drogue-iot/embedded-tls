@@ -108,7 +108,7 @@ where
 }
 
 pub(crate) fn encrypt<CipherSuite>(
-    key_schedule: &mut WriteKeySchedule<CipherSuite>,
+    key_schedule: &WriteKeySchedule<CipherSuite>,
     buf: &mut CryptoBuffer<'_>,
 ) -> Result<(), TlsError>
 where
