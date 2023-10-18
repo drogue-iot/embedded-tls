@@ -1,7 +1,6 @@
 use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
-use generic_array::ArrayLength;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -18,7 +17,7 @@ impl ChangeCipherSpec {
         Ok(Self {})
     }
 
-    pub fn parse<N: ArrayLength<u8>>(_: &mut ParseBuffer) -> Result<Self, TlsError> {
+    pub fn parse(_: &mut ParseBuffer) -> Result<Self, TlsError> {
         Ok(Self {})
     }
 

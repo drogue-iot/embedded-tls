@@ -105,7 +105,7 @@ impl<'b> CryptoBuffer<'b> {
             Err(TlsError::InsufficientSpace)
         } else {
             let start = self.offset + self.len;
-            self.buf[start..start + other.len()].clone_from_slice(&other[..other.len()]);
+            self.buf[start..start + other.len()].clone_from_slice(other);
             self.len += other.len();
             Ok(())
         }

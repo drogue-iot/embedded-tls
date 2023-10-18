@@ -47,7 +47,7 @@ where
         key_schedule: &mut ReadKeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
         let header = self.advance(transport, 5).await?;
-        let header = RecordHeader::decode(header.try_into().unwrap())?;
+        let header = RecordHeader::decode(unwrap!(header.try_into().ok()))?;
 
         let content_length = header.content_length();
         debug!(
@@ -78,10 +78,7 @@ where
             self.pending += read;
         }
 
-        let slice = &mut self.buf[self.decoded..self.decoded + amount];
-        self.decoded += amount;
-        self.pending -= amount;
-        Ok(slice)
+        Ok(self.consume(amount))
     }
 
     pub fn read_blocking<'m>(
@@ -90,7 +87,7 @@ where
         key_schedule: &mut ReadKeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
         let header = self.advance_blocking(transport, 5)?;
-        let header = RecordHeader::decode(header.try_into().unwrap())?;
+        let header = RecordHeader::decode(unwrap!(header.try_into().ok()))?;
 
         let content_length = header.content_length();
         let data = self.advance_blocking(transport, content_length)?;
@@ -114,10 +111,14 @@ where
             self.pending += read;
         }
 
+        Ok(self.consume(amount))
+    }
+
+    fn consume(&mut self, amount: usize) -> &mut [u8] {
         let slice = &mut self.buf[self.decoded..self.decoded + amount];
         self.decoded += amount;
         self.pending -= amount;
-        Ok(slice)
+        slice
     }
 
     fn ensure_contiguous(&mut self, len: usize) -> Result<(), TlsError> {

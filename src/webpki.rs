@@ -130,7 +130,7 @@ where
     }
 
     fn verify_signature(&mut self, verify: CertificateVerify) -> Result<(), TlsError> {
-        let handshake_hash = self.certificate_transcript.take().unwrap();
+        let handshake_hash = unwrap!(self.certificate_transcript.take());
         let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
         let mut msg: Vec<u8, 130> = Vec::new();
         msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
@@ -139,7 +139,7 @@ where
         msg.extend_from_slice(&handshake_hash.finalize())
             .map_err(|_| TlsError::EncodeError)?;
 
-        let certificate = self.certificate.as_ref().unwrap().try_into()?;
+        let certificate = unwrap!(self.certificate.as_ref()).try_into()?;
         verify_signature(&msg[..], certificate, verify)?;
         Ok(())
     }
