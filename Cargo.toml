@@ -1,6 +1,6 @@
 [package]
 name = "embedded-tls"
-version = "0.16.0"
+version = "0.16.1"
 edition = "2021"
 description = "TLS 1.3 client with no_std support and no allocator"
 documentation = "https://docs.rs/embedded-tls"
