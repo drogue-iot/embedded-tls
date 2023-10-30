@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.16.1 - 2023-10-30
+
 - Corrected recommended read buffer size (16640 bytes instead of 16384)
+- Use unwrap macro where possible
+- Update to embedded-io 0.6
+- Update dependencies
 
 ## 0.15.0 - 2023-08-26
 
