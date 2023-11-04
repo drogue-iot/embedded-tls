@@ -156,6 +156,9 @@ where
 
     /// Read and decrypt data filling the provided slice.
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, TlsError> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
         let mut buffer = self.read_buffered()?;
 
         let len = buffer.pop_into(buf);
@@ -450,6 +453,9 @@ where
     State: SplitState,
 {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
         let mut buffer = self.read_buffered()?;
 
         let len = buffer.pop_into(buf);

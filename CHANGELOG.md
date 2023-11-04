@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.16.3 - ?
+
+- Don't block when reading into an empty buffer
+
 ## 0.16.2 - 2023-11-02
 
 - Re-add `impl_trait_projections` to support older nightly rustc versions
