@@ -140,6 +140,11 @@ async fn test_ping() {
     assert_eq!(b"ping", &rx_buf[..sz]);
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
 
+    // Test that embedded-tls doesn't block if the buffer is empty.
+    let mut rx_buf = [0; 0];
+    let sz = tls.read(&mut rx_buf).await.expect("error reading data");
+    assert_eq!(sz, 0);
+
     tls.close()
         .await
         .map_err(|(_, e)| e)
@@ -303,6 +308,11 @@ fn test_blocking_ping() {
     assert_eq!(4, sz);
     assert_eq!(b"ping", &rx_buf[..sz]);
     log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
+
+    // Test that embedded-tls doesn't block if the buffer is empty.
+    let mut rx_buf = [0; 0];
+    let sz = tls.read(&mut rx_buf).expect("error reading data");
+    assert_eq!(sz, 0);
 
     tls.close()
         .map_err(|(_, e)| e)
