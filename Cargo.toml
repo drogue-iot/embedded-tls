@@ -27,9 +27,7 @@ embedded-io = "0.6"
 embedded-io-async = { version = "0.6", optional = true }
 embedded-io-adapters = { version = "0.6", optional = true }
 generic-array = { version = "0.14", default-features = false }
-#webpki = { version = "0.22.0", default-features = false }
-#webpki = { path = "../../webpki", default-features = false }
-webpki = { version = "0.21.4", git = "https://github.com/lulf/webpki", rev = "d5188bd8c0a2c9cb14ec7835e63253e793e720a1", default-features = false, optional = true }
+webpki = { package = "rustls-webpki", version = "0.101.7", default-features = false, optional = true }
 
 # Logging alternatives
 log = { version = "0.4", optional = true }
