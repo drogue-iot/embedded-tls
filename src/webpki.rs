@@ -10,8 +10,6 @@ use crate::TlsError;
 use core::marker::PhantomData;
 use digest::Digest;
 use heapless::Vec;
-use webpki::DnsNameRef;
-
 #[cfg(all(not(feature = "alloc"), feature = "webpki"))]
 impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
     type Error = TlsError;
@@ -194,8 +192,6 @@ fn verify_certificate(
             warn!("Error loading CA: {:?}", e);
             TlsError::DecodeError
         })?;
-        let anchors = &[trust];
-        let anchors = webpki::TLSServerTrustAnchors(anchors);
 
         trace!("We got {} certificate entries", certificate.entries.len());
 
@@ -210,15 +206,18 @@ fn verify_certificate(
                 let time = if let Some(now) = now {
                     webpki::Time::from_seconds_since_unix_epoch(now)
                 } else {
-                    // If no clock is provided, use certificate notAfter as the timestamp, if available
-                    if let Ok(validity) = cert.validity() {
-                        validity.not_after
-                    } else {
-                        webpki::Time::from_seconds_since_unix_epoch(0)
-                    }
+                    // If no clock is provided, the validity check will fail
+                    webpki::Time::from_seconds_since_unix_epoch(0)
                 };
                 info!("Certificate is loaded!");
-                match cert.verify_is_valid_tls_server_cert(ALL_SIGALGS, &anchors, &[], time) {
+                match cert.verify_for_usage(
+                    ALL_SIGALGS,
+                    &[trust],
+                    &[],
+                    time,
+                    webpki::KeyUsage::server_auth(),
+                    &[],
+                ) {
                     Ok(_) => verified = true,
                     Err(e) => {
                         warn!("Error verifying certificate: {:?}", e);
@@ -226,10 +225,13 @@ fn verify_certificate(
                 }
 
                 if let Some(server_name) = verify_host {
-                    match cert.verify_is_valid_for_dns_name(
-                        DnsNameRef::try_from_ascii_str(server_name).unwrap(),
-                    ) {
-                        Ok(_) => host_verified = true,
+                    match webpki::SubjectNameRef::try_from_ascii(server_name.as_bytes()) {
+                        Ok(subject) => match cert.verify_is_valid_for_subject_name(subject) {
+                            Ok(_) => host_verified = true,
+                            Err(e) => {
+                                warn!("Error verifying host: {:?}", e);
+                            }
+                        },
                         Err(e) => {
                             warn!("Error verifying host: {:?}", e);
                         }
