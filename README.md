@@ -8,7 +8,7 @@
 Embedded-TLS is a Rust-native TLS 1.3 implementation that works in a no-std environment. The Rust crate was formerly known as `drogue-tls`. The
 implementation is work in progress, but the [example clients](https://github.com/drogue-iot/embedded-tls/tree/main/examples) should work against the [rustls](https://github.com/ctz/rustls) echo server.
 
-The client supports both async and blocking modes. By default, the `async` and `std` features are enabled. The `async` feature requires Rust nightly, while the blocking feature works on Rust stable.
+The client supports both async and blocking modes. By default, the `std` feature is enabled, but can be disabled for bare metal usage.
 
 To use the async mode, import `embedded_tls::*`. To use the blocking mode, import `embedded_tls::blocking::*`.
 
