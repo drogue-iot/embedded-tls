@@ -1,6 +1,4 @@
 #![macro_use]
-#![allow(incomplete_features)]
-#![feature(async_fn_in_trait)]
 use embedded_io::BufRead as _;
 use embedded_io_adapters::{std::FromStd, tokio_1::FromTokio};
 use embedded_io_async::BufRead as _;

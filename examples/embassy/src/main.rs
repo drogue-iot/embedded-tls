@@ -1,7 +1,3 @@
-#![allow(incomplete_features)]
-#![feature(type_alias_impl_trait)]
-#![feature(async_fn_in_trait)]
-
 use clap::Parser;
 use embassy_executor::{Executor, Spawner};
 use embassy_net::tcp::TcpSocket;
@@ -13,7 +9,7 @@ use embedded_tls::{Aes128GcmSha256, NoVerify, TlsConfig, TlsConnection, TlsConte
 use heapless::Vec;
 use log::*;
 use rand::{rngs::OsRng, RngCore};
-use static_cell::{make_static, StaticCell};
+use static_cell::StaticCell;
 
 #[derive(Parser)]
 #[clap(version = "1.0")]
@@ -55,10 +51,12 @@ async fn main_task(spawner: Spawner) {
     let seed = u64::from_le_bytes(seed);
 
     // Init network stack
-    let stack = &*make_static!(Stack::new(
+    static STACK: StaticCell<Stack<TunTapDevice>> = StaticCell::new();
+    static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+    let stack = &*STACK.init(Stack::new(
         device,
         config,
-        make_static!(StackResources::<3>::new()),
+        RESOURCES.init(StackResources::<3>::new()),
         seed
     ));
 

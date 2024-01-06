@@ -1,6 +1,4 @@
 #![macro_use]
-#![allow(incomplete_features)]
-#![feature(async_fn_in_trait)]
 use embedded_io::{Read, Write};
 use embedded_io_adapters::std::FromStd;
 use rand_core::OsRng;

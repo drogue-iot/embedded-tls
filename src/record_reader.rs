@@ -2,8 +2,6 @@ use core::marker::PhantomData;
 
 use crate::key_schedule::ReadKeySchedule;
 use embedded_io::{Error, Read as BlockingRead};
-
-#[cfg(feature = "async")]
 use embedded_io_async::Read as AsyncRead;
 
 use crate::{
@@ -40,7 +38,6 @@ where
         }
     }
 
-    #[cfg(feature = "async")]
     pub async fn read<'m>(
         &'m mut self,
         transport: &mut impl AsyncRead,
@@ -59,7 +56,6 @@ where
         ServerRecord::decode(header, data, key_schedule.transcript_hash())
     }
 
-    #[cfg(feature = "async")]
     async fn advance<'m>(
         &'m mut self,
         transport: &mut impl AsyncRead,

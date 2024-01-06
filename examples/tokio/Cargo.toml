@@ -9,10 +9,10 @@ authors = [
 
 [dependencies]
 embedded-tls = { path = "../..", features = ["log", "tokio"] }
-embedded-io-adapters = { version = "0.6.0", features = ["tokio-1"] }
-embedded-io-async = "0.6.0"
+embedded-io-adapters = { version = "0.6", features = ["tokio-1"] }
+embedded-io-async = "0.6"
 env_logger = "0.10"
-tokio = { version = "1.7", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 rand = "0.8"
 log = "0.4"
 pem-parser = "0.1.1"

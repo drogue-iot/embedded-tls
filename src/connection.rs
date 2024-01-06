@@ -11,12 +11,9 @@ use crate::{
 };
 use core::fmt::Debug;
 use embedded_io::Error as _;
-use rand_core::{CryptoRng, RngCore};
-
 use embedded_io::{Read as BlockingRead, Write as BlockingWrite};
-
-#[cfg(feature = "async")]
 use embedded_io_async::{Read as AsyncRead, Write as AsyncWrite};
+use rand_core::{CryptoRng, RngCore};
 
 use crate::application_data::ApplicationData;
 // use crate::handshake::certificate_request::CertificateRequest;
@@ -179,7 +176,6 @@ pub enum State {
 }
 
 impl<'a> State {
-    #[cfg(feature = "async")]
     #[allow(clippy::too_many_arguments)]
     pub async fn process<'v, Transport, CipherSuite, RNG, Verifier>(
         self,
@@ -341,7 +337,6 @@ where
     Ok(())
 }
 
-#[cfg(feature = "async")]
 async fn handle_processing_error<'a, CipherSuite>(
     result: Result<State, TlsError>,
     transport: &mut impl AsyncWrite,
@@ -365,7 +360,6 @@ where
     result
 }
 
-#[cfg(feature = "async")]
 async fn respond<CipherSuite>(
     tx: &[u8],
     transport: &mut impl AsyncWrite,

@@ -1,6 +1,4 @@
 #![macro_use]
-#![allow(incomplete_features)]
-#![feature(async_fn_in_trait)]
 use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_tls::*;
 use openssl::ssl;
