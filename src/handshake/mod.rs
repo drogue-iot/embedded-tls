@@ -70,6 +70,7 @@ where
     CipherSuite: TlsCipherSuite,
 {
     ClientCert(CertificateRef<'a>),
+    ClientCertVerify(CertificateVerify<'a>),
     ClientHello(ClientHello<'config, CipherSuite>),
     Finished(Finished<HashOutputSize<CipherSuite>>),
 }
@@ -83,6 +84,7 @@ where
             ClientHandshake::ClientHello(_) => HandshakeType::ClientHello,
             ClientHandshake::Finished(_) => HandshakeType::Finished,
             ClientHandshake::ClientCert(_) => HandshakeType::Certificate,
+            ClientHandshake::ClientCertVerify(_) => HandshakeType::CertificateVerify,
         }
     }
 
@@ -91,6 +93,7 @@ where
             ClientHandshake::ClientHello(inner) => inner.encode(buf),
             ClientHandshake::Finished(inner) => inner.encode(buf),
             ClientHandshake::ClientCert(inner) => inner.encode(buf),
+            ClientHandshake::ClientCertVerify(inner) => inner.encode(buf),
         }
     }
 

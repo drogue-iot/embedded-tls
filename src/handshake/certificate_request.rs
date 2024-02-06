@@ -7,6 +7,7 @@ use heapless::Vec;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateRequestRef<'a> {
     pub(crate) request_context: &'a [u8],
+    pub(crate) extensions: Vec<CertificateRequestExtension<'a>, 6>,
 }
 
 impl<'a> CertificateRequestRef<'a> {
@@ -19,10 +20,11 @@ impl<'a> CertificateRequestRef<'a> {
             .map_err(|_| TlsError::InvalidCertificateRequest)?;
 
         // Validate extensions
-        CertificateRequestExtension::parse_vector::<6>(buf)?;
+        let extensions = CertificateRequestExtension::parse_vector::<6>(buf)?;
 
         Ok(Self {
             request_context: request_context.as_slice(),
+            extensions,
         })
     }
 }
@@ -31,6 +33,8 @@ impl<'a> CertificateRequestRef<'a> {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateRequest {
     pub(crate) request_context: Vec<u8, 256>,
+    // TODO: Owned version of the `Vec<CertificateRequestExtension, 6>`? Or
+    // extract the potential `SignatureAlgorithms<4>`?
 }
 
 impl<'a> TryFrom<CertificateRequestRef<'a>> for CertificateRequest {

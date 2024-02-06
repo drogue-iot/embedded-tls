@@ -1,4 +1,5 @@
 use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
+use crate::handshake::certificate_verify::CertificateVerify;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::{KeySchedule, ReadKeySchedule, WriteKeySchedule};
 use crate::record::{ClientRecord, ServerRecord};
@@ -171,6 +172,7 @@ pub enum State {
     ServerHello,
     ServerVerify,
     ClientCert,
+    ClientCertVerify,
     ClientFinished,
     ApplicationData,
 }
@@ -221,6 +223,13 @@ impl<'a> State {
             }
             State::ClientCert => {
                 let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
+
+                respond(tx, transport, key_schedule).await?;
+
+                Ok(state)
+            }
+            State::ClientCertVerify => {
+                let (state, tx) = client_cert_verify(handshake, key_schedule, config, tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
@@ -278,6 +287,13 @@ impl<'a> State {
             }
             State::ClientCert => {
                 let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
+
+                respond_blocking(tx, transport, key_schedule)?;
+
+                Ok(state)
+            }
+            State::ClientCertVerify => {
+                let (state, tx) = client_cert_verify(handshake, key_schedule, config, tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -523,6 +539,51 @@ where
     buffer
         .write_record(
             &ClientRecord::Handshake(ClientHandshake::ClientCert(certificate), true),
+            write_key_schedule,
+            Some(read_key_schedule),
+        )
+        .map(|slice| (State::ClientCertVerify, slice))
+}
+
+fn client_cert_verify<'r, CipherSuite, Verifier>(
+    handshake: &mut Handshake<CipherSuite, Verifier>,
+    key_schedule: &mut KeySchedule<CipherSuite>,
+    config: &TlsConfig<CipherSuite>,
+    buffer: &'r mut WriteBuffer,
+) -> Result<(State, &'r [u8]), TlsError>
+where
+    CipherSuite: TlsCipherSuite,
+{
+    // TODO:
+    //
+    // handshake
+    //     .traffic_hash
+    //     .replace(key_schedule.transcript_hash().clone());
+
+    // let extensions = &handshake
+    //     .certificate_request
+    //     .as_ref()
+    //     .ok_or(TlsError::InvalidHandshake)?
+    //     .extensions;
+
+    // let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
+    // let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
+    // msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
+    // msg.extend_from_slice(ctx_str)
+    //     .map_err(|_| TlsError::EncodeError)?;
+    // msg.extend_from_slice(&handshake_hash.finalize())
+    //     .map_err(|_| TlsError::EncodeError)?;
+
+    let mut certificate_verify = CertificateVerify {
+        signature_scheme: todo!(),
+        signature: todo!(),
+    };
+
+    let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
+
+    buffer
+        .write_record(
+            &ClientRecord::Handshake(ClientHandshake::ClientCertVerify(certificate_verify), true),
             write_key_schedule,
             Some(read_key_schedule),
         )

@@ -2,6 +2,8 @@ use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 
+use super::CryptoBuffer;
+
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateVerify<'a> {
@@ -23,5 +25,12 @@ impl<'a> CertificateVerify<'a> {
             signature_scheme,
             signature: signature.as_slice(),
         })
+    }
+
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+        buf.push_u16(self.signature_scheme as _)?;
+        buf.push_u16(self.signature.len() as _)?;
+        buf.extend_from_slice(self.signature)?;
+        Ok(())
     }
 }

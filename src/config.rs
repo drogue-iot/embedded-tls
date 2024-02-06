@@ -134,6 +134,7 @@ where
     pub(crate) max_fragment_length: Option<MaxFragmentLength>,
     pub(crate) ca: Option<Certificate<'a>>,
     pub(crate) cert: Option<Certificate<'a>>,
+    // TODO: priv_key: Option<&'a [u8]>?
 }
 
 pub trait TlsClock {
