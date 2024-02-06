@@ -1,3 +1,4 @@
+use crate::extensions::extension_data::signature_algorithms::SignatureAlgorithms;
 use crate::extensions::messages::CertificateRequestExtension;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
@@ -33,8 +34,7 @@ impl<'a> CertificateRequestRef<'a> {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateRequest {
     pub(crate) request_context: Vec<u8, 256>,
-    // TODO: Owned version of the `Vec<CertificateRequestExtension, 6>`? Or
-    // extract the potential `SignatureAlgorithms<4>`?
+    pub(crate) signature_algorithms: Option<SignatureAlgorithms<4>>,
 }
 
 impl<'a> TryFrom<CertificateRequestRef<'a>> for CertificateRequest {
@@ -47,6 +47,18 @@ impl<'a> TryFrom<CertificateRequestRef<'a>> for CertificateRequest {
                 error!("CertificateRequest: InsufficientSpace");
                 TlsError::InsufficientSpace
             })?;
-        Ok(Self { request_context })
+
+        let mut signature_algorithms = None;
+
+        for ext in cert.extensions {
+            if let CertificateRequestExtension::SignatureAlgorithms(algos) = ext {
+                signature_algorithms = Some(algos)
+            }
+        }
+
+        Ok(Self {
+            request_context,
+            signature_algorithms,
+        })
     }
 }

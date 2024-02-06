@@ -134,7 +134,7 @@ where
     pub(crate) max_fragment_length: Option<MaxFragmentLength>,
     pub(crate) ca: Option<Certificate<'a>>,
     pub(crate) cert: Option<Certificate<'a>>,
-    // TODO: priv_key: Option<&'a [u8]>?
+    pub(crate) priv_key: Option<&'a [u8]>,
 }
 
 pub trait TlsClock {
@@ -185,6 +185,7 @@ where
             server_name: None,
             ca: None,
             cert: None,
+            priv_key: None,
         };
 
         //config.cipher_suites.push(CipherSuite::TlsAes128GcmSha256);
@@ -278,6 +279,11 @@ where
 
     pub fn with_cert(mut self, cert: Certificate<'a>) -> Self {
         self.cert = Some(cert);
+        self
+    }
+
+    pub fn with_priv_key(mut self, priv_key: &'a [u8]) -> Self {
+        self.priv_key = Some(priv_key);
         self
     }
 
