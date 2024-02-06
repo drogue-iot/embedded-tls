@@ -11,6 +11,7 @@ use crate::{
     handshake::{certificate::CertificateRef, certificate_request::CertificateRequest},
 };
 use core::fmt::Debug;
+use digest::Digest;
 use embedded_io::Error as _;
 use embedded_io::{Read as BlockingRead, Write as BlockingWrite};
 use embedded_io_async::{Read as AsyncRead, Write as AsyncWrite};
@@ -531,9 +532,12 @@ where
         .request_context;
 
     let mut certificate = CertificateRef::with_context(request_context);
-    if let Some(cert) = &config.cert {
+    let next_state = if let Some(cert) = &config.cert {
         certificate.add(cert.into())?;
-    }
+        State::ClientCertVerify
+    } else {
+        State::ClientFinished
+    };
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
 
     buffer
@@ -542,7 +546,7 @@ where
             write_key_schedule,
             Some(read_key_schedule),
         )
-        .map(|slice| (State::ClientCertVerify, slice))
+        .map(|slice| (next_state, slice))
 }
 
 fn client_cert_verify<'r, CipherSuite, Verifier>(
@@ -554,29 +558,21 @@ fn client_cert_verify<'r, CipherSuite, Verifier>(
 where
     CipherSuite: TlsCipherSuite,
 {
-    // TODO:
-    //
-    // handshake
-    //     .traffic_hash
-    //     .replace(key_schedule.transcript_hash().clone());
+    let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
+    let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
+    msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
+    msg.extend_from_slice(ctx_str)
+        .map_err(|_| TlsError::EncodeError)?;
+    msg.extend_from_slice(&key_schedule.transcript_hash().clone().finalize())
+        .map_err(|_| TlsError::EncodeError)?;
 
-    // let extensions = &handshake
-    //     .certificate_request
-    //     .as_ref()
-    //     .ok_or(TlsError::InvalidHandshake)?
-    //     .extensions;
-
-    // let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
-    // let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
-    // msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
-    // msg.extend_from_slice(ctx_str)
-    //     .map_err(|_| TlsError::EncodeError)?;
-    // msg.extend_from_slice(&handshake_hash.finalize())
-    //     .map_err(|_| TlsError::EncodeError)?;
+    // TODO: How to get a hold of something that can sign here?
+    let scheme = signer.scheme();
+    let sig = signer.sign(&msg)?;
 
     let mut certificate_verify = CertificateVerify {
-        signature_scheme: todo!(),
-        signature: todo!(),
+        signature_scheme: scheme,
+        signature: sig,
     };
 
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
