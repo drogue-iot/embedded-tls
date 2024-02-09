@@ -49,15 +49,14 @@ impl<'a> CertificateRef<'a> {
     }
 
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
-        buf.push(self.request_context.len() as u8)
-            .map_err(|_| TlsError::EncodeError)?;
-        buf.extend_from_slice(self.request_context)
-            .map_err(|_| TlsError::EncodeError)?;
+        buf.with_u8_length(|buf| buf.extend_from_slice(self.request_context))?;
+        buf.with_u24_length(|buf| {
+            for entry in self.entries.iter() {
+                entry.encode(buf)?;
+            }
+            Ok(())
+        })?;
 
-        buf.push_u24(self.entries.len() as u32)?;
-        for entry in self.entries.iter() {
-            entry.encode(buf)?;
-        }
         Ok(())
     }
 }
@@ -100,19 +99,20 @@ impl<'a> CertificateEntryRef<'a> {
         Ok(result)
     }
 
-    pub(crate) fn encode(&self, _buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
-        todo!("not implemented");
-        /*
+    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
         match self {
-            CertificateEntry::RawPublicKey(key) => {
-                let entry_len = (key.len() as u32).to_be_bytes();
+            &CertificateEntryRef::RawPublicKey(_key) => {
+                todo!("ASN1_subjectPublicKeyInfo encoding?");
+                // buf.with_u24_length(|buf| buf.extend_from_slice(key))?;
             }
-            CertificateEntry::X509(cert) => {
-                let entry_len = (cert.len() as u32).to_be_bytes();
+            &CertificateEntryRef::X509(cert) => {
+                buf.with_u24_length(|buf| buf.extend_from_slice(cert))?;
             }
         }
+
+        // Zero extensions for now
+        buf.push_u16(0)?;
         Ok(())
-        */
     }
 }
 

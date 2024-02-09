@@ -223,13 +223,17 @@ impl<'a> State {
                 handle_processing_error(result, transport, key_schedule, tx_buf).await
             }
             State::ClientCert => {
+                debug!("State::ClientCert");
                 let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
 
+                debug!("State::ClientCert respond");
                 respond(tx, transport, key_schedule).await?;
 
                 Ok(state)
             }
             State::ClientCertVerify => {
+                debug!("State::ClientCertVerify");
+
                 let (state, tx) = client_cert_verify(handshake, key_schedule, config, tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
@@ -566,13 +570,14 @@ where
     msg.extend_from_slice(&key_schedule.transcript_hash().clone().finalize())
         .map_err(|_| TlsError::EncodeError)?;
 
+    debug!("Generating signature");
     // TODO: How to get a hold of something that can sign here?
-    let scheme = signer.scheme();
-    let sig = signer.sign(&msg)?;
+    // let scheme = signer.scheme();
+    // let sig = signer.sign(&msg)?;
 
-    let mut certificate_verify = CertificateVerify {
-        signature_scheme: scheme,
-        signature: sig,
+    let certificate_verify = CertificateVerify {
+        signature_scheme: crate::extensions::extension_data::signature_algorithms::SignatureScheme::EcdsaSecp256r1Sha256,
+        signature: b"abcd",
     };
 
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();

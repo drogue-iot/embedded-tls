@@ -29,8 +29,7 @@ impl<'a> CertificateVerify<'a> {
 
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
         buf.push_u16(self.signature_scheme as _)?;
-        buf.push_u16(self.signature.len() as _)?;
-        buf.extend_from_slice(self.signature)?;
+        buf.with_u16_length(|buf| buf.extend_from_slice(self.signature))?;
         Ok(())
     }
 }
