@@ -126,8 +126,7 @@ where
     ) -> Result<(), TlsError> {
         let enc_buf = buf.as_slice();
         let end = enc_buf.len();
-        // Don't include the content type in the slice
-        transcript.update(&enc_buf[0..end - 1]);
+        transcript.update(&enc_buf[0..end]);
         Ok(())
     }
 }
