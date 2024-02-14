@@ -4,7 +4,7 @@ use crate::handshake::{
     certificate::{
         Certificate as OwnedCertificate, CertificateEntryRef, CertificateRef as ServerCertificate,
     },
-    certificate_verify::CertificateVerify,
+    certificate_verify::CertificateVerifyRef,
 };
 use crate::TlsError;
 use core::marker::PhantomData;
@@ -100,19 +100,33 @@ where
     _clock: PhantomData<Clock>,
 }
 
+impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
+where
+    Clock: TlsClock,
+    CipherSuite: TlsCipherSuite,
+{
+    fn new() -> Self {
+        Self {
+            host: None,
+            certificate_transcript: None,
+            certificate: None,
+            _clock: PhantomData,
+        }
+    }
+}
+
 impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<'a, CipherSuite>
     for CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
 where
     CipherSuite: TlsCipherSuite,
     Clock: TlsClock,
 {
-    fn new(host: Option<&'a str>) -> Self {
-        Self {
-            host,
-            certificate_transcript: None,
-            certificate: None,
-            _clock: PhantomData,
-        }
+    fn set_hostname_verification(
+        &mut self,
+        hostname: Option<&'a str>,
+    ) -> Result<(), crate::TlsError> {
+        self.host = hostname;
+        Ok(())
     }
 
     fn verify_certificate(
@@ -127,7 +141,7 @@ where
         Ok(())
     }
 
-    fn verify_signature(&mut self, verify: CertificateVerify) -> Result<(), TlsError> {
+    fn verify_signature(&mut self, verify: CertificateVerifyRef) -> Result<(), TlsError> {
         let handshake_hash = unwrap!(self.certificate_transcript.take());
         let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
         let mut msg: Vec<u8, 130> = Vec::new();
@@ -143,10 +157,10 @@ where
     }
 }
 
-fn verify_signature(
+pub fn verify_signature(
     message: &[u8],
     certificate: ServerCertificate,
-    verify: CertificateVerify,
+    verify: CertificateVerifyRef,
 ) -> Result<(), TlsError> {
     let mut verified = false;
     if !certificate.entries.is_empty() {
@@ -179,7 +193,7 @@ fn verify_signature(
     Ok(())
 }
 
-fn verify_certificate(
+pub fn verify_certificate(
     verify_host: Option<&str>,
     ca: &Option<Certificate>,
     certificate: &ServerCertificate,

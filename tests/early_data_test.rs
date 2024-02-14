@@ -68,14 +68,17 @@ fn early_data_ignored() {
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         FromStd::new(stream),
         &mut read_record_buffer,
         &mut write_record_buffer,
     );
 
-    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng))
-        .expect("error establishing TLS connection");
+    tls.open(TlsContext::new(
+        &config,
+        SimpleProvider::new::<Aes128GcmSha256>(OsRng),
+    ))
+    .expect("error establishing TLS connection");
 
     tls.write_all(b"ping").expect("Failed to write data");
     tls.flush().expect("Failed to flush");

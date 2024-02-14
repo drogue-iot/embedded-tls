@@ -8,9 +8,10 @@ use crate::record::{ClientRecord, ClientRecordHeader};
 use crate::record_reader::RecordReader;
 use crate::split::{SplitState, SplitStateContainer};
 use crate::write_buffer::WriteBuffer;
+use ecdsa::{elliptic_curve::CurveArithmetic, hazmat::SignPrimitive, SignatureSize};
 use embedded_io::Error as _;
 use embedded_io::{BufRead, ErrorType, Read, Write};
-use rand_core::{CryptoRng, RngCore};
+use generic_array::ArrayLength;
 
 pub use crate::config::*;
 #[cfg(feature = "std")]
@@ -70,16 +71,22 @@ where
     ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection
     /// instance must be recreated.
-    pub fn open<'v, RNG, Verifier>(
+    pub fn open<'v, Provider>(
         &mut self,
-        context: TlsContext<'v, CipherSuite, RNG>,
+        mut context: TlsContext<'v, Provider>,
     ) -> Result<(), TlsError>
     where
-        RNG: CryptoRng + RngCore,
-        Verifier: TlsVerifier<'v, CipherSuite>,
+        Provider: CryptoProvider<CipherSuite = CipherSuite>,
+        SignatureSize<Provider::SignatureCurve>:
+            core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
+        ecdsa::der::MaxSize<Provider::SignatureCurve>: ArrayLength<u8>,
+        <Provider::SignatureCurve as CurveArithmetic>::Scalar:
+            SignPrimitive<Provider::SignatureCurve>,
     {
-        let mut handshake: Handshake<CipherSuite, Verifier> =
-            Handshake::new(Verifier::new(context.config.server_name));
+        let mut handshake: Handshake<CipherSuite> = Handshake::new();
+        if let Ok(verifier) = context.crypto_provider.verifier() {
+            verifier.set_hostname_verification(context.config.server_name)?;
+        }
         let mut state = State::ClientHello;
 
         while state != State::ApplicationData {
@@ -90,7 +97,7 @@ where
                 &mut self.record_write_buf,
                 &mut self.key_schedule,
                 context.config,
-                context.rng,
+                &mut context.crypto_provider,
             )?;
             trace!("State {:?} -> {:?}", state, next_state);
             state = next_state;

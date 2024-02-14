@@ -1,40 +1,28 @@
-use crate::config::{TlsCipherSuite, TlsConfig, TlsVerifier};
-use crate::handshake::certificate_verify::CertificateVerify;
+use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::{KeySchedule, ReadKeySchedule, WriteKeySchedule};
 use crate::record::{ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
 use crate::write_buffer::WriteBuffer;
-use crate::TlsError;
 use crate::{
     alert::*,
     handshake::{certificate::CertificateRef, certificate_request::CertificateRequest},
 };
+use crate::{CertificateVerify, CryptoProvider, TlsError, TlsVerifier};
 use core::fmt::Debug;
 use digest::Digest;
+use ecdsa::{elliptic_curve::CurveArithmetic, hazmat::SignPrimitive, SignatureSize};
 use embedded_io::Error as _;
 use embedded_io::{Read as BlockingRead, Write as BlockingWrite};
 use embedded_io_async::{Read as AsyncRead, Write as AsyncWrite};
-use rand_core::{CryptoRng, RngCore};
+use generic_array::ArrayLength;
 
 use crate::application_data::ApplicationData;
-// use crate::handshake::certificate_request::CertificateRequest;
-// use crate::handshake::certificate_verify::CertificateVerify;
-// use crate::handshake::encrypted_extensions::EncryptedExtensions;
-// use crate::handshake::finished::Finished;
-// use crate::handshake::new_session_ticket::NewSessionTicket;
-// use crate::handshake::server_hello::ServerHello;
 use crate::buffer::CryptoBuffer;
 use digest::generic_array::typenum::Unsigned;
 use p256::ecdh::EphemeralSecret;
 
 use crate::content_types::ContentType;
-// use crate::handshake::certificate_request::CertificateRequest;
-// use crate::handshake::certificate_verify::CertificateVerify;
-// use crate::handshake::encrypted_extensions::EncryptedExtensions;
-// use crate::handshake::finished::Finished;
-// use crate::handshake::new_session_ticket::NewSessionTicket;
-// use crate::handshake::server_hello::ServerHello;
 use crate::parse_buffer::ParseBuffer;
 use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 
@@ -141,27 +129,24 @@ where
         .map_err(|_| TlsError::InvalidApplicationData)
 }
 
-pub struct Handshake<CipherSuite, Verifier>
+pub struct Handshake<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
     traffic_hash: Option<CipherSuite::Hash>,
     secret: Option<EphemeralSecret>,
     certificate_request: Option<CertificateRequest>,
-    verifier: Verifier,
 }
 
-impl<'v, CipherSuite, Verifier> Handshake<CipherSuite, Verifier>
+impl<'v, CipherSuite> Handshake<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
-    Verifier: TlsVerifier<'v, CipherSuite>,
 {
-    pub fn new(verifier: Verifier) -> Handshake<CipherSuite, Verifier> {
+    pub fn new() -> Handshake<CipherSuite> {
         Handshake {
             traffic_hash: None,
             secret: None,
             certificate_request: None,
-            verifier,
         }
     }
 }
@@ -180,25 +165,29 @@ pub enum State {
 
 impl<'a> State {
     #[allow(clippy::too_many_arguments)]
-    pub async fn process<'v, Transport, CipherSuite, RNG, Verifier>(
+    pub async fn process<'v, Transport, Provider>(
         self,
         transport: &mut Transport,
-        handshake: &mut Handshake<CipherSuite, Verifier>,
-        record_reader: &mut RecordReader<'_, CipherSuite>,
+        handshake: &mut Handshake<Provider::CipherSuite>,
+        record_reader: &mut RecordReader<'_, Provider::CipherSuite>,
         tx_buf: &mut WriteBuffer<'_>,
-        key_schedule: &mut KeySchedule<CipherSuite>,
-        config: &TlsConfig<'a, CipherSuite>,
-        rng: &mut RNG,
+        key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+        config: &TlsConfig<'a>,
+        crypto_provider: &mut Provider,
     ) -> Result<State, TlsError>
     where
         Transport: AsyncRead + AsyncWrite + 'a,
-        RNG: CryptoRng + RngCore + 'a,
-        CipherSuite: TlsCipherSuite,
-        Verifier: TlsVerifier<'v, CipherSuite>,
+        Provider: CryptoProvider,
+        SignatureSize<Provider::SignatureCurve>:
+            core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
+        ecdsa::der::MaxSize<Provider::SignatureCurve>: ArrayLength<u8>,
+        <Provider::SignatureCurve as CurveArithmetic>::Scalar:
+            SignPrimitive<Provider::SignatureCurve>,
     {
         match self {
             State::ClientHello => {
-                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
+                let (state, tx) =
+                    client_hello(key_schedule, config, crypto_provider, tx_buf, handshake)?;
 
                 respond(tx, transport, key_schedule).await?;
 
@@ -218,23 +207,21 @@ impl<'a> State {
                     .read(transport, key_schedule.read_state())
                     .await?;
 
-                let result = process_server_verify(handshake, key_schedule, config, record);
+                let result =
+                    process_server_verify(handshake, key_schedule, config, crypto_provider, record);
 
                 handle_processing_error(result, transport, key_schedule, tx_buf).await
             }
             State::ClientCert => {
-                debug!("State::ClientCert");
                 let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
 
-                debug!("State::ClientCert respond");
                 respond(tx, transport, key_schedule).await?;
 
                 Ok(state)
             }
             State::ClientCertVerify => {
-                debug!("State::ClientCertVerify");
-
-                let (state, tx) = client_cert_verify(handshake, key_schedule, config, tx_buf)?;
+                let (state, tx) =
+                    client_cert_verify(key_schedule, config, crypto_provider, tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
@@ -252,25 +239,29 @@ impl<'a> State {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn process_blocking<'v, Transport, CipherSuite, RNG, Verifier>(
+    pub fn process_blocking<'v, Transport, Provider>(
         self,
         transport: &mut Transport,
-        handshake: &mut Handshake<CipherSuite, Verifier>,
-        record_reader: &mut RecordReader<'_, CipherSuite>,
+        handshake: &mut Handshake<Provider::CipherSuite>,
+        record_reader: &mut RecordReader<'_, Provider::CipherSuite>,
         tx_buf: &mut WriteBuffer,
-        key_schedule: &mut KeySchedule<CipherSuite>,
-        config: &TlsConfig<'a, CipherSuite>,
-        rng: &mut RNG,
+        key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+        config: &TlsConfig<'a>,
+        crypto_provider: &mut Provider,
     ) -> Result<State, TlsError>
     where
         Transport: BlockingRead + BlockingWrite + 'a,
-        RNG: CryptoRng + RngCore,
-        CipherSuite: TlsCipherSuite + 'static,
-        Verifier: TlsVerifier<'v, CipherSuite>,
+        Provider: CryptoProvider,
+        SignatureSize<Provider::SignatureCurve>:
+            core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
+        ecdsa::der::MaxSize<Provider::SignatureCurve>: ArrayLength<u8>,
+        <Provider::SignatureCurve as CurveArithmetic>::Scalar:
+            SignPrimitive<Provider::SignatureCurve>,
     {
         match self {
             State::ClientHello => {
-                let (state, tx) = client_hello(key_schedule, config, rng, tx_buf, handshake)?;
+                let (state, tx) =
+                    client_hello(key_schedule, config, crypto_provider, tx_buf, handshake)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -286,7 +277,8 @@ impl<'a> State {
             State::ServerVerify => {
                 let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
 
-                let result = process_server_verify(handshake, key_schedule, config, record);
+                let result =
+                    process_server_verify(handshake, key_schedule, config, crypto_provider, record);
 
                 handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
             }
@@ -298,7 +290,8 @@ impl<'a> State {
                 Ok(state)
             }
             State::ClientCertVerify => {
-                let (state, tx) = client_cert_verify(handshake, key_schedule, config, tx_buf)?;
+                let (state, tx) =
+                    client_cert_verify(key_schedule, config, crypto_provider, tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -404,20 +397,19 @@ where
     Ok(())
 }
 
-fn client_hello<'r, CipherSuite, RNG, Verifier>(
-    key_schedule: &mut KeySchedule<CipherSuite>,
-    config: &TlsConfig<CipherSuite>,
-    rng: &mut RNG,
+fn client_hello<'r, Provider>(
+    key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+    config: &TlsConfig,
+    crypto_provider: &mut Provider,
     tx_buf: &'r mut WriteBuffer,
-    handshake: &mut Handshake<CipherSuite, Verifier>,
+    handshake: &mut Handshake<Provider::CipherSuite>,
 ) -> Result<(State, &'r [u8]), TlsError>
 where
-    RNG: CryptoRng + RngCore,
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     key_schedule.initialize_early_secret(config.psk.as_ref().map(|p| p.0))?;
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
-    let client_hello = ClientRecord::client_hello(config, rng);
+    let client_hello = ClientRecord::client_hello(config, crypto_provider);
     let slice = tx_buf.write_record(&client_hello, write_key_schedule, Some(read_key_schedule))?;
 
     if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) = client_hello {
@@ -428,8 +420,8 @@ where
     }
 }
 
-fn process_server_hello<CipherSuite, Verifier>(
-    handshake: &mut Handshake<CipherSuite, Verifier>,
+fn process_server_hello<CipherSuite>(
+    handshake: &mut Handshake<CipherSuite>,
     key_schedule: &mut KeySchedule<CipherSuite>,
     record: ServerRecord<'_, CipherSuite>,
 ) -> Result<State, TlsError>
@@ -456,15 +448,15 @@ where
     }
 }
 
-fn process_server_verify<'a, 'v, CipherSuite, Verifier>(
-    handshake: &mut Handshake<CipherSuite, Verifier>,
-    key_schedule: &mut KeySchedule<CipherSuite>,
-    config: &TlsConfig<'a, CipherSuite>,
-    record: ServerRecord<'_, CipherSuite>,
+fn process_server_verify<'a, 'v, Provider>(
+    handshake: &mut Handshake<Provider::CipherSuite>,
+    key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+    config: &TlsConfig<'a>,
+    crypto_provider: &mut Provider,
+    record: ServerRecord<'_, Provider::CipherSuite>,
 ) -> Result<State, TlsError>
 where
-    CipherSuite: TlsCipherSuite,
-    Verifier: TlsVerifier<'v, CipherSuite>,
+    Provider: CryptoProvider,
 {
     let mut state = State::ServerVerify;
     decrypt_record(key_schedule.read_state(), record, |key_schedule, record| {
@@ -474,16 +466,20 @@ where
                     ServerHandshake::EncryptedExtensions(_) => {}
                     ServerHandshake::Certificate(certificate) => {
                         let transcript = key_schedule.transcript_hash();
-                        handshake.verifier.verify_certificate(
-                            transcript,
-                            &config.ca,
-                            certificate,
-                        )?;
-                        debug!("Certificate verified!");
+                        if let Ok(verifier) = crypto_provider.verifier() {
+                            verifier.verify_certificate(transcript, &config.ca, certificate)?;
+                            debug!("Certificate verified!");
+                        } else {
+                            debug!("Certificate verification skipped due to no verifier!");
+                        }
                     }
                     ServerHandshake::CertificateVerify(verify) => {
-                        handshake.verifier.verify_signature(verify)?;
-                        debug!("Signature verified!");
+                        if let Ok(verifier) = crypto_provider.verifier() {
+                            verifier.verify_signature(verify)?;
+                            debug!("Signature verified!");
+                        } else {
+                            debug!("Signature verification skipped due to no verifier!");
+                        }
                     }
                     ServerHandshake::CertificateRequest(request) => {
                         handshake.certificate_request.replace(request.try_into()?);
@@ -516,10 +512,10 @@ where
     Ok(state)
 }
 
-fn client_cert<'r, CipherSuite, Verifier>(
-    handshake: &mut Handshake<CipherSuite, Verifier>,
+fn client_cert<'r, CipherSuite>(
+    handshake: &mut Handshake<CipherSuite>,
     key_schedule: &mut KeySchedule<CipherSuite>,
-    config: &TlsConfig<CipherSuite>,
+    config: &TlsConfig,
     buffer: &'r mut WriteBuffer,
 ) -> Result<(State, &'r [u8]), TlsError>
 where
@@ -553,31 +549,42 @@ where
         .map(|slice| (next_state, slice))
 }
 
-fn client_cert_verify<'r, CipherSuite, Verifier>(
-    handshake: &mut Handshake<CipherSuite, Verifier>,
-    key_schedule: &mut KeySchedule<CipherSuite>,
-    config: &TlsConfig<CipherSuite>,
+fn client_cert_verify<'r, Provider>(
+    key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+    config: &TlsConfig,
+    crypto_provider: &mut Provider,
     buffer: &'r mut WriteBuffer,
 ) -> Result<(State, &'r [u8]), TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
+    SignatureSize<Provider::SignatureCurve>:
+        core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
+    ecdsa::der::MaxSize<Provider::SignatureCurve>: ArrayLength<u8>,
+    <Provider::SignatureCurve as CurveArithmetic>::Scalar: SignPrimitive<Provider::SignatureCurve>,
 {
+    let hash = key_schedule.transcript_hash().clone().finalize();
+
+    info!("{:?}", &hash);
+
     let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
     let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
     msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
     msg.extend_from_slice(ctx_str)
         .map_err(|_| TlsError::EncodeError)?;
-    msg.extend_from_slice(&key_schedule.transcript_hash().clone().finalize())
+    msg.extend_from_slice(&hash)
         .map_err(|_| TlsError::EncodeError)?;
 
-    debug!("Generating signature");
-    // TODO: How to get a hold of something that can sign here?
-    // let scheme = signer.scheme();
-    // let sig = signer.sign(&msg)?;
+    // FIXME: Remove unwraps!
+    let mut signing_key = crypto_provider.signer(config.priv_key.unwrap()).unwrap();
+    let signature = signing_key.sign(&msg);
+
+    let signature = signature.to_vec();
+
+    info!("Signature: {:x?}, len: {}", signature, signature.len());
 
     let certificate_verify = CertificateVerify {
-        signature_scheme: crate::extensions::extension_data::signature_algorithms::SignatureScheme::EcdsaSecp256r1Sha256,
-        signature: b"abcd",
+        signature_scheme: signing_key.signature_scheme(),
+        signature,
     };
 
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
@@ -611,9 +618,9 @@ where
     )
 }
 
-fn client_finished_finalize<CipherSuite, Verifier>(
+fn client_finished_finalize<CipherSuite>(
     key_schedule: &mut KeySchedule<CipherSuite>,
-    handshake: &mut Handshake<CipherSuite, Verifier>,
+    handshake: &mut Handshake<CipherSuite>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,

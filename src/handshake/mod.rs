@@ -2,7 +2,7 @@
 use crate::config::TlsCipherSuite;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_request::CertificateRequestRef;
-use crate::handshake::certificate_verify::CertificateVerify;
+use crate::handshake::certificate_verify::{CertificateVerify, CertificateVerifyRef};
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::encrypted_extensions::EncryptedExtensions;
 use crate::handshake::finished::Finished;
@@ -70,7 +70,7 @@ where
     CipherSuite: TlsCipherSuite,
 {
     ClientCert(CertificateRef<'a>),
-    ClientCertVerify(CertificateVerify<'a>),
+    ClientCertVerify(CertificateVerify),
     ClientHello(ClientHello<'config, CipherSuite>),
     Finished(Finished<HashOutputSize<CipherSuite>>),
 }
@@ -138,7 +138,7 @@ pub enum ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
     NewSessionTicket(NewSessionTicket<'a>),
     Certificate(CertificateRef<'a>),
     CertificateRequest(CertificateRequestRef<'a>),
-    CertificateVerify(CertificateVerify<'a>),
+    CertificateVerify(CertificateVerifyRef<'a>),
     Finished(Finished<HashOutputSize<CipherSuite>>),
 }
 
@@ -227,7 +227,7 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
             }
 
             HandshakeType::CertificateVerify => {
-                ServerHandshake::CertificateVerify(CertificateVerify::parse(buf)?)
+                ServerHandshake::CertificateVerify(CertificateVerifyRef::parse(buf)?)
             }
             HandshakeType::Finished => {
                 ServerHandshake::Finished(Finished::parse(buf, content_len)?)

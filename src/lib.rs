@@ -57,6 +57,10 @@ mod record_reader;
 mod split;
 mod write_buffer;
 
+pub use config::{Signature, SimpleProvider};
+pub use extensions::extension_data::signature_algorithms::SignatureScheme;
+pub use handshake::certificate_verify::CertificateVerify;
+
 #[cfg(feature = "webpki")]
 pub mod webpki;
 
@@ -91,6 +95,7 @@ pub enum TlsError {
     InvalidCertificate,
     InvalidCertificateEntry,
     InvalidCertificateRequest,
+    InvalidPrivateKey,
     UnableToInitializeCryptoEngine,
     ParseError(ParseError),
     OutOfMemory,

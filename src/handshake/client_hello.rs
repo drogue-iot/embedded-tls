@@ -1,11 +1,12 @@
+use core::marker::PhantomData;
+
 use digest::{Digest, OutputSizeUser};
 use heapless::Vec;
 use p256::ecdh::EphemeralSecret;
-use p256::elliptic_curve::rand_core::{CryptoRng, RngCore};
+use p256::elliptic_curve::rand_core::RngCore;
 use p256::EncodedPoint;
 use typenum::Unsigned;
 
-use crate::buffer::*;
 use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::extensions::extension_data::key_share::{KeyShareClientHello, KeyShareEntry};
 use crate::extensions::extension_data::pre_shared_key::PreSharedKeyClientHello;
@@ -20,13 +21,15 @@ use crate::extensions::messages::ClientHelloExtension;
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
 use crate::TlsError;
+use crate::{buffer::*, CryptoProvider};
 
 pub struct ClientHello<'config, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
-    pub(crate) config: &'config TlsConfig<'config, CipherSuite>,
+    pub(crate) config: &'config TlsConfig<'config>,
     random: Random,
+    cipher_suite: PhantomData<CipherSuite>,
     pub(crate) secret: EphemeralSecret,
 }
 
@@ -34,17 +37,18 @@ impl<'config, CipherSuite> ClientHello<'config, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
-    pub fn new<RNG>(config: &'config TlsConfig<'config, CipherSuite>, rng: &mut RNG) -> Self
+    pub fn new<Provider>(config: &'config TlsConfig<'config>, provider: &mut Provider) -> Self
     where
-        RNG: CryptoRng + RngCore,
+        Provider: CryptoProvider,
     {
         let mut random = [0; 32];
-        rng.fill_bytes(&mut random);
+        provider.rng().fill_bytes(&mut random);
 
         Self {
             config,
             random,
-            secret: EphemeralSecret::random(rng),
+            cipher_suite: PhantomData,
+            secret: EphemeralSecret::random(provider.rng()),
         }
     }
 
