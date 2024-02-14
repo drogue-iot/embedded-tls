@@ -157,7 +157,7 @@ where
     }
 }
 
-pub fn verify_signature(
+fn verify_signature(
     message: &[u8],
     certificate: ServerCertificate,
     verify: CertificateVerifyRef,
@@ -193,7 +193,7 @@ pub fn verify_signature(
     Ok(())
 }
 
-pub fn verify_certificate(
+fn verify_certificate(
     verify_host: Option<&str>,
     ca: &Option<Certificate>,
     certificate: &ServerCertificate,
