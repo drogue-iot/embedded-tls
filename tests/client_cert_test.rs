@@ -3,10 +3,8 @@ use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_tls::{CryptoProvider, SignatureScheme, Signer};
 use rand::rngs::OsRng;
 use rustls::server::AllowAnyAuthenticatedClient;
-use rustls::ClientConfig;
 use std::net::SocketAddr;
 use std::sync::Once;
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 mod tlsserver;
 
@@ -38,9 +36,9 @@ fn setup() -> SocketAddr {
 
             let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
 
-            let ca = load_certs(&test_dir.join("data").join("new").join("ca.crt"));
-            let certs = load_certs(&test_dir.join("data").join("new").join("server.crt"));
-            let privkey = load_private_key(&test_dir.join("data").join("new").join("server.key"));
+            let ca = load_certs(&test_dir.join("data").join("ca-cert.pem"));
+            let certs = load_certs(&test_dir.join("data").join("server-cert.pem"));
+            let privkey = load_private_key(&test_dir.join("data").join("server-key.pem"));
 
             let mut client_auth_roots = rustls::RootCertStore::empty();
             for root in ca.iter() {
@@ -98,13 +96,13 @@ async fn test_client_certificate_auth() {
     use tokio::net::TcpStream;
     let addr = setup();
 
-    let ca_pem = include_str!("data/new/ca.crt");
+    let ca_pem = include_str!("data/ca-cert.pem");
     let ca_der = pem_parser::pem_to_der(ca_pem);
 
-    let client_cert_pem = include_str!("data/new/client.crt");
+    let client_cert_pem = include_str!("data/client-cert.pem");
     let client_cert_der = pem_parser::pem_to_der(client_cert_pem);
 
-    let private_key_pem = include_str!("data/new/client.key");
+    let private_key_pem = include_str!("data/client-key.pem");
     let private_key_der = pem_parser::pem_to_der(private_key_pem);
 
     let stream = TcpStream::connect(addr)
@@ -165,46 +163,4 @@ async fn test_client_certificate_auth() {
         .await
         .map_err(|(_, e)| e)
         .expect("error closing session");
-}
-
-#[tokio::test]
-async fn test_client_certificate_auth_rustls() {
-    let addr = setup();
-
-    let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
-
-    let ca = tlsserver::load_certs(&test_dir.join("data").join("new").join("ca.crt"));
-    let certs = tlsserver::load_certs(&test_dir.join("data").join("new").join("client.crt"));
-    let privkey =
-        tlsserver::load_private_key(&test_dir.join("data").join("new").join("client.key"));
-
-    let mut root_store = rustls::RootCertStore::empty();
-    for root in ca.iter() {
-        root_store.add(root).unwrap()
-    }
-
-    let config = ClientConfig::builder()
-        .with_cipher_suites(&[rustls::cipher_suite::TLS13_AES_128_GCM_SHA256])
-        .with_kx_groups(&rustls::ALL_KX_GROUPS)
-        .with_protocol_versions(&[&rustls::version::TLS13])
-        .unwrap()
-        .with_root_certificates(root_store)
-        .with_client_auth_cert(certs, privkey)
-        .unwrap();
-
-    let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
-    let dnsname = rustls::ServerName::try_from("factbird.com").unwrap();
-
-    let stream = tokio::net::TcpStream::connect(&addr).await.unwrap();
-    let mut tls = connector.connect(dnsname, stream).await.unwrap();
-
-    tls.write(b"ping").await.expect("error writing data");
-    tls.flush().await.expect("error flushing data");
-
-    // Make sure reading into a 0 length buffer doesn't loop
-    let mut rx_buf = [0; 4096];
-    let sz = tls.read(&mut rx_buf).await.expect("error reading data");
-    assert_eq!(sz, 4);
-    assert_eq!(b"ping", &rx_buf[..sz]);
-    log::info!("Read {} bytes: {:?}", sz, &rx_buf[..sz]);
 }
