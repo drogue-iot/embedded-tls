@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use core::ops::Deref;
 
 use crate::cipher_suites::CipherSuite;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
@@ -163,13 +164,16 @@ where
 {
     signature: ecdsa::der::Signature<T>,
 }
-impl<T: PrimeCurve> Signature<T>
+
+impl<T: PrimeCurve> Deref for Signature<T> 
 where
     SignatureSize<T>: core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
     ecdsa::der::MaxSize<T>: ArrayLength<u8>,
 {
-    pub fn to_vec<const N: usize>(&self) -> heapless::Vec<u8, N> {
-        heapless::Vec::from_slice(self.signature.as_bytes()).unwrap()
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        self.signature.as_bytes()
     }
 }
 
@@ -190,7 +194,7 @@ where
         <T as CurveArithmetic>::Scalar: SignPrimitive<T>,
     {
         let signing_key = SigningKey::from(&self.secret_key);
-        let signature = signing_key.try_sign_with_rng(self.rng, &message).unwrap();
+        let signature = signing_key.sign_with_rng(self.rng, &message);
 
         Signature { signature }
     }
