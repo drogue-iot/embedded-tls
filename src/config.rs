@@ -141,7 +141,7 @@ pub struct TlsConfig<'a> {
     pub(crate) max_fragment_length: Option<MaxFragmentLength>,
     pub(crate) ca: Option<Certificate<'a>>,
     pub(crate) cert: Option<Certificate<'a>>,
-    pub(crate) priv_key: Option<&'a [u8]>,
+    pub(crate) priv_key: &'a [u8],
 }
 
 pub trait TlsClock {
@@ -211,7 +211,9 @@ pub trait CryptoProvider {
 
     fn rng(&mut self) -> &mut Self::SecureRandom;
 
-    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<'_, Self::CipherSuite>, crate::TlsError> {
+    fn verifier(
+        &mut self,
+    ) -> Result<&mut impl TlsVerifier<'_, Self::CipherSuite>, crate::TlsError> {
         Err::<&mut NoVerify, _>(crate::TlsError::Unimplemented)
     }
 
@@ -283,7 +285,7 @@ impl<'a> TlsConfig<'a> {
             server_name: None,
             ca: None,
             cert: None,
-            priv_key: None,
+            priv_key: &[],
         };
 
         if cfg!(feature = "alloc") {
@@ -379,7 +381,7 @@ impl<'a> TlsConfig<'a> {
     }
 
     pub fn with_priv_key(mut self, priv_key: &'a [u8]) -> Self {
-        self.priv_key = Some(priv_key);
+        self.priv_key = priv_key;
         self
     }
 

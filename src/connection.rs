@@ -220,12 +220,12 @@ impl<'a> State {
                 Ok(state)
             }
             State::ClientCertVerify => {
-                let (state, tx) =
+                let (result, tx) =
                     client_cert_verify(key_schedule, config, crypto_provider, tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
-                Ok(state)
+                result
             }
             State::ClientFinished => {
                 let tx = client_finished(key_schedule, tx_buf)?;
@@ -290,12 +290,12 @@ impl<'a> State {
                 Ok(state)
             }
             State::ClientCertVerify => {
-                let (state, tx) =
+                let (result, tx) =
                     client_cert_verify(key_schedule, config, crypto_provider, tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
-                Ok(state)
+                result
             }
             State::ClientFinished => {
                 let tx = client_finished(key_schedule, tx_buf)?;
@@ -554,7 +554,7 @@ fn client_cert_verify<'r, Provider>(
     config: &TlsConfig,
     crypto_provider: &mut Provider,
     buffer: &'r mut WriteBuffer,
-) -> Result<(State, &'r [u8]), TlsError>
+) -> Result<(Result<State, TlsError>, &'r [u8]), TlsError>
 where
     Provider: CryptoProvider,
     SignatureSize<Provider::SignatureCurve>:
@@ -562,32 +562,48 @@ where
     ecdsa::der::MaxSize<Provider::SignatureCurve>: ArrayLength<u8>,
     <Provider::SignatureCurve as CurveArithmetic>::Scalar: SignPrimitive<Provider::SignatureCurve>,
 {
-    let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
-    let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
-    msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
-    msg.extend_from_slice(ctx_str)
-        .map_err(|_| TlsError::EncodeError)?;
-    msg.extend_from_slice(&key_schedule.transcript_hash().clone().finalize())
-        .map_err(|_| TlsError::EncodeError)?;
+    let (result, record) = match crypto_provider.signer(config.priv_key) {
+        Ok(mut signing_key) => {
+            let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
+            let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
+            msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
+            msg.extend_from_slice(ctx_str)
+                .map_err(|_| TlsError::EncodeError)?;
+            msg.extend_from_slice(&key_schedule.transcript_hash().clone().finalize())
+                .map_err(|_| TlsError::EncodeError)?;
 
-    // FIXME: Remove unwraps!
-    let mut signing_key = crypto_provider.signer(config.priv_key.unwrap()).unwrap();
-    let signature = signing_key.sign(&msg);
+            let signature = signing_key.sign(&msg);
 
-    let certificate_verify = CertificateVerify {
-        signature_scheme: signing_key.signature_scheme(),
-        signature: heapless::Vec::from_slice(&*signature).unwrap(),
+            let certificate_verify = CertificateVerify {
+                signature_scheme: signing_key.signature_scheme(),
+                signature: heapless::Vec::from_slice(&*signature).unwrap(),
+            };
+
+            (
+                Ok(State::ClientFinished),
+                ClientRecord::Handshake(
+                    ClientHandshake::ClientCertVerify(certificate_verify),
+                    true,
+                ),
+            )
+        }
+        Err(e) => {
+            error!("Failed to obtain signing key: {:?}", e);
+            (
+                Err(e),
+                ClientRecord::Alert(
+                    Alert::new(AlertLevel::Warning, AlertDescription::CloseNotify),
+                    true,
+                ),
+            )
+        }
     };
 
     let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
 
     buffer
-        .write_record(
-            &ClientRecord::Handshake(ClientHandshake::ClientCertVerify(certificate_verify), true),
-            write_key_schedule,
-            Some(read_key_schedule),
-        )
-        .map(|slice| (State::ClientFinished, slice))
+        .write_record(&record, write_key_schedule, Some(read_key_schedule))
+        .map(|slice| (result, slice))
 }
 
 fn client_finished<'r, CipherSuite>(
