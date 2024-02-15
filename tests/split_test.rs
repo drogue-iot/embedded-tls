@@ -86,7 +86,7 @@ fn test_blocking_borrowed() {
 
     tls.open(TlsContext::new(
         &config,
-        SimpleProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
     ))
     .expect("error establishing TLS connection");
 
@@ -137,7 +137,7 @@ fn test_blocking_managed() {
 
     tls.open(TlsContext::new(
         &config,
-        SimpleProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
     ))
     .expect("error establishing TLS connection");
 

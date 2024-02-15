@@ -105,7 +105,7 @@ where
     Clock: TlsClock,
     CipherSuite: TlsCipherSuite,
 {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             host: None,
             certificate_transcript: None,

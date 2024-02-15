@@ -211,7 +211,7 @@ pub trait CryptoProvider {
 
     fn rng(&mut self) -> &mut Self::SecureRandom;
 
-    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, crate::TlsError> {
+    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<'_, Self::CipherSuite>, crate::TlsError> {
         Err::<&mut NoVerify, _>(crate::TlsError::Unimplemented)
     }
 
@@ -224,14 +224,14 @@ pub trait CryptoProvider {
     }
 }
 
-pub struct SimpleProvider<CipherSuite, RNG> {
+pub struct UnsecureProvider<CipherSuite, RNG> {
     rng: RNG,
     _marker: PhantomData<CipherSuite>,
 }
 
-impl<RNG: CryptoRngCore> SimpleProvider<(), RNG> {
-    pub fn new<CipherSuite: TlsCipherSuite>(rng: RNG) -> SimpleProvider<CipherSuite, RNG> {
-        SimpleProvider {
+impl<RNG: CryptoRngCore> UnsecureProvider<(), RNG> {
+    pub fn new<CipherSuite: TlsCipherSuite>(rng: RNG) -> UnsecureProvider<CipherSuite, RNG> {
+        UnsecureProvider {
             rng,
             _marker: PhantomData,
         }
@@ -239,7 +239,7 @@ impl<RNG: CryptoRngCore> SimpleProvider<(), RNG> {
 }
 
 impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
-    for SimpleProvider<CipherSuite, RNG>
+    for UnsecureProvider<CipherSuite, RNG>
 {
     type CipherSuite = CipherSuite;
     type SecureRandom = RNG;

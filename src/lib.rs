@@ -31,7 +31,7 @@ async fn main() {
     // otherwise, use embedded_tls::webpki::CertVerifier, which only works on std for now.
     tls.open(TlsContext::new(
         &config,
-        SimpleProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
     ))
     .await
     .expect("error establishing TLS connection");
@@ -66,7 +66,7 @@ mod record_reader;
 mod split;
 mod write_buffer;
 
-pub use config::{Signature, SimpleProvider};
+pub use config::{Signature, UnsecureProvider};
 pub use extensions::extension_data::signature_algorithms::SignatureScheme;
 pub use handshake::certificate_verify::CertificateVerify;
 

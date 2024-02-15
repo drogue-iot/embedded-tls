@@ -84,7 +84,7 @@ async fn test_psk_open() {
         assert!(tls
             .open(TlsContext::new(
                 &config,
-                SimpleProvider::new::<Aes128GcmSha256>(OsRng)
+                UnsecureProvider::new::<Aes128GcmSha256>(OsRng)
             ))
             .await
             .is_ok());

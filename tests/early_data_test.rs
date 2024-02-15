@@ -76,7 +76,7 @@ fn early_data_ignored() {
 
     tls.open(TlsContext::new(
         &config,
-        SimpleProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
     ))
     .expect("error establishing TLS connection");
 
