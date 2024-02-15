@@ -165,7 +165,7 @@ where
     signature: ecdsa::der::Signature<T>,
 }
 
-impl<T: PrimeCurve> Deref for Signature<T> 
+impl<T: PrimeCurve> Deref for Signature<T>
 where
     SignatureSize<T>: core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
     ecdsa::der::MaxSize<T>: ArrayLength<u8>,
