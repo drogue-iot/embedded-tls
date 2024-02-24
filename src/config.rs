@@ -1,5 +1,4 @@
 use core::marker::PhantomData;
-use core::ops::Deref;
 
 use crate::cipher_suites::CipherSuite;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
@@ -10,20 +9,12 @@ use crate::TlsError;
 use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
-use ecdsa::signature::RandomizedSigner;
 use generic_array::ArrayLength;
 use heapless::Vec;
-use p256::NistP256;
 use rand_core::CryptoRngCore;
 pub use sha2::Sha256;
 pub use sha2::Sha384;
 use typenum::{Sum, U10, U12, U16, U32};
-
-use ecdsa::{
-    elliptic_curve::{CurveArithmetic, SecretKey},
-    hazmat::{DigestPrimitive, SignPrimitive},
-    PrimeCurve, SignatureSize, SigningKey,
-};
 
 pub use crate::extensions::extension_data::max_fragment_length::MaxFragmentLength;
 
@@ -156,58 +147,10 @@ impl TlsClock for NoClock {
     }
 }
 
-#[derive(Debug)]
-pub struct Signature<T: PrimeCurve>
-where
-    SignatureSize<T>: core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
-    ecdsa::der::MaxSize<T>: ArrayLength<u8>,
-{
-    signature: ecdsa::der::Signature<T>,
-}
-
-impl<T: PrimeCurve> Deref for Signature<T>
-where
-    SignatureSize<T>: core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
-    ecdsa::der::MaxSize<T>: ArrayLength<u8>,
-{
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.signature.as_bytes()
-    }
-}
-
-pub struct Signer<'a, T: PrimeCurve, RNG: CryptoRngCore> {
-    pub secret_key: SecretKey<T>,
-    pub scheme: SignatureScheme,
-    pub rng: &'a mut RNG,
-}
-
-impl<'a, T: PrimeCurve, RNG: CryptoRngCore> Signer<'a, T, RNG>
-where
-    SignatureSize<T>: core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
-    ecdsa::der::MaxSize<T>: ArrayLength<u8>,
-{
-    pub fn sign(&mut self, message: &[u8]) -> Signature<T>
-    where
-        T: CurveArithmetic + DigestPrimitive,
-        <T as CurveArithmetic>::Scalar: SignPrimitive<T>,
-    {
-        let signing_key = SigningKey::from(&self.secret_key);
-        let signature = signing_key.sign_with_rng(self.rng, &message);
-
-        Signature { signature }
-    }
-
-    pub fn signature_scheme(&self) -> SignatureScheme {
-        self.scheme
-    }
-}
-
 pub trait CryptoProvider {
     type CipherSuite: TlsCipherSuite;
     type SecureRandom: CryptoRngCore;
-    type SignatureCurve: CurveArithmetic + DigestPrimitive;
+    type Signature: AsRef<[u8]>;
 
     fn rng(&mut self) -> &mut Self::SecureRandom;
 
@@ -221,8 +164,16 @@ pub trait CryptoProvider {
     fn signer(
         &mut self,
         _key_der: &[u8],
-    ) -> Result<Signer<Self::SignatureCurve, Self::SecureRandom>, crate::TlsError> {
-        Err::<Signer<Self::SignatureCurve, Self::SecureRandom>, _>(crate::TlsError::Unimplemented)
+    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError> {
+        Err::<(NoSign, _), crate::TlsError>(crate::TlsError::Unimplemented)
+    }
+}
+
+pub struct NoSign;
+
+impl<S> signature::Signer<S> for NoSign {
+    fn try_sign(&self, _msg: &[u8]) -> Result<S, signature::Error> {
+        unimplemented!()
     }
 }
 
@@ -245,7 +196,9 @@ impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
 {
     type CipherSuite = CipherSuite;
     type SecureRandom = RNG;
-    type SignatureCurve = NistP256;
+    type Signature = &'static [u8];
+    // type SignatureCurve = NistP256;
+    // type Signature = ();
 
     fn rng(&mut self) -> &mut Self::SecureRandom {
         &mut self.rng

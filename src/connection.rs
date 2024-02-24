@@ -11,16 +11,15 @@ use crate::{
 use crate::{CertificateVerify, CryptoProvider, TlsError, TlsVerifier};
 use core::fmt::Debug;
 use digest::Digest;
-use ecdsa::{elliptic_curve::CurveArithmetic, hazmat::SignPrimitive, SignatureSize};
 use embedded_io::Error as _;
 use embedded_io::{Read as BlockingRead, Write as BlockingWrite};
 use embedded_io_async::{Read as AsyncRead, Write as AsyncWrite};
-use generic_array::ArrayLength;
 
 use crate::application_data::ApplicationData;
 use crate::buffer::CryptoBuffer;
 use digest::generic_array::typenum::Unsigned;
 use p256::ecdh::EphemeralSecret;
+use signature::SignerMut;
 
 use crate::content_types::ContentType;
 use crate::parse_buffer::ParseBuffer;
@@ -178,11 +177,6 @@ impl<'a> State {
     where
         Transport: AsyncRead + AsyncWrite + 'a,
         Provider: CryptoProvider,
-        SignatureSize<Provider::SignatureCurve>:
-            core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
-        ecdsa::der::MaxSize<Provider::SignatureCurve>: ArrayLength<u8>,
-        <Provider::SignatureCurve as CurveArithmetic>::Scalar:
-            SignPrimitive<Provider::SignatureCurve>,
     {
         match self {
             State::ClientHello => {
@@ -252,11 +246,6 @@ impl<'a> State {
     where
         Transport: BlockingRead + BlockingWrite + 'a,
         Provider: CryptoProvider,
-        SignatureSize<Provider::SignatureCurve>:
-            core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
-        ecdsa::der::MaxSize<Provider::SignatureCurve>: ArrayLength<u8>,
-        <Provider::SignatureCurve as CurveArithmetic>::Scalar:
-            SignPrimitive<Provider::SignatureCurve>,
     {
         match self {
             State::ClientHello => {
@@ -557,13 +546,9 @@ fn client_cert_verify<'r, Provider>(
 ) -> Result<(Result<State, TlsError>, &'r [u8]), TlsError>
 where
     Provider: CryptoProvider,
-    SignatureSize<Provider::SignatureCurve>:
-        core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
-    ecdsa::der::MaxSize<Provider::SignatureCurve>: ArrayLength<u8>,
-    <Provider::SignatureCurve as CurveArithmetic>::Scalar: SignPrimitive<Provider::SignatureCurve>,
 {
     let (result, record) = match crypto_provider.signer(config.priv_key) {
-        Ok(mut signing_key) => {
+        Ok((mut signing_key, signature_scheme)) => {
             let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
             let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
             msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
@@ -575,8 +560,8 @@ where
             let signature = signing_key.sign(&msg);
 
             let certificate_verify = CertificateVerify {
-                signature_scheme: signing_key.signature_scheme(),
-                signature: heapless::Vec::from_slice(&*signature).unwrap(),
+                signature_scheme,
+                signature: heapless::Vec::from_slice(signature.as_ref()).unwrap(),
             };
 
             (

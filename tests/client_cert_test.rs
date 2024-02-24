@@ -1,6 +1,7 @@
 use ecdsa::elliptic_curve::SecretKey;
 use embedded_io_adapters::tokio_1::FromTokio;
-use embedded_tls::{CryptoProvider, SignatureScheme, Signer};
+use embedded_tls::{CryptoProvider, SignatureScheme};
+use p256::ecdsa::SigningKey;
 use rand::rngs::OsRng;
 use rustls::server::AllowAnyAuthenticatedClient;
 use std::net::SocketAddr;
@@ -71,7 +72,7 @@ struct Provider {
 impl CryptoProvider for Provider {
     type CipherSuite = embedded_tls::Aes128GcmSha256;
     type SecureRandom = OsRng;
-    type SignatureCurve = p256::NistP256;
+    type Signature = p256::ecdsa::DerSignature;
 
     fn rng(&mut self) -> &mut Self::SecureRandom {
         &mut self.rng
@@ -80,13 +81,15 @@ impl CryptoProvider for Provider {
     fn signer(
         &mut self,
         key_der: &[u8],
-    ) -> Result<Signer<Self::SignatureCurve, Self::SecureRandom>, embedded_tls::TlsError> {
-        Ok(Signer {
-            secret_key: SecretKey::from_sec1_der(key_der)
-                .map_err(|_| embedded_tls::TlsError::InvalidPrivateKey)?,
-            scheme: SignatureScheme::EcdsaSecp256r1Sha256,
-            rng: &mut self.rng,
-        })
+    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), embedded_tls::TlsError>
+    {
+        let secret_key = SecretKey::from_sec1_der(key_der)
+            .map_err(|_| embedded_tls::TlsError::InvalidPrivateKey)?;
+
+        Ok((
+            SigningKey::from(&secret_key),
+            SignatureScheme::EcdsaSecp256r1Sha256,
+        ))
     }
 }
 

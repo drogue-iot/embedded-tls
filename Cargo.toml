@@ -16,7 +16,6 @@ atomic-polyfill = "1"
 p256 = { version = "0.13.2", default-features = false, features = [
     "ecdh",
     "ecdsa",
-    "arithmetic",
     "sha256",
 ] }
 rand_core = { version = "0.6.3", default-features = false }
@@ -35,7 +34,7 @@ embedded-io-async = "0.6"
 embedded-io-adapters = { version = "0.6", optional = true }
 generic-array = { version = "0.14", default-features = false }
 webpki = { package = "rustls-webpki", version = "0.101.7", default-features = false, optional = true }
-ecdsa = { version = "0.16.9", default-features = false }
+signature = { version = "2.2", default-features = false }
 
 # Logging alternatives
 log = { version = "0.4", optional = true }
@@ -52,6 +51,7 @@ rand = "0.8"
 log = "0.4"
 pem-parser = "0.1.1"
 openssl = "0.10.44"
+ecdsa = { version = "0.16.9", default-features = false }
 
 [features]
 default = ["std", "log", "tokio"]

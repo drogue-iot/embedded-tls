@@ -66,7 +66,7 @@ mod record_reader;
 mod split;
 mod write_buffer;
 
-pub use config::{Signature, UnsecureProvider};
+pub use config::UnsecureProvider;
 pub use extensions::extension_data::signature_algorithms::SignatureScheme;
 pub use handshake::certificate_verify::CertificateVerify;
 

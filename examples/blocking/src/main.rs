@@ -6,6 +6,29 @@ use rand::rngs::OsRng;
 use std::net::TcpStream;
 use std::time::SystemTime;
 
+struct Provider<'a> {
+    rng: OsRng,
+    verifier: CertVerifier<'a, Aes128GcmSha256, SystemTime, 4096>,
+}
+
+impl<'a> CryptoProvider for Provider<'a> {
+    type CipherSuite = Aes128GcmSha256;
+
+    type SecureRandom = OsRng;
+
+    type SignatureCurve;
+
+    fn rng(&mut self) -> &mut Self::SecureRandom {
+        &mut self.rng
+    }
+
+    fn verifier(
+        &mut self,
+    ) -> Result<&mut impl TlsVerifier<'_, Self::CipherSuite>, embedded_tls::TlsError> {
+        Ok(&mut self.verifier)
+    }
+}
+
 fn main() {
     env_logger::init();
     let stream = TcpStream::connect("127.0.0.1:12345").expect("error connecting to server");
@@ -14,15 +37,18 @@ fn main() {
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new().with_server_name("localhost");
-    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         FromStd::new(stream),
         &mut read_record_buffer,
         &mut write_record_buffer,
     );
-    let mut rng = OsRng;
 
-    tls.open::<OsRng, CertVerifier<Aes128GcmSha256, SystemTime, 4096>>(TlsContext::new(
-        &config, &mut rng,
+    tls.open(TlsContext::new(
+        &config,
+        Provider {
+            rng: OsRng,
+            verifier: CertVerifier::new(),
+        },
     ))
     .expect("error establishing TLS connection");
 

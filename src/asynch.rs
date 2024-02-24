@@ -9,13 +9,9 @@ use crate::record_reader::RecordReader;
 use crate::split::{SplitState, SplitStateContainer};
 use crate::write_buffer::WriteBuffer;
 use crate::TlsError;
-use ecdsa::elliptic_curve::CurveArithmetic;
-use ecdsa::hazmat::SignPrimitive;
-use ecdsa::SignatureSize;
 use embedded_io::Error as _;
 use embedded_io::ErrorType;
 use embedded_io_async::{BufRead, Read as AsyncRead, Write as AsyncWrite};
-use generic_array::ArrayLength;
 
 pub use crate::config::*;
 #[cfg(feature = "std")]
@@ -80,11 +76,6 @@ where
     ) -> Result<(), TlsError>
     where
         Provider: CryptoProvider<CipherSuite = CipherSuite>,
-        SignatureSize<Provider::SignatureCurve>:
-            core::ops::Add<ecdsa::der::MaxOverhead> + ArrayLength<u8>,
-        ecdsa::der::MaxSize<Provider::SignatureCurve>: ArrayLength<u8>,
-        <Provider::SignatureCurve as CurveArithmetic>::Scalar:
-            SignPrimitive<Provider::SignatureCurve>,
     {
         let mut handshake: Handshake<CipherSuite> = Handshake::new();
         if let Ok(verifier) = context.crypto_provider.verifier() {
