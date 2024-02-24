@@ -5,7 +5,7 @@ use embassy_net::{Config, Ipv4Address, Ipv4Cidr, Stack, StackResources};
 use embassy_net_tuntap::TunTapDevice;
 use embassy_time::Duration;
 use embedded_io_async::Write;
-use embedded_tls::{Aes128GcmSha256, NoVerify, TlsConfig, TlsConnection, TlsContext};
+use embedded_tls::{Aes128GcmSha256, TlsConfig, TlsConnection, TlsContext, UnsecureProvider};
 use heapless::Vec;
 use log::*;
 use rand::{rngs::OsRng, RngCore};
@@ -81,7 +81,6 @@ async fn main_task(spawner: Spawner) {
 
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let mut rng = OsRng;
     let config = TlsConfig::new().with_server_name("example.com");
     let mut tls = TlsConnection::new(socket, &mut read_record_buffer, &mut write_record_buffer);
 

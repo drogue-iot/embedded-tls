@@ -16,7 +16,7 @@ impl<'a> CryptoProvider for Provider<'a> {
 
     type SecureRandom = OsRng;
 
-    type SignatureCurve;
+    type Signature = &'static [u8];
 
     fn rng(&mut self) -> &mut Self::SecureRandom {
         &mut self.rng
