@@ -14,11 +14,9 @@ struct Provider<'a> {
 impl<'a> CryptoProvider for Provider<'a> {
     type CipherSuite = Aes128GcmSha256;
 
-    type SecureRandom = OsRng;
-
     type Signature = &'static [u8];
 
-    fn rng(&mut self) -> &mut Self::SecureRandom {
+    fn rng(&mut self) -> impl embedded_tls::CryptoRngCore {
         &mut self.rng
     }
 

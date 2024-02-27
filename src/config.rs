@@ -9,10 +9,13 @@ use crate::TlsError;
 use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
+use ecdsa::elliptic_curve::SecretKey;
 use generic_array::ArrayLength;
 use heapless::Vec;
+use p256::ecdsa::SigningKey;
 use rand_core::CryptoRngCore;
 pub use sha2::Sha256;
+
 pub use sha2::Sha384;
 use typenum::{Sum, U10, U12, U16, U32};
 
@@ -219,10 +222,24 @@ impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
     for UnsecureProvider<CipherSuite, RNG>
 {
     type CipherSuite = CipherSuite;
-    type Signature = &'static [u8];
+    type Signature = p256::ecdsa::DerSignature;
 
     fn rng(&mut self) -> impl CryptoRngCore {
         &mut self.rng
+    }
+
+    fn signer(
+        &mut self,
+        key_der: &[u8],
+    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
+    {
+        let secret_key =
+            SecretKey::from_sec1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
+
+        Ok((
+            SigningKey::from(&secret_key),
+            SignatureScheme::EcdsaSecp256r1Sha256,
+        ))
     }
 }
 
