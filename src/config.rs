@@ -149,10 +149,9 @@ impl TlsClock for NoClock {
 
 pub trait CryptoProvider {
     type CipherSuite: TlsCipherSuite;
-    type SecureRandom: CryptoRngCore;
     type Signature: AsRef<[u8]>;
 
-    fn rng(&mut self) -> &mut Self::SecureRandom;
+    fn rng(&mut self) -> impl CryptoRngCore;
 
     fn verifier(
         &mut self,
@@ -164,8 +163,33 @@ pub trait CryptoProvider {
     fn signer(
         &mut self,
         _key_der: &[u8],
-    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError> {
+    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
+    {
         Err::<(NoSign, _), crate::TlsError>(crate::TlsError::Unimplemented)
+    }
+}
+
+impl<T: CryptoProvider> CryptoProvider for &mut T {
+    type CipherSuite = T::CipherSuite;
+
+    type Signature = T::Signature;
+
+    fn rng(&mut self) -> impl CryptoRngCore {
+        T::rng(self)
+    }
+
+    fn verifier(
+        &mut self,
+    ) -> Result<&mut impl TlsVerifier<'_, Self::CipherSuite>, crate::TlsError> {
+        T::verifier(self)
+    }
+
+    fn signer(
+        &mut self,
+        key_der: &[u8],
+    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
+    {
+        T::signer(self, key_der)
     }
 }
 
@@ -195,12 +219,9 @@ impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
     for UnsecureProvider<CipherSuite, RNG>
 {
     type CipherSuite = CipherSuite;
-    type SecureRandom = RNG;
     type Signature = &'static [u8];
-    // type SignatureCurve = NistP256;
-    // type Signature = ();
 
-    fn rng(&mut self) -> &mut Self::SecureRandom {
+    fn rng(&mut self) -> impl CryptoRngCore {
         &mut self.rng
     }
 }

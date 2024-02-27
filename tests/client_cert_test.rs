@@ -3,6 +3,7 @@ use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_tls::{CryptoProvider, SignatureScheme};
 use p256::ecdsa::SigningKey;
 use rand::rngs::OsRng;
+use rand_core::CryptoRngCore;
 use rustls::server::AllowAnyAuthenticatedClient;
 use std::net::SocketAddr;
 use std::sync::Once;
@@ -71,10 +72,9 @@ struct Provider {
 
 impl CryptoProvider for Provider {
     type CipherSuite = embedded_tls::Aes128GcmSha256;
-    type SecureRandom = OsRng;
     type Signature = p256::ecdsa::DerSignature;
 
-    fn rng(&mut self) -> &mut Self::SecureRandom {
+    fn rng(&mut self) -> impl CryptoRngCore {
         &mut self.rng
     }
 
@@ -129,7 +129,8 @@ async fn test_client_certificate_auth() {
 
     log::info!("SIZE of connection is {}", core::mem::size_of_val(&tls));
 
-    let open_fut = tls.open(TlsContext::new(&config, Provider::default()));
+    let mut provider = Provider::default();
+    let open_fut = tls.open(TlsContext::new(&config, &mut provider));
     log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
     open_fut.await.expect("error establishing TLS connection");
     log::info!("Established");

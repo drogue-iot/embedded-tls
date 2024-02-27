@@ -37,7 +37,7 @@ impl<'config, CipherSuite> ClientHello<'config, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
-    pub fn new<Provider>(config: &'config TlsConfig<'config>, provider: &mut Provider) -> Self
+    pub fn new<Provider>(config: &'config TlsConfig<'config>, mut provider: Provider) -> Self
     where
         Provider: CryptoProvider,
     {
@@ -48,7 +48,7 @@ where
             config,
             random,
             cipher_suite: PhantomData,
-            secret: EphemeralSecret::random(provider.rng()),
+            secret: EphemeralSecret::random(&mut provider.rng()),
         }
     }
 
