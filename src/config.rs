@@ -2,7 +2,7 @@ use crate::cipher_suites::CipherSuite;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::handshake::certificate::CertificateRef;
-use crate::handshake::certificate_verify::CertificateVerify;
+pub use crate::handshake::certificate_verify::CertificateVerify;
 use crate::TlsError;
 use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
 use core::marker::PhantomData;
