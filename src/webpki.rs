@@ -89,18 +89,18 @@ static ALL_SIGALGS: &[&webpki::SignatureAlgorithm] = &[
     &webpki::ED25519,
 ];
 
-pub struct CertVerifier<'a, CipherSuite, Clock, const CERT_SIZE: usize>
+pub struct CertVerifier<CipherSuite, Clock, const CERT_SIZE: usize>
 where
     Clock: TlsClock,
     CipherSuite: TlsCipherSuite,
 {
-    host: Option<&'a str>,
+    host: Option<heapless::String<64>>,
     certificate_transcript: Option<CipherSuite::Hash>,
     certificate: Option<OwnedCertificate<CERT_SIZE>>,
     _clock: PhantomData<Clock>,
 }
 
-impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
+impl<CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<CipherSuite, Clock, CERT_SIZE>
 where
     Clock: TlsClock,
     CipherSuite: TlsCipherSuite,
@@ -115,17 +115,16 @@ where
     }
 }
 
-impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<'a, CipherSuite>
-    for CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
+impl<CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<CipherSuite>
+    for CertVerifier<CipherSuite, Clock, CERT_SIZE>
 where
     CipherSuite: TlsCipherSuite,
     Clock: TlsClock,
 {
-    fn set_hostname_verification(
-        &mut self,
-        hostname: Option<&'a str>,
-    ) -> Result<(), crate::TlsError> {
-        self.host = hostname;
+    fn set_hostname_verification(&mut self, hostname: &str) -> Result<(), TlsError> {
+        self.host.replace(
+            heapless::String::try_from(hostname).map_err(|_| TlsError::InsufficientSpace)?,
+        );
         Ok(())
     }
 
@@ -135,7 +134,7 @@ where
         ca: &Option<Certificate>,
         cert: ServerCertificate,
     ) -> Result<(), TlsError> {
-        verify_certificate(self.host.clone(), ca, &cert, Clock::now())?;
+        verify_certificate(self.host.as_deref(), ca, &cert, Clock::now())?;
         self.certificate.replace(cert.try_into()?);
         self.certificate_transcript.replace(transcript.clone());
         Ok(())

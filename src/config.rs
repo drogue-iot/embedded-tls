@@ -70,15 +70,12 @@ impl TlsCipherSuite for Aes256GcmSha384 {
 /// The verifier is responsible for verifying certificates and signatures. Since certificate verification is
 /// an expensive process, this trait allows clients to choose how much verification should take place,
 /// and also to skip the verification if the server is verified through other means (I.e. a pre-shared key).
-pub trait TlsVerifier<'a, CipherSuite>
+pub trait TlsVerifier<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
     /// Host verification is enabled by passing a server hostname.
-    fn set_hostname_verification(
-        &mut self,
-        hostname: Option<&'a str>,
-    ) -> Result<(), crate::TlsError>;
+    fn set_hostname_verification(&mut self, hostname: &str) -> Result<(), crate::TlsError>;
 
     /// Verify a certificate.
     ///
@@ -100,14 +97,11 @@ where
 
 pub struct NoVerify;
 
-impl<'a, CipherSuite> TlsVerifier<'a, CipherSuite> for NoVerify
+impl<CipherSuite> TlsVerifier<CipherSuite> for NoVerify
 where
     CipherSuite: TlsCipherSuite,
 {
-    fn set_hostname_verification(
-        &mut self,
-        _hostname: Option<&'a str>,
-    ) -> Result<(), crate::TlsError> {
+    fn set_hostname_verification(&mut self, _hostname: &str) -> Result<(), crate::TlsError> {
         Ok(())
     }
 
@@ -156,9 +150,7 @@ pub trait CryptoProvider {
 
     fn rng(&mut self) -> impl CryptoRngCore;
 
-    fn verifier(
-        &mut self,
-    ) -> Result<&mut impl TlsVerifier<'_, Self::CipherSuite>, crate::TlsError> {
+    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, crate::TlsError> {
         Err::<&mut NoVerify, _>(crate::TlsError::Unimplemented)
     }
 
@@ -181,9 +173,7 @@ impl<T: CryptoProvider> CryptoProvider for &mut T {
         T::rng(self)
     }
 
-    fn verifier(
-        &mut self,
-    ) -> Result<&mut impl TlsVerifier<'_, Self::CipherSuite>, crate::TlsError> {
+    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, crate::TlsError> {
         T::verifier(self)
     }
 

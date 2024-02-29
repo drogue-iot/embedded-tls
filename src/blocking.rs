@@ -77,8 +77,11 @@ where
         Provider: CryptoProvider<CipherSuite = CipherSuite>,
     {
         let mut handshake: Handshake<CipherSuite> = Handshake::new();
-        if let Ok(verifier) = context.crypto_provider.verifier() {
-            verifier.set_hostname_verification(context.config.server_name)?;
+        if let (Ok(verifier), Some(server_name)) = (
+            context.crypto_provider.verifier(),
+            context.config.server_name,
+        ) {
+            verifier.set_hostname_verification(server_name)?;
         }
         let mut state = State::ClientHello;
 

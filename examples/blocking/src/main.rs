@@ -6,12 +6,12 @@ use rand::rngs::OsRng;
 use std::net::TcpStream;
 use std::time::SystemTime;
 
-struct Provider<'a> {
+struct Provider {
     rng: OsRng,
-    verifier: CertVerifier<'a, Aes128GcmSha256, SystemTime, 4096>,
+    verifier: CertVerifier<Aes128GcmSha256, SystemTime, 4096>,
 }
 
-impl<'a> CryptoProvider for Provider<'a> {
+impl CryptoProvider for Provider {
     type CipherSuite = Aes128GcmSha256;
 
     type Signature = &'static [u8];
@@ -22,7 +22,7 @@ impl<'a> CryptoProvider for Provider<'a> {
 
     fn verifier(
         &mut self,
-    ) -> Result<&mut impl TlsVerifier<'_, Self::CipherSuite>, embedded_tls::TlsError> {
+    ) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, embedded_tls::TlsError> {
         Ok(&mut self.verifier)
     }
 }
