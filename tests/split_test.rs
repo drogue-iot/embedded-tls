@@ -78,14 +78,17 @@ fn test_blocking_borrowed() {
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<Clonable<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         Clonable(Arc::new(stream)),
         &mut read_record_buffer,
         &mut write_record_buffer,
     );
 
-    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng))
-        .expect("error establishing TLS connection");
+    tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ))
+    .expect("error establishing TLS connection");
 
     let mut state = SplitConnectionState::default();
     let (mut reader, mut writer) = tls.split_with(&mut state);
@@ -126,14 +129,17 @@ fn test_blocking_managed() {
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<Clonable<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         Clonable(Arc::new(stream)),
         &mut read_record_buffer,
         &mut write_record_buffer,
     );
 
-    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng))
-        .expect("error establishing TLS connection");
+    tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ))
+    .expect("error establishing TLS connection");
 
     let (mut reader, mut writer) = tls.split();
 

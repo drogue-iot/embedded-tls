@@ -38,7 +38,6 @@ fn setup() -> SocketAddr {
     unsafe { ADDR.unwrap() }
 }
 
-#[ignore]
 #[tokio::test]
 async fn test_google() {
     use embedded_tls::*;
@@ -55,14 +54,16 @@ async fn test_google() {
     let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new().with_server_name("google.com");
 
-    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         FromTokio::new(stream),
         &mut read_record_buffer,
         &mut write_record_buffer,
     );
 
-    let mut rng = OsRng;
-    let open_fut = tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng));
+    let open_fut = tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ));
     log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
     open_fut.await.expect("error establishing TLS connection");
     log::info!("Established");
@@ -101,7 +102,7 @@ async fn test_ping() {
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         FromTokio::new(stream),
         &mut read_record_buffer,
         &mut write_record_buffer,
@@ -109,8 +110,10 @@ async fn test_ping() {
 
     log::info!("SIZE of connection is {}", core::mem::size_of_val(&tls));
 
-    let mut rng = OsRng;
-    let open_fut = tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng));
+    let open_fut = tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ));
     log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
     open_fut.await.expect("error establishing TLS connection");
     log::info!("Established");
@@ -168,7 +171,7 @@ async fn test_ping_nocopy() {
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         FromTokio::new(stream),
         &mut read_record_buffer,
         &mut write_record_buffer,
@@ -176,8 +179,10 @@ async fn test_ping_nocopy() {
 
     log::info!("SIZE of connection is {}", core::mem::size_of_val(&tls));
 
-    let mut rng = OsRng;
-    let open_fut = tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng));
+    let open_fut = tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ));
     log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
     open_fut.await.expect("error establishing TLS connection");
     log::info!("Established");
@@ -238,15 +243,17 @@ async fn test_ping_nocopy_bufread() {
         .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
-    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         FromTokio::new(stream),
         &mut read_record_buffer,
         &mut write_record_buffer,
     );
-
-    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng))
-        .await
-        .expect("error establishing TLS connection");
+    tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ))
+    .await
+    .expect("error establishing TLS connection");
     log::info!("Established");
 
     tls.write(b"ping").await.expect("error writing data");
@@ -288,9 +295,11 @@ fn test_blocking_ping() {
         &mut read_record_buffer,
         &mut write_record_buffer,
     );
-
-    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng))
-        .expect("error establishing TLS connection");
+    tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ))
+    .expect("error establishing TLS connection");
     log::info!("Established");
 
     tls.write(b"ping").expect("error writing data");
@@ -339,9 +348,11 @@ fn test_blocking_ping_nocopy() {
         &mut read_record_buffer,
         &mut write_record_buffer,
     );
-
-    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng))
-        .expect("error establishing TLS connection");
+    tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ))
+    .expect("error establishing TLS connection");
     log::info!("Established");
 
     tls.write(b"ping").expect("error writing data");
@@ -384,9 +395,11 @@ fn test_blocking_ping_nocopy_bufread() {
         &mut read_record_buffer,
         &mut write_record_buffer,
     );
-
-    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng))
-        .expect("error establishing TLS connection");
+    tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ))
+    .expect("error establishing TLS connection");
     log::info!("Established");
 
     tls.write(b"ping").expect("error writing data");

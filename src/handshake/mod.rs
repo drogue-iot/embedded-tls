@@ -2,7 +2,7 @@
 use crate::config::TlsCipherSuite;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_request::CertificateRequestRef;
-use crate::handshake::certificate_verify::CertificateVerify;
+use crate::handshake::certificate_verify::{CertificateVerify, CertificateVerifyRef};
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::encrypted_extensions::EncryptedExtensions;
 use crate::handshake::finished::Finished;
@@ -70,6 +70,7 @@ where
     CipherSuite: TlsCipherSuite,
 {
     ClientCert(CertificateRef<'a>),
+    ClientCertVerify(CertificateVerify),
     ClientHello(ClientHello<'config, CipherSuite>),
     Finished(Finished<HashOutputSize<CipherSuite>>),
 }
@@ -83,6 +84,7 @@ where
             ClientHandshake::ClientHello(_) => HandshakeType::ClientHello,
             ClientHandshake::Finished(_) => HandshakeType::Finished,
             ClientHandshake::ClientCert(_) => HandshakeType::Certificate,
+            ClientHandshake::ClientCertVerify(_) => HandshakeType::CertificateVerify,
         }
     }
 
@@ -91,6 +93,7 @@ where
             ClientHandshake::ClientHello(inner) => inner.encode(buf),
             ClientHandshake::Finished(inner) => inner.encode(buf),
             ClientHandshake::ClientCert(inner) => inner.encode(buf),
+            ClientHandshake::ClientCertVerify(inner) => inner.encode(buf),
         }
     }
 
@@ -123,8 +126,7 @@ where
     ) -> Result<(), TlsError> {
         let enc_buf = buf.as_slice();
         let end = enc_buf.len();
-        // Don't include the content type in the slice
-        transcript.update(&enc_buf[0..end - 1]);
+        transcript.update(&enc_buf[0..end]);
         Ok(())
     }
 }
@@ -135,7 +137,7 @@ pub enum ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
     NewSessionTicket(NewSessionTicket<'a>),
     Certificate(CertificateRef<'a>),
     CertificateRequest(CertificateRequestRef<'a>),
-    CertificateVerify(CertificateVerify<'a>),
+    CertificateVerify(CertificateVerifyRef<'a>),
     Finished(Finished<HashOutputSize<CipherSuite>>),
 }
 
@@ -224,7 +226,7 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
             }
 
             HandshakeType::CertificateVerify => {
-                ServerHandshake::CertificateVerify(CertificateVerify::parse(buf)?)
+                ServerHandshake::CertificateVerify(CertificateVerifyRef::parse(buf)?)
             }
             HandshakeType::Finished => {
                 ServerHandshake::Finished(Finished::parse(buf, content_len)?)

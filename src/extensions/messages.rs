@@ -71,7 +71,7 @@ extension_group! {
 extension_group! {
     pub enum CertificateRequestExtension<'a> {
         StatusRequest(Unimplemented<'a>),
-        SignatureAlgorithms(SignatureAlgorithms<4>),
+        SignatureAlgorithms(SignatureAlgorithms<16>),
         SignedCertificateTimestamp(Unimplemented<'a>),
         CertificateAuthorities(Unimplemented<'a>),
         OidFilters(Unimplemented<'a>),

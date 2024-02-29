@@ -1,5 +1,4 @@
 use crate::application_data::ApplicationData;
-use crate::buffer::*;
 use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::content_types::ContentType;
@@ -8,8 +7,8 @@ use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::WriteKeySchedule;
 use crate::TlsError;
 use crate::{alert::*, parse_buffer::ParseBuffer};
+use crate::{buffer::*, CryptoProvider};
 use core::fmt::Debug;
-use rand_core::{CryptoRng, RngCore};
 
 pub type Encrypted = bool;
 
@@ -103,15 +102,15 @@ where
         }
     }
 
-    pub fn client_hello<RNG>(
-        config: &'config TlsConfig<'config, CipherSuite>,
-        rng: &mut RNG,
+    pub fn client_hello<Provider>(
+        config: &'config TlsConfig<'config>,
+        provider: &mut Provider,
     ) -> Self
     where
-        RNG: CryptoRng + RngCore,
+        Provider: CryptoProvider,
     {
         ClientRecord::Handshake(
-            ClientHandshake::ClientHello(ClientHello::new(config, rng)),
+            ClientHandshake::ClientHello(ClientHello::new(config, provider)),
             false,
         )
     }

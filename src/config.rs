@@ -1,17 +1,21 @@
+use core::marker::PhantomData;
+
 use crate::cipher_suites::CipherSuite;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::handshake::certificate::CertificateRef;
-pub use crate::handshake::certificate_verify::CertificateVerify;
+pub use crate::handshake::certificate_verify::CertificateVerifyRef;
 use crate::TlsError;
 use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
-use core::marker::PhantomData;
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
+use ecdsa::elliptic_curve::SecretKey;
 use generic_array::ArrayLength;
 use heapless::Vec;
-use rand_core::{CryptoRng, RngCore};
+use p256::ecdsa::SigningKey;
+use rand_core::CryptoRngCore;
 pub use sha2::Sha256;
+
 pub use sha2::Sha384;
 use typenum::{Sum, U10, U12, U16, U32};
 
@@ -66,16 +70,12 @@ impl TlsCipherSuite for Aes256GcmSha384 {
 /// The verifier is responsible for verifying certificates and signatures. Since certificate verification is
 /// an expensive process, this trait allows clients to choose how much verification should take place,
 /// and also to skip the verification if the server is verified through other means (I.e. a pre-shared key).
-pub trait TlsVerifier<'a, CipherSuite>
+pub trait TlsVerifier<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
-    /// Create a new verification instance.
-    ///
-    /// This method is called for every TLS handshake.
-    ///
     /// Host verification is enabled by passing a server hostname.
-    fn new(host: Option<&'a str>) -> Self;
+    fn set_hostname_verification(&mut self, hostname: &str) -> Result<(), crate::TlsError>;
 
     /// Verify a certificate.
     ///
@@ -92,17 +92,17 @@ where
     /// Verify the certificate signature.
     ///
     /// The signature verification uses the transcript and certificate provided earlier to decode the provided signature.
-    fn verify_signature(&mut self, verify: CertificateVerify) -> Result<(), crate::TlsError>;
+    fn verify_signature(&mut self, verify: CertificateVerifyRef) -> Result<(), crate::TlsError>;
 }
 
 pub struct NoVerify;
 
-impl<'a, CipherSuite> TlsVerifier<'a, CipherSuite> for NoVerify
+impl<CipherSuite> TlsVerifier<CipherSuite> for NoVerify
 where
     CipherSuite: TlsCipherSuite,
 {
-    fn new(_host: Option<&str>) -> Self {
-        Self
+    fn set_hostname_verification(&mut self, _hostname: &str) -> Result<(), crate::TlsError> {
+        Ok(())
     }
 
     fn verify_certificate(
@@ -114,26 +114,22 @@ where
         Ok(())
     }
 
-    fn verify_signature(&mut self, _verify: CertificateVerify) -> Result<(), crate::TlsError> {
+    fn verify_signature(&mut self, _verify: CertificateVerifyRef) -> Result<(), crate::TlsError> {
         Ok(())
     }
 }
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TlsConfig<'a, CipherSuite>
-where
-    CipherSuite: TlsCipherSuite,
-{
-    //pub(crate) cipher_suites: Vec<CipherSuite, U16>,
+pub struct TlsConfig<'a> {
     pub(crate) server_name: Option<&'a str>,
     pub(crate) psk: Option<(&'a [u8], Vec<&'a [u8], 4>)>,
-    pub(crate) cipher_suite: PhantomData<CipherSuite>,
     pub(crate) signature_schemes: Vec<SignatureScheme, 16>,
     pub(crate) named_groups: Vec<NamedGroup, 16>,
     pub(crate) max_fragment_length: Option<MaxFragmentLength>,
     pub(crate) ca: Option<Certificate<'a>>,
     pub(crate) cert: Option<Certificate<'a>>,
+    pub(crate) priv_key: &'a [u8],
 }
 
 pub trait TlsClock {
@@ -148,35 +144,121 @@ impl TlsClock for NoClock {
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct TlsContext<'a, CipherSuite, RNG>
-where
-    CipherSuite: TlsCipherSuite,
-    RNG: CryptoRng + RngCore + 'a,
-{
-    pub(crate) config: &'a TlsConfig<'a, CipherSuite>,
-    pub(crate) rng: &'a mut RNG,
-}
+pub trait CryptoProvider {
+    type CipherSuite: TlsCipherSuite;
+    type Signature: AsRef<[u8]>;
 
-impl<'a, CipherSuite, RNG> TlsContext<'a, CipherSuite, RNG>
-where
-    CipherSuite: TlsCipherSuite,
-    RNG: CryptoRng + RngCore + 'a,
-{
-    /// Create a new context with a given config and random number generator reference.
-    pub fn new(config: &'a TlsConfig<'a, CipherSuite>, rng: &'a mut RNG) -> Self {
-        Self { config, rng }
+    fn rng(&mut self) -> impl CryptoRngCore;
+
+    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, crate::TlsError> {
+        Err::<&mut NoVerify, _>(crate::TlsError::Unimplemented)
+    }
+
+    /// Decode and validate a private signing key from `key_der`.
+    fn signer(
+        &mut self,
+        _key_der: &[u8],
+    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
+    {
+        Err::<(NoSign, _), crate::TlsError>(crate::TlsError::Unimplemented)
     }
 }
 
-impl<'a, CipherSuite> TlsConfig<'a, CipherSuite>
-where
-    CipherSuite: TlsCipherSuite,
+impl<T: CryptoProvider> CryptoProvider for &mut T {
+    type CipherSuite = T::CipherSuite;
+
+    type Signature = T::Signature;
+
+    fn rng(&mut self) -> impl CryptoRngCore {
+        T::rng(self)
+    }
+
+    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, crate::TlsError> {
+        T::verifier(self)
+    }
+
+    fn signer(
+        &mut self,
+        key_der: &[u8],
+    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
+    {
+        T::signer(self, key_der)
+    }
+}
+
+pub struct NoSign;
+
+impl<S> signature::Signer<S> for NoSign {
+    fn try_sign(&self, _msg: &[u8]) -> Result<S, signature::Error> {
+        unimplemented!()
+    }
+}
+
+pub struct UnsecureProvider<CipherSuite, RNG> {
+    rng: RNG,
+    _marker: PhantomData<CipherSuite>,
+}
+
+impl<RNG: CryptoRngCore> UnsecureProvider<(), RNG> {
+    pub fn new<CipherSuite: TlsCipherSuite>(rng: RNG) -> UnsecureProvider<CipherSuite, RNG> {
+        UnsecureProvider {
+            rng,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
+    for UnsecureProvider<CipherSuite, RNG>
 {
+    type CipherSuite = CipherSuite;
+    type Signature = p256::ecdsa::DerSignature;
+
+    fn rng(&mut self) -> impl CryptoRngCore {
+        &mut self.rng
+    }
+
+    fn signer(
+        &mut self,
+        key_der: &[u8],
+    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
+    {
+        let secret_key =
+            SecretKey::from_sec1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
+
+        Ok((
+            SigningKey::from(&secret_key),
+            SignatureScheme::EcdsaSecp256r1Sha256,
+        ))
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct TlsContext<'a, Provider>
+where
+    Provider: CryptoProvider,
+{
+    pub(crate) config: &'a TlsConfig<'a>,
+    pub(crate) crypto_provider: Provider,
+}
+
+impl<'a, Provider> TlsContext<'a, Provider>
+where
+    Provider: CryptoProvider,
+{
+    /// Create a new context with a given config and a crypto provider.
+    pub fn new(config: &'a TlsConfig<'a>, crypto_provider: Provider) -> Self {
+        Self {
+            config,
+            crypto_provider,
+        }
+    }
+}
+
+impl<'a> TlsConfig<'a> {
     pub fn new() -> Self {
         let mut config = Self {
-            cipher_suite: PhantomData,
             signature_schemes: Vec::new(),
             named_groups: Vec::new(),
             max_fragment_length: None,
@@ -184,10 +266,9 @@ where
             server_name: None,
             ca: None,
             cert: None,
+            priv_key: &[],
         };
 
-        //config.cipher_suites.push(CipherSuite::TlsAes128GcmSha256);
-        //
         if cfg!(feature = "alloc") {
             config = config.enable_rsa_signatures();
         }
@@ -280,6 +361,11 @@ where
         self
     }
 
+    pub fn with_priv_key(mut self, priv_key: &'a [u8]) -> Self {
+        self.priv_key = priv_key;
+        self
+    }
+
     pub fn with_psk(mut self, psk: &'a [u8], identities: &[&'a [u8]]) -> Self {
         // TODO: Remove potential panic
         self.psk = Some((psk, unwrap!(Vec::from_slice(identities).ok())));
@@ -287,10 +373,7 @@ where
     }
 }
 
-impl<'a, CipherSuite> Default for TlsConfig<'a, CipherSuite>
-where
-    CipherSuite: TlsCipherSuite,
-{
+impl<'a> Default for TlsConfig<'a> {
     fn default() -> Self {
         TlsConfig::new()
     }

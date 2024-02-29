@@ -75,15 +75,17 @@ async fn test_psk_open() {
             .with_psk(&[0xaa, 0xbb, 0xcc, 0xdd], &[b"vader"])
             .with_server_name("localhost");
 
-        let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+        let mut tls = TlsConnection::new(
             FromTokio::new(stream),
             &mut read_record_buffer,
             &mut write_record_buffer,
         );
 
-        let mut rng = OsRng;
         assert!(tls
-            .open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
+            .open(TlsContext::new(
+                &config,
+                UnsecureProvider::new::<Aes128GcmSha256>(OsRng)
+            ))
             .await
             .is_ok());
         println!("TLS session opened");

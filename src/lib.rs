@@ -13,19 +13,28 @@ use tokio::net::TcpStream;
 
 #[tokio::main]
 async fn main() {
-    let stream = TcpStream::connect("http.sandbox.drogue.cloud:443").await.expect("error creating TCP connection");
+    let stream = TcpStream::connect("http.sandbox.drogue.cloud:443")
+        .await
+        .expect("error creating TCP connection");
 
     println!("TCP connection opened");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("http.sandbox.drogue.cloud");
-    let mut tls: TlsConnection<FromTokio<TcpStream>, Aes128GcmSha256> =
-        TlsConnection::new(FromTokio::new(stream), &mut read_record_buffer, &mut write_record_buffer);
+    let config = TlsConfig::new().with_server_name("http.sandbox.drogue.cloud");
+    let mut tls = TlsConnection::new(
+        FromTokio::new(stream),
+        &mut read_record_buffer,
+        &mut write_record_buffer,
+    );
 
     // Allows disabling cert verification, in case you are using PSK and don't need it, or are just testing.
     // otherwise, use embedded_tls::webpki::CertVerifier, which only works on std for now.
-    tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut OsRng)).await.expect("error establishing TLS connection");
+    tls.open(TlsContext::new(
+        &config,
+        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+    ))
+    .await
+    .expect("error establishing TLS connection");
 
     println!("TLS session opened");
 }
@@ -56,6 +65,11 @@ mod record;
 mod record_reader;
 mod split;
 mod write_buffer;
+
+pub use config::UnsecureProvider;
+pub use extensions::extension_data::signature_algorithms::SignatureScheme;
+pub use handshake::certificate_verify::CertificateVerify;
+pub use rand_core::{CryptoRng, CryptoRngCore};
 
 #[cfg(feature = "webpki")]
 pub mod webpki;
@@ -91,6 +105,7 @@ pub enum TlsError {
     InvalidCertificate,
     InvalidCertificateEntry,
     InvalidCertificateRequest,
+    InvalidPrivateKey,
     UnableToInitializeCryptoEngine,
     ParseError(ParseError),
     OutOfMemory,
