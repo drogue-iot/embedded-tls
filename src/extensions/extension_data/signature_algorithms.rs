@@ -33,6 +33,10 @@ pub enum SignatureScheme {
     RsaPssPssSha384 = 0x080a,
     RsaPssPssSha512 = 0x080b,
 
+    Sha224Ecdsa = 0x0303,
+    Sha224Rsa = 0x0301,
+    Sha224Dsa = 0x0302,
+
     /* Legacy algorithms */
     RsaPkcs1Sha1 = 0x0201,
     EcdsaSha1 = 0x0203,
@@ -62,6 +66,10 @@ impl SignatureScheme {
             0x0809 => Ok(Self::RsaPssPssSha256),
             0x080a => Ok(Self::RsaPssPssSha384),
             0x080b => Ok(Self::RsaPssPssSha512),
+
+            0x0303 => Ok(Self::Sha224Ecdsa),
+            0x0301 => Ok(Self::Sha224Rsa),
+            0x0302 => Ok(Self::Sha224Dsa),
 
             0x0201 => Ok(Self::RsaPkcs1Sha1),
             0x0203 => Ok(Self::EcdsaSha1),

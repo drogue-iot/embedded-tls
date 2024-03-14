@@ -19,12 +19,12 @@ extension_group! {
     pub enum ClientHelloExtension<'a> {
         ServerName(ServerNameList<'a, 1>),
         SupportedVersions(SupportedVersionsClientHello<16>),
-        SignatureAlgorithms(SignatureAlgorithms<16>),
+        SignatureAlgorithms(SignatureAlgorithms<19>),
         SupportedGroups(SupportedGroups<16>),
         KeyShare(KeyShareClientHello<'a, 1>),
         PreSharedKey(PreSharedKeyClientHello<'a, 4>),
         PskKeyExchangeModes(PskKeyExchangeModes<4>),
-        SignatureAlgorithmsCert(SignatureAlgorithmsCert<16>),
+        SignatureAlgorithmsCert(SignatureAlgorithmsCert<19>),
         MaxFragmentLength(MaxFragmentLength),
         StatusRequest(Unimplemented<'a>),
         UseSrtp(Unimplemented<'a>),
@@ -71,7 +71,7 @@ extension_group! {
 extension_group! {
     pub enum CertificateRequestExtension<'a> {
         StatusRequest(Unimplemented<'a>),
-        SignatureAlgorithms(SignatureAlgorithms<16>),
+        SignatureAlgorithms(SignatureAlgorithms<19>),
         SignedCertificateTimestamp(Unimplemented<'a>),
         CertificateAuthorities(Unimplemented<'a>),
         OidFilters(Unimplemented<'a>),

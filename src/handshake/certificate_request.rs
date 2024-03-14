@@ -34,7 +34,7 @@ impl<'a> CertificateRequestRef<'a> {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateRequest {
     pub(crate) request_context: Vec<u8, 256>,
-    pub(crate) signature_algorithms: Option<SignatureAlgorithms<16>>,
+    pub(crate) signature_algorithms: Option<SignatureAlgorithms<19>>,
 }
 
 impl<'a> TryFrom<CertificateRequestRef<'a>> for CertificateRequest {
