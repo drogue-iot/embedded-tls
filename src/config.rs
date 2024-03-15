@@ -124,7 +124,7 @@ where
 pub struct TlsConfig<'a> {
     pub(crate) server_name: Option<&'a str>,
     pub(crate) psk: Option<(&'a [u8], Vec<&'a [u8], 4>)>,
-    pub(crate) signature_schemes: Vec<SignatureScheme, 16>,
+    pub(crate) signature_schemes: Vec<SignatureScheme, 19>,
     pub(crate) named_groups: Vec<NamedGroup, 16>,
     pub(crate) max_fragment_length: Option<MaxFragmentLength>,
     pub(crate) ca: Option<Certificate<'a>>,

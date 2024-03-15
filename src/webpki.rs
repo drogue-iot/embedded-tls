@@ -34,6 +34,10 @@ impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
             SignatureScheme::Ed25519 => Ok(&webpki::ED25519),
             SignatureScheme::Ed448 => Err(TlsError::InvalidSignatureScheme),
 
+            SignatureScheme::Sha224Ecdsa => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::Sha224Rsa => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::Sha224Dsa => Err(TlsError::InvalidSignatureScheme),
+
             /* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
             SignatureScheme::RsaPssPssSha256 => Err(TlsError::InvalidSignatureScheme),
             SignatureScheme::RsaPssPssSha384 => Err(TlsError::InvalidSignatureScheme),
@@ -68,6 +72,10 @@ impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
             /* EdDSA algorithms */
             SignatureScheme::Ed25519 => Ok(&webpki::ED25519),
             SignatureScheme::Ed448 => Err(TlsError::InvalidSignatureScheme),
+
+            SignatureScheme::Sha224Ecdsa => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::Sha224Rsa => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::Sha224Dsa => Err(TlsError::InvalidSignatureScheme),
 
             /* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
             SignatureScheme::RsaPssPssSha256 => Err(TlsError::InvalidSignatureScheme),
