@@ -1,4 +1,4 @@
-use atomic_polyfill::{AtomicBool, Ordering};
+use portable_atomic::{AtomicBool, Ordering};
 
 pub trait SplitState: Clone {
     fn same(&self, other: &Self) -> bool;

@@ -1,6 +1,6 @@
 [package]
 name = "embedded-tls"
-version = "0.17.0"
+version = "0.17.1"
 edition = "2021"
 description = "TLS 1.3 client with no_std support and no allocator"
 documentation = "https://docs.rs/embedded-tls"
@@ -12,7 +12,7 @@ keywords = ["embedded", "async", "tls", "no_std", "network"]
 exclude = [".github"]
 
 [dependencies]
-atomic-polyfill = "1"
+portable-atomic = { version = "1.6.0", default-features = false }
 p256 = { version = "0.13.2", default-features = false, features = [
     "ecdh",
     "ecdsa",
