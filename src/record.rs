@@ -171,6 +171,8 @@ pub struct RecordHeader {
 }
 
 impl RecordHeader {
+    pub const LEN: usize = 5;
+
     pub fn content_type(&self) -> ContentType {
         // Content type already validated in read
         unwrap!(ContentType::of(self.header[0]))
