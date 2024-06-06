@@ -29,7 +29,7 @@ where
     delegate: Socket,
     opened: bool,
     key_schedule: KeySchedule<CipherSuite>,
-    record_reader: RecordReader<'a, CipherSuite>,
+    record_reader: RecordReader<'a>,
     record_write_buf: WriteBuffer<'a>,
     decrypted: DecryptedBufferInfo,
 }
@@ -365,7 +365,7 @@ where
     state: State,
     delegate: Socket,
     key_schedule: ReadKeySchedule<CipherSuite>,
-    record_reader: RecordReader<'a, CipherSuite>,
+    record_reader: RecordReader<'a>,
     decrypted: DecryptedBufferInfo,
 }
 
