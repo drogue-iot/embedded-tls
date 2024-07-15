@@ -119,7 +119,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TlsConfig<'a> {
     pub(crate) server_name: Option<&'a str>,
