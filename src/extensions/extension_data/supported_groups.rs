@@ -10,39 +10,56 @@ use crate::{
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum NamedGroup {
     /* Elliptic Curve Groups (ECDHE) */
-    Secp256r1 = 0x0017,
-    Secp384r1 = 0x0018,
-    Secp521r1 = 0x0019,
-    X25519 = 0x001D,
-    X448 = 0x001E,
+    Secp256r1,
+    Secp384r1,
+    Secp521r1,
+    X25519,
+    X448,
 
     /* Finite Field Groups (DHE) */
-    Ffdhe2048 = 0x0100,
-    Ffdhe3072 = 0x0101,
-    Ffdhe4096 = 0x0102,
-    Ffdhe6144 = 0x0103,
-    Ffdhe8192 = 0x0104,
+    Ffdhe2048,
+    Ffdhe3072,
+    Ffdhe4096,
+    Ffdhe6144,
+    Ffdhe8192,
 }
 
 impl NamedGroup {
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         match buf.read_u16()? {
-            v if v == Self::Secp256r1 as u16 => Ok(Self::Secp256r1),
-            v if v == Self::Secp384r1 as u16 => Ok(Self::Secp384r1),
-            v if v == Self::Secp521r1 as u16 => Ok(Self::Secp521r1),
-            v if v == Self::X25519 as u16 => Ok(Self::X25519),
-            v if v == Self::X448 as u16 => Ok(Self::X448),
-            v if v == Self::Ffdhe2048 as u16 => Ok(Self::Ffdhe2048),
-            v if v == Self::Ffdhe3072 as u16 => Ok(Self::Ffdhe3072),
-            v if v == Self::Ffdhe4096 as u16 => Ok(Self::Ffdhe4096),
-            v if v == Self::Ffdhe6144 as u16 => Ok(Self::Ffdhe6144),
-            v if v == Self::Ffdhe8192 as u16 => Ok(Self::Ffdhe8192),
+            0x0017 => Ok(Self::Secp256r1),
+            0x0018 => Ok(Self::Secp384r1),
+            0x0019 => Ok(Self::Secp521r1),
+            0x001D => Ok(Self::X25519),
+            0x001E => Ok(Self::X448),
+
+            0x0100 => Ok(Self::Ffdhe2048),
+            0x0101 => Ok(Self::Ffdhe3072),
+            0x0102 => Ok(Self::Ffdhe4096),
+            0x0103 => Ok(Self::Ffdhe6144),
+            0x0104 => Ok(Self::Ffdhe8192),
             _ => Err(ParseError::InvalidData),
         }
     }
 
+    pub fn as_u16(self) -> u16 {
+        match self {
+            Self::Secp256r1 => 0x0017,
+            Self::Secp384r1 => 0x0018,
+            Self::Secp521r1 => 0x0019,
+            Self::X25519 => 0x001D,
+            Self::X448 => 0x001E,
+
+            Self::Ffdhe2048 => 0x0100,
+            Self::Ffdhe3072 => 0x0101,
+            Self::Ffdhe4096 => 0x0102,
+            Self::Ffdhe6144 => 0x0103,
+            Self::Ffdhe8192 => 0x0104,
+        }
+    }
+
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
-        buf.push_u16(*self as u16)
+        buf.push_u16(self.as_u16())
             .map_err(|_| TlsError::EncodeError)
     }
 }
