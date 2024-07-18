@@ -37,7 +37,7 @@ pub struct CertificateVerify {
 
 impl CertificateVerify {
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
-        buf.push_u16(self.signature_scheme as _)?;
+        buf.push_u16(self.signature_scheme.as_u16())?;
         buf.with_u16_length(|buf| buf.extend_from_slice(self.signature.as_slice()))?;
         Ok(())
     }
