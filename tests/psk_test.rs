@@ -54,7 +54,7 @@ fn setup() -> (SocketAddr, JoinHandle<()>) {
         let mut conn = acceptor.accept(stream).unwrap();
         let mut buf = [0; 64];
         let len = conn.read(&mut buf[..]).unwrap();
-        conn.write(&buf[..len]).unwrap();
+        conn.write_all(&buf[..len]).unwrap();
     });
     (addr, h)
 }

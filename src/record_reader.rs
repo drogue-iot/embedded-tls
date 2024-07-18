@@ -72,8 +72,8 @@ impl<'a> RecordReader<'a> {
         self.consume(header, key_schedule.transcript_hash())
     }
 
-    fn advance_blocking<'m>(
-        &'m mut self,
+    fn advance_blocking(
+        &mut self,
         transport: &mut impl BlockingRead,
         amount: usize,
     ) -> Result<(), TlsError> {

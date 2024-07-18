@@ -69,10 +69,7 @@ where
     ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection
     /// instance must be recreated.
-    pub fn open<'v, Provider>(
-        &mut self,
-        mut context: TlsContext<'v, Provider>,
-    ) -> Result<(), TlsError>
+    pub fn open<Provider>(&mut self, mut context: TlsContext<Provider>) -> Result<(), TlsError>
     where
         Provider: CryptoProvider<CipherSuite = CipherSuite>,
     {
@@ -244,6 +241,7 @@ where
         self.split_with(ManagedSplitState::new())
     }
 
+    #[allow(clippy::type_complexity)] // Requires inherent type aliases to solve well.
     pub fn split_with<StateContainer>(
         self,
         state: StateContainer,
