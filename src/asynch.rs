@@ -253,6 +253,7 @@ where
         self.split_with(ManagedSplitState::new())
     }
 
+    #[allow(clippy::type_complexity)] // Requires inherent type aliases to solve well.
     pub fn split_with<StateContainer>(
         self,
         state: StateContainer,

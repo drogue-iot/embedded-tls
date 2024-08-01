@@ -137,7 +137,7 @@ where
     certificate_request: Option<CertificateRequest>,
 }
 
-impl<'v, CipherSuite> Handshake<CipherSuite>
+impl<CipherSuite> Handshake<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
@@ -437,10 +437,10 @@ where
     }
 }
 
-fn process_server_verify<'a, 'v, Provider>(
+fn process_server_verify<Provider>(
     handshake: &mut Handshake<Provider::CipherSuite>,
     key_schedule: &mut KeySchedule<Provider::CipherSuite>,
-    config: &TlsConfig<'a>,
+    config: &TlsConfig<'_>,
     crypto_provider: &mut Provider,
     record: ServerRecord<'_, Provider::CipherSuite>,
 ) -> Result<State, TlsError>

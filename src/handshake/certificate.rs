@@ -100,12 +100,12 @@ impl<'a> CertificateEntryRef<'a> {
     }
 
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
-        match self {
-            &CertificateEntryRef::RawPublicKey(_key) => {
+        match *self {
+            CertificateEntryRef::RawPublicKey(_key) => {
                 todo!("ASN1_subjectPublicKeyInfo encoding?");
                 // buf.with_u24_length(|buf| buf.extend_from_slice(key))?;
             }
-            &CertificateEntryRef::X509(cert) => {
+            CertificateEntryRef::X509(cert) => {
                 buf.with_u24_length(|buf| buf.extend_from_slice(cert))?;
             }
         }

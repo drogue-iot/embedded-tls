@@ -240,7 +240,7 @@ impl Connection {
         // If we have a successful but empty read, that's an EOF.
         // Otherwise, we shove the data into the TLS session.
         match maybe_len {
-            Some(len) if len == 0 => {
+            Some(0) => {
                 log::debug!("back eof");
                 self.closing = true;
             }
