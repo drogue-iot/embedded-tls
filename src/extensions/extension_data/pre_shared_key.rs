@@ -19,7 +19,7 @@ impl<const N: usize> PreSharedKeyClientHello<'_, N> {
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.with_u16_length(|buf| {
-            for identity in self.identities.iter() {
+            for identity in &self.identities {
                 buf.with_u16_length(|buf| buf.extend_from_slice(identity))
                     .map_err(|_| TlsError::EncodeError)?;
 
@@ -56,7 +56,7 @@ impl PreSharedKeyServerHello {
         })
     }
 
-    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+    pub fn encode(self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.push_u16(self.selected_identity)
             .map_err(|_| TlsError::EncodeError)
     }

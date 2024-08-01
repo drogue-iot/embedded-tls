@@ -1,4 +1,4 @@
-use crate::buffer::*;
+use crate::buffer::CryptoBuffer;
 use crate::record::RecordHeader;
 use core::fmt::{Debug, Formatter};
 

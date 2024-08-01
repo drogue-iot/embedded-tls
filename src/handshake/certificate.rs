@@ -51,7 +51,7 @@ impl<'a> CertificateRef<'a> {
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
         buf.with_u8_length(|buf| buf.extend_from_slice(self.request_context))?;
         buf.with_u24_length(|buf| {
-            for entry in self.entries.iter() {
+            for entry in &self.entries {
                 entry.encode(buf)?;
             }
             Ok(())
@@ -146,11 +146,11 @@ impl<'a, const N: usize> TryFrom<CertificateRef<'a>> for Certificate<N> {
         let mut request_context = Vec::new();
         request_context
             .extend_from_slice(cert.request_context)
-            .map_err(|_| TlsError::OutOfMemory)?;
+            .map_err(|()| TlsError::OutOfMemory)?;
         let mut entries_data = Vec::new();
         entries_data
             .extend_from_slice(cert.raw_entries)
-            .map_err(|_| TlsError::OutOfMemory)?;
+            .map_err(|()| TlsError::OutOfMemory)?;
 
         Ok(Self {
             request_context,

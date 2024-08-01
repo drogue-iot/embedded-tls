@@ -120,6 +120,7 @@ where
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[must_use = "TlsConfig does nothing unless consumed"]
 pub struct TlsConfig<'a> {
     pub(crate) server_name: Option<&'a str>,
     pub(crate) psk: Option<(&'a [u8], Vec<&'a [u8], 4>)>,

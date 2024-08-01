@@ -58,7 +58,7 @@ impl NamedGroup {
         }
     }
 
-    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+    pub fn encode(self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.push_u16(self.as_u16())
             .map_err(|_| TlsError::EncodeError)
     }
@@ -81,7 +81,7 @@ impl<const N: usize> SupportedGroups<N> {
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.with_u16_length(|buf| {
-            for g in self.supported_groups.iter() {
+            for g in &self.supported_groups {
                 g.encode(buf)?;
             }
             Ok(())

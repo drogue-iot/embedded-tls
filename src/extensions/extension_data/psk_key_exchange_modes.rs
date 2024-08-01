@@ -23,8 +23,8 @@ impl PskKeyExchangeMode {
         }
     }
 
-    fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
-        buf.push(*self as u8).map_err(|_| TlsError::EncodeError)
+    fn encode(self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        buf.push(self as u8).map_err(|_| TlsError::EncodeError)
     }
 }
 
@@ -44,7 +44,7 @@ impl<const N: usize> PskKeyExchangeModes<N> {
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.with_u8_length(|buf| {
-            for mode in self.modes.iter() {
+            for mode in &self.modes {
                 mode.encode(buf)?;
             }
             Ok(())

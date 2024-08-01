@@ -12,18 +12,28 @@ on:
   # Also on PRs, just be careful not to publish anything
   pull_request:
 
-
 jobs:
-  ci:
-    runs-on: ubuntu-22.04
+  library-ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        subcmd: [build, clippy, test]
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build
-        run: cargo check
+      - name: Run `cargo ${{ matrix.subcmd }}` for library
+        run: cargo ${{ matrix.subcmd }}
 
-      - name: Test
-        run: cargo test -- --nocapture
+  example-ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        example: [embassy, blocking, tokio, nrf52]
 
-      - name: Build examples
-        run: for i in embassy blocking tokio nrf52; do pushd examples/$i; cargo build; popd; done;
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run `cargo build` for example ${{ matrix.example }}
+        working-directory: examples/${{ matrix.example }}
+        run: cargo build

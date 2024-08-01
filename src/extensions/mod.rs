@@ -72,8 +72,7 @@ impl ExtensionType {
         }
     }
 
-    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
-        buf.push_u16(*self as u16)
-            .map_err(|_| TlsError::EncodeError)
+    pub fn encode(self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        buf.push_u16(self as u16).map_err(|_| TlsError::EncodeError)
     }
 }

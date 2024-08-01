@@ -1,4 +1,4 @@
-use crate::buffer::*;
+use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
 use core::fmt::{Debug, Formatter};

@@ -24,8 +24,8 @@ impl NameType {
         }
     }
 
-    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
-        buf.push(*self as u8).map_err(|_| TlsError::EncodeError)
+    pub fn encode(self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        buf.push(self as u8).map_err(|_| TlsError::EncodeError)
     }
 }
 
@@ -97,7 +97,7 @@ impl<'a, const N: usize> ServerNameList<'a, N> {
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.with_u16_length(|buf| {
-            for name in self.names.iter() {
+            for name in &self.names {
                 name.encode(buf)?;
             }
 
@@ -118,13 +118,14 @@ pub struct ServerNameResponse;
 
 impl ServerNameResponse {
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
-        if !buf.is_empty() {
-            Err(ParseError::InvalidData)
-        } else {
+        if buf.is_empty() {
             Ok(Self)
+        } else {
+            Err(ParseError::InvalidData)
         }
     }
 
+    #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
     pub fn encode(&self, _buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         Ok(())
     }

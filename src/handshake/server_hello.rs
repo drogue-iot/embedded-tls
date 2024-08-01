@@ -69,7 +69,7 @@ impl<'a> ServerHello<'a> {
         Some(secret.diffie_hellman(&server_public_key))
     }
 
-    pub fn initialize_crypto_engine(&self, secret: EphemeralSecret) -> Option<CryptoEngine> {
+    pub fn initialize_crypto_engine(&self, secret: &EphemeralSecret) -> Option<CryptoEngine> {
         let server_key_share = self.key_share()?;
 
         let group = server_key_share.group;

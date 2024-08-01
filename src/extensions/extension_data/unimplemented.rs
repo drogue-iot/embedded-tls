@@ -11,6 +11,7 @@ pub struct Unimplemented<'a> {
 }
 
 impl<'a> Unimplemented<'a> {
+    #[allow(clippy::unnecessary_wraps)]
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, ParseError> {
         Ok(Self {
             data: buf.as_slice(),
