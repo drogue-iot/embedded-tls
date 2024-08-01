@@ -25,7 +25,8 @@ impl<const N: usize> SignatureAlgorithmsCert<N> {
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.with_u16_length(|buf| {
             for &a in self.supported_signature_algorithms.iter() {
-                buf.push_u16(a as u16).map_err(|_| TlsError::EncodeError)?;
+                buf.push_u16(a.as_u16())
+                    .map_err(|_| TlsError::EncodeError)?;
             }
             Ok(())
         })
