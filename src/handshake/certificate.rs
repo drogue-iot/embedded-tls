@@ -131,7 +131,6 @@ impl<'a> From<&crate::config::Certificate<'a>> for CertificateEntryRef<'a> {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Certificate<const N: usize> {
     request_context: Vec<u8, 256>,
-    num_entries: usize,
     entries_data: Vec<u8, N>,
 }
 
@@ -155,7 +154,6 @@ impl<'a, const N: usize> TryFrom<CertificateRef<'a>> for Certificate<N> {
 
         Ok(Self {
             request_context,
-            num_entries: cert.entries.len(),
             entries_data,
         })
     }

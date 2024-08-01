@@ -4,18 +4,14 @@ use crate::cipher_suites::CipherSuite;
 use crate::crypto_engine::CryptoEngine;
 use crate::extensions::extension_data::key_share::KeyShareEntry;
 use crate::extensions::messages::ServerHelloExtension;
-use crate::handshake::Random;
 use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
+use crate::{unused, TlsError};
 use p256::ecdh::{EphemeralSecret, SharedSecret};
 use p256::PublicKey;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ServerHello<'a> {
-    random: Random,
-    legacy_session_id_echo: &'a [u8],
-    cipher_suite: CipherSuite,
     extensions: Vec<ServerHelloExtension<'a>, 4>,
 }
 
@@ -53,12 +49,8 @@ impl<'a> ServerHello<'a> {
         debug!("server cipher_suite {:?}", cipher_suite);
         debug!("server extensions {:?}", extensions);
 
-        Ok(Self {
-            random,
-            legacy_session_id_echo: session_id.as_slice(),
-            cipher_suite,
-            extensions,
-        })
+        unused(session_id);
+        Ok(Self { extensions })
     }
 
     pub fn key_share(&self) -> Option<&KeyShareEntry> {

@@ -1,17 +1,13 @@
-use heapless::Vec;
+use core::marker::PhantomData;
 
 use crate::extensions::messages::NewSessionTicketExtension;
 use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
+use crate::{unused, TlsError};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct NewSessionTicket<'a> {
-    lifetime: u32,
-    age_add: u32,
-    nonce: &'a [u8],
-    ticket: &'a [u8],
-    extensions: Vec<NewSessionTicketExtension<'a>, 1>,
+    _todo: PhantomData<&'a ()>,
 }
 
 impl<'a> NewSessionTicket<'a> {
@@ -29,14 +25,9 @@ impl<'a> NewSessionTicket<'a> {
             .slice(ticket_length as usize)
             .map_err(|_| TlsError::InvalidTicketLength)?;
 
-        let extensions = NewSessionTicketExtension::parse_vector(buf)?;
+        let extensions = NewSessionTicketExtension::parse_vector::<1>(buf)?;
 
-        Ok(Self {
-            lifetime,
-            age_add,
-            nonce: nonce.as_slice(),
-            ticket: ticket.as_slice(),
-            extensions,
-        })
+        unused((lifetime, age_add, nonce, ticket, extensions));
+        Ok(Self { _todo: PhantomData })
     }
 }
