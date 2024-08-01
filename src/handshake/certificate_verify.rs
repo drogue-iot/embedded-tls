@@ -7,8 +7,8 @@ use super::CryptoBuffer;
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateVerifyRef<'a> {
-    pub(crate) signature_scheme: SignatureScheme,
-    pub(crate) signature: &'a [u8],
+    pub signature_scheme: SignatureScheme,
+    pub signature: &'a [u8],
 }
 
 impl<'a> CertificateVerifyRef<'a> {

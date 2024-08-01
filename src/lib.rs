@@ -1,6 +1,5 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![doc = include_str!("../README.md")]
-#![allow(dead_code)]
 
 /*!
 # Example
@@ -143,3 +142,8 @@ mod stdlib {
         }
     }
 }
+
+/// An internal function to mark an unused value.
+///
+/// All calls to this should be removed before 1.x.
+fn unused<T>(_: T) {}

@@ -19,16 +19,13 @@ where
     CipherSuite: TlsCipherSuite,
 {
     Handshake(ClientHandshake<'config, 'a, CipherSuite>, Encrypted),
-    ChangeCipherSpec(ChangeCipherSpec, Encrypted),
     Alert(Alert, Encrypted),
-    ApplicationData(&'a [u8]),
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ClientRecordHeader {
     Handshake(Encrypted),
-    ChangeCipherSpec(Encrypted),
     Alert(Encrypted),
     ApplicationData,
 }
@@ -36,9 +33,9 @@ pub enum ClientRecordHeader {
 impl ClientRecordHeader {
     pub fn is_encrypted(&self) -> bool {
         match self {
-            ClientRecordHeader::Handshake(encrypted)
-            | ClientRecordHeader::ChangeCipherSpec(encrypted)
-            | ClientRecordHeader::Alert(encrypted) => *encrypted,
+            ClientRecordHeader::Handshake(encrypted) | ClientRecordHeader::Alert(encrypted) => {
+                *encrypted
+            }
             ClientRecordHeader::ApplicationData => true,
         }
     }
@@ -47,10 +44,8 @@ impl ClientRecordHeader {
         match self {
             Self::Handshake(false) => ContentType::Handshake,
             Self::Alert(false) => ContentType::ChangeCipherSpec,
-            Self::ChangeCipherSpec(false) => ContentType::ChangeCipherSpec,
             Self::Handshake(true) => ContentType::ApplicationData,
             Self::Alert(true) => ContentType::ApplicationData,
-            Self::ChangeCipherSpec(true) => ContentType::ApplicationData,
             Self::ApplicationData => ContentType::ApplicationData,
         }
     }
@@ -59,7 +54,6 @@ impl ClientRecordHeader {
         match self {
             Self::Handshake(_) => ContentType::Handshake,
             Self::Alert(_) => ContentType::Alert,
-            Self::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
             Self::ApplicationData => ContentType::ApplicationData,
         }
     }
@@ -68,8 +62,6 @@ impl ClientRecordHeader {
         match self {
             Self::Handshake(true) => [0x03, 0x03],
             Self::Handshake(false) => [0x03, 0x01],
-            Self::ChangeCipherSpec(true) => [0x03, 0x03],
-            Self::ChangeCipherSpec(false) => [0x03, 0x01],
             Self::Alert(true) => [0x03, 0x03],
             Self::Alert(false) => [0x03, 0x01],
             Self::ApplicationData => [0x03, 0x03],
@@ -94,11 +86,7 @@ where
     pub fn header(&self) -> ClientRecordHeader {
         match self {
             ClientRecord::Handshake(_, encrypted) => ClientRecordHeader::Handshake(*encrypted),
-            ClientRecord::ChangeCipherSpec(_, encrypted) => {
-                ClientRecordHeader::ChangeCipherSpec(*encrypted)
-            }
             ClientRecord::Alert(_, encrypted) => ClientRecordHeader::Alert(*encrypted),
-            ClientRecord::ApplicationData(_) => ClientRecordHeader::ApplicationData,
         }
     }
 
@@ -127,12 +115,7 @@ where
 
         match self {
             ClientRecord::Handshake(handshake, _) => handshake.encode(buf)?,
-            ClientRecord::ChangeCipherSpec(spec, _) => spec.encode(buf)?,
             ClientRecord::Alert(alert, _) => alert.encode(buf)?,
-
-            ClientRecord::ApplicationData(data) => buf
-                .extend_from_slice(data)
-                .map_err(|_| TlsError::EncodeError)?,
         };
 
         Ok(buf.len() - record_length_marker)

@@ -21,6 +21,7 @@ impl ChangeCipherSpec {
         Ok(Self {})
     }
 
+    #[allow(dead_code)]
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
         buf.push(1).map_err(|_| TlsError::EncodeError)?;
         Ok(())

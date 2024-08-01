@@ -9,6 +9,7 @@ pub struct CryptoBuffer<'b> {
 }
 
 impl<'b> CryptoBuffer<'b> {
+    #[allow(dead_code)]
     pub(crate) fn empty() -> Self {
         Self {
             buf: &mut [],

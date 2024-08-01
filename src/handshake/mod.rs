@@ -131,6 +131,7 @@ where
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
     ServerHello(ServerHello<'a>),
     EncryptedExtensions(EncryptedExtensions<'a>),
