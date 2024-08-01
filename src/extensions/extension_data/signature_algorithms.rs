@@ -77,6 +77,7 @@ impl SignatureScheme {
         }
     }
 
+    #[must_use]
     pub fn as_u16(self) -> u16 {
         match self {
             Self::RsaPkcs1Sha256 => 0x0401,
@@ -126,7 +127,7 @@ impl<const N: usize> SignatureAlgorithms<N> {
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.with_u16_length(|buf| {
-            for &a in self.supported_signature_algorithms.iter() {
+            for &a in &self.supported_signature_algorithms {
                 buf.push_u16(a.as_u16())
                     .map_err(|_| TlsError::EncodeError)?;
             }

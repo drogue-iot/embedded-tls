@@ -56,7 +56,7 @@ impl DecryptedReadHandler<'_> {
                 // by the user.
                 Ok(())
             }
-            _ => {
+            ServerRecord::Handshake(_) => {
                 unimplemented!()
             }
         }

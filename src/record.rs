@@ -6,8 +6,11 @@ use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::WriteKeySchedule;
 use crate::TlsError;
-use crate::{alert::*, parse_buffer::ParseBuffer};
-use crate::{buffer::*, CryptoProvider};
+use crate::{
+    alert::{Alert, AlertDescription, AlertLevel},
+    parse_buffer::ParseBuffer,
+};
+use crate::{buffer::CryptoBuffer, CryptoProvider};
 use core::fmt::Debug;
 
 pub type Encrypted = bool;
@@ -31,26 +34,26 @@ pub enum ClientRecordHeader {
 }
 
 impl ClientRecordHeader {
-    pub fn is_encrypted(&self) -> bool {
+    pub fn is_encrypted(self) -> bool {
         match self {
             ClientRecordHeader::Handshake(encrypted) | ClientRecordHeader::Alert(encrypted) => {
-                *encrypted
+                encrypted
             }
             ClientRecordHeader::ApplicationData => true,
         }
     }
 
-    pub fn header_content_type(&self) -> ContentType {
+    pub fn header_content_type(self) -> ContentType {
         match self {
             Self::Handshake(false) => ContentType::Handshake,
             Self::Alert(false) => ContentType::ChangeCipherSpec,
-            Self::Handshake(true) => ContentType::ApplicationData,
-            Self::Alert(true) => ContentType::ApplicationData,
-            Self::ApplicationData => ContentType::ApplicationData,
+            Self::Handshake(true) | Self::Alert(true) | Self::ApplicationData => {
+                ContentType::ApplicationData
+            }
         }
     }
 
-    pub fn trailer_content_type(&self) -> ContentType {
+    pub fn trailer_content_type(self) -> ContentType {
         match self {
             Self::Handshake(_) => ContentType::Handshake,
             Self::Alert(_) => ContentType::Alert,
@@ -58,17 +61,14 @@ impl ClientRecordHeader {
         }
     }
 
-    pub fn version(&self) -> [u8; 2] {
+    pub fn version(self) -> [u8; 2] {
         match self {
-            Self::Handshake(true) => [0x03, 0x03],
-            Self::Handshake(false) => [0x03, 0x01],
-            Self::Alert(true) => [0x03, 0x03],
-            Self::Alert(false) => [0x03, 0x01],
-            Self::ApplicationData => [0x03, 0x03],
+            Self::Handshake(true) | Self::Alert(true) | Self::ApplicationData => [0x03, 0x03],
+            Self::Handshake(false) | Self::Alert(false) => [0x03, 0x01],
         }
     }
 
-    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+    pub fn encode(self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.push(self.header_content_type() as u8)
             .map_err(|_| TlsError::EncodeError)?;
         buf.extend_from_slice(&self.version())
@@ -131,8 +131,9 @@ where
             ClientRecord::Handshake(handshake, false) => {
                 handshake.finalize(buf, transcript, write_key_schedule)
             }
-            ClientRecord::Handshake(handshake, true) => {
-                handshake.finalize_encrypted(buf, transcript)
+            ClientRecord::Handshake(_, true) => {
+                ClientHandshake::<CipherSuite>::finalize_encrypted(buf, transcript);
+                Ok(())
             }
             _ => Ok(()),
         }

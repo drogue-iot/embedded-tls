@@ -6,6 +6,7 @@ use crate::TlsError;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ChangeCipherSpec {}
 
+#[allow(clippy::unnecessary_wraps)] // TODO
 impl ChangeCipherSpec {
     pub fn new() -> Self {
         Self {}
@@ -21,8 +22,8 @@ impl ChangeCipherSpec {
         Ok(Self {})
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+    #[allow(dead_code, clippy::unused_self)]
+    pub(crate) fn encode(self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
         buf.push(1).map_err(|_| TlsError::EncodeError)?;
         Ok(())
     }

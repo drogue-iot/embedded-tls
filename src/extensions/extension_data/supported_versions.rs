@@ -10,7 +10,7 @@ use heapless::Vec;
 pub struct ProtocolVersion(u16);
 
 impl ProtocolVersion {
-    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+    pub fn encode(self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.push_u16(self.0).map_err(|_| TlsError::EncodeError)
     }
 
@@ -38,7 +38,7 @@ impl<const N: usize> SupportedVersionsClientHello<N> {
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.with_u8_length(|buf| {
-            for v in self.versions.iter() {
+            for v in &self.versions {
                 v.encode(buf)?;
             }
             Ok(())
@@ -59,7 +59,7 @@ impl SupportedVersionsServerHello {
         })
     }
 
-    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+    pub fn encode(self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         self.selected_version.encode(buf)
     }
 }

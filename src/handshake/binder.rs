@@ -1,4 +1,4 @@
-use crate::buffer::*;
+use crate::buffer::CryptoBuffer;
 use crate::TlsError;
 use core::fmt::{Debug, Formatter};
 //use digest::generic_array::{ArrayLength, GenericArray};

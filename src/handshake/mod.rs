@@ -11,7 +11,7 @@ use crate::handshake::server_hello::ServerHello;
 use crate::key_schedule::HashOutputSize;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
-use crate::{buffer::*, key_schedule::WriteKeySchedule};
+use crate::{buffer::CryptoBuffer, key_schedule::WriteKeySchedule};
 use core::fmt::{Debug, Formatter};
 use sha2::Digest;
 
@@ -119,15 +119,10 @@ where
         }
     }
 
-    pub fn finalize_encrypted(
-        &self,
-        buf: &mut CryptoBuffer,
-        transcript: &mut CipherSuite::Hash,
-    ) -> Result<(), TlsError> {
+    pub fn finalize_encrypted(buf: &mut CryptoBuffer, transcript: &mut CipherSuite::Hash) {
         let enc_buf = buf.as_slice();
         let end = enc_buf.len();
         transcript.update(&enc_buf[0..end]);
-        Ok(())
     }
 }
 

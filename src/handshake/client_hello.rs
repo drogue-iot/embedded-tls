@@ -21,7 +21,7 @@ use crate::extensions::messages::ClientHelloExtension;
 use crate::handshake::{Random, LEGACY_VERSION};
 use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
 use crate::TlsError;
-use crate::{buffer::*, CryptoProvider};
+use crate::{buffer::CryptoBuffer, CryptoProvider};
 
 pub struct ClientHello<'config, CipherSuite>
 where

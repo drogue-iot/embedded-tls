@@ -1,6 +1,6 @@
 use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
 use crate::common::decrypted_read_handler::DecryptedReadHandler;
-use crate::connection::*;
+use crate::connection::{decrypt_record, Handshake, State};
 use crate::key_schedule::KeySchedule;
 use crate::key_schedule::{ReadKeySchedule, SharedState, WriteKeySchedule};
 use crate::read_buffer::ReadBuffer;

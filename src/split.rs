@@ -52,7 +52,7 @@ pub use stdlib::ManagedSplitState;
 
 #[cfg(feature = "std")]
 mod stdlib {
-    use super::*;
+    use super::{SplitConnectionState, SplitState, SplitStateContainer};
     use std::sync::Arc;
 
     #[derive(Clone)]
@@ -77,7 +77,7 @@ mod stdlib {
         }
 
         fn set_open(&self, open: bool) {
-            self.0.as_ref().set_open(open)
+            self.0.as_ref().set_open(open);
         }
 
         fn same(&self, other: &Self) -> bool {

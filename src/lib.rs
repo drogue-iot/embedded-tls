@@ -1,5 +1,12 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![doc = include_str!("../README.md")]
+#![warn(clippy::pedantic)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::missing_errors_doc // TODO
+)]
 
 /*!
 # Example
@@ -116,12 +123,11 @@ pub enum TlsError {
 
 impl embedded_io::Error for TlsError {
     fn kind(&self) -> embedded_io::ErrorKind {
-        match self {
-            Self::Io(k) => *k,
-            _ => {
-                error!("TLS error: {:?}", self);
-                embedded_io::ErrorKind::Other
-            }
+        if let Self::Io(k) = self {
+            *k
+        } else {
+            error!("TLS error: {:?}", self);
+            embedded_io::ErrorKind::Other
         }
     }
 }

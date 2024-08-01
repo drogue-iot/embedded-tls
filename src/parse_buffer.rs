@@ -133,7 +133,7 @@ impl<'b> ParseBuffer<'b> {
             Err(ParseError::InsufficientSpace)
         } else if self.pos + num_bytes <= self.buffer.len() {
             dest.extend_from_slice(&self.buffer[self.pos..self.pos + num_bytes])
-                .map_err(|_| {
+                .map_err(|()| {
                     error!(
                         "Failed to extend destination buffer. Space: {} required: {}",
                         space, num_bytes

@@ -36,7 +36,7 @@ impl<'a, const N: usize> KeyShareClientHello<'a, N> {
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.with_u16_length(|buf| {
-            for client_share in self.client_shares.iter() {
+            for client_share in &self.client_shares {
                 client_share.encode(buf)?;
             }
             Ok(())

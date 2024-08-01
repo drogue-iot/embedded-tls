@@ -15,10 +15,11 @@ impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
     type Error = TlsError;
     fn try_into(self) -> Result<&'static webpki::SignatureAlgorithm, Self::Error> {
         // TODO: support other schemes via 'alloc' feature
+        #[allow(clippy::match_same_arms)] // Style
         match self {
-            SignatureScheme::RsaPkcs1Sha256 => Err(TlsError::InvalidSignatureScheme),
-            SignatureScheme::RsaPkcs1Sha384 => Err(TlsError::InvalidSignatureScheme),
-            SignatureScheme::RsaPkcs1Sha512 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPkcs1Sha256
+            | SignatureScheme::RsaPkcs1Sha384
+            | SignatureScheme::RsaPkcs1Sha512 => Err(TlsError::InvalidSignatureScheme),
 
             /* ECDSA algorithms */
             SignatureScheme::EcdsaSecp256r1Sha256 => Ok(&webpki::ECDSA_P256_SHA256),
@@ -26,26 +27,26 @@ impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
             SignatureScheme::EcdsaSecp521r1Sha512 => Err(TlsError::InvalidSignatureScheme),
 
             /* RSASSA-PSS algorithms with public key OID rsaEncryption */
-            SignatureScheme::RsaPssRsaeSha256 => Err(TlsError::InvalidSignatureScheme),
-            SignatureScheme::RsaPssRsaeSha384 => Err(TlsError::InvalidSignatureScheme),
-            SignatureScheme::RsaPssRsaeSha512 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssRsaeSha256
+            | SignatureScheme::RsaPssRsaeSha384
+            | SignatureScheme::RsaPssRsaeSha512 => Err(TlsError::InvalidSignatureScheme),
 
             /* EdDSA algorithms */
             SignatureScheme::Ed25519 => Ok(&webpki::ED25519),
-            SignatureScheme::Ed448 => Err(TlsError::InvalidSignatureScheme),
-
-            SignatureScheme::Sha224Ecdsa => Err(TlsError::InvalidSignatureScheme),
-            SignatureScheme::Sha224Rsa => Err(TlsError::InvalidSignatureScheme),
-            SignatureScheme::Sha224Dsa => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::Ed448
+            | SignatureScheme::Sha224Ecdsa
+            | SignatureScheme::Sha224Rsa
+            | SignatureScheme::Sha224Dsa => Err(TlsError::InvalidSignatureScheme),
 
             /* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
-            SignatureScheme::RsaPssPssSha256 => Err(TlsError::InvalidSignatureScheme),
-            SignatureScheme::RsaPssPssSha384 => Err(TlsError::InvalidSignatureScheme),
-            SignatureScheme::RsaPssPssSha512 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPssPssSha256
+            | SignatureScheme::RsaPssPssSha384
+            | SignatureScheme::RsaPssPssSha512 => Err(TlsError::InvalidSignatureScheme),
 
             /* Legacy algorithms */
-            SignatureScheme::RsaPkcs1Sha1 => Err(TlsError::InvalidSignatureScheme),
-            SignatureScheme::EcdsaSha1 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::RsaPkcs1Sha1 | SignatureScheme::EcdsaSha1 => {
+                Err(TlsError::InvalidSignatureScheme)
+            }
         }
     }
 }
@@ -108,11 +109,22 @@ where
     _clock: PhantomData<Clock>,
 }
 
+impl<Cs, C, const CERT_SIZE: usize> Default for CertVerifier<Cs, C, CERT_SIZE>
+where
+    C: TlsClock,
+    Cs: TlsCipherSuite,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<CipherSuite, Clock, CERT_SIZE>
 where
     Clock: TlsClock,
     CipherSuite: TlsCipherSuite,
 {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             host: None,
@@ -131,7 +143,7 @@ where
 {
     fn set_hostname_verification(&mut self, hostname: &str) -> Result<(), TlsError> {
         self.host.replace(
-            heapless::String::try_from(hostname).map_err(|_| TlsError::InsufficientSpace)?,
+            heapless::String::try_from(hostname).map_err(|()| TlsError::InsufficientSpace)?,
         );
         Ok(())
     }
@@ -152,22 +164,22 @@ where
         let handshake_hash = unwrap!(self.certificate_transcript.take());
         let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
         let mut msg: Vec<u8, 130> = Vec::new();
-        msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
+        msg.resize(64, 0x20).map_err(|()| TlsError::EncodeError)?;
         msg.extend_from_slice(ctx_str)
-            .map_err(|_| TlsError::EncodeError)?;
+            .map_err(|()| TlsError::EncodeError)?;
         msg.extend_from_slice(&handshake_hash.finalize())
-            .map_err(|_| TlsError::EncodeError)?;
+            .map_err(|()| TlsError::EncodeError)?;
 
         let certificate = unwrap!(self.certificate.as_ref()).try_into()?;
-        verify_signature(&msg[..], certificate, verify)?;
+        verify_signature(&msg[..], &certificate, &verify)?;
         Ok(())
     }
 }
 
 fn verify_signature(
     message: &[u8],
-    certificate: ServerCertificate,
-    verify: CertificateVerifyRef,
+    certificate: &ServerCertificate,
+    verify: &CertificateVerifyRef,
 ) -> Result<(), TlsError> {
     let mut verified = false;
     if !certificate.entries.is_empty() {
@@ -185,7 +197,7 @@ fn verify_signature(
             info!("Signature: {:x?}", verify.signature);
             let pkisig = verify.signature_scheme.try_into()?;
             match cert.verify_signature(pkisig, message, verify.signature) {
-                Ok(_) => {
+                Ok(()) => {
                     verified = true;
                 }
                 Err(e) => {
@@ -239,7 +251,7 @@ fn verify_certificate(
                     webpki::KeyUsage::server_auth(),
                     &[],
                 ) {
-                    Ok(_) => verified = true,
+                    Ok(()) => verified = true,
                     Err(e) => {
                         warn!("Error verifying certificate: {:?}", e);
                     }
@@ -248,7 +260,7 @@ fn verify_certificate(
                 if let Some(server_name) = verify_host {
                     match webpki::SubjectNameRef::try_from_ascii(server_name.as_bytes()) {
                         Ok(subject) => match cert.verify_is_valid_for_subject_name(subject) {
-                            Ok(_) => host_verified = true,
+                            Ok(()) => host_verified = true,
                             Err(e) => {
                                 warn!("Error verifying host: {:?}", e);
                             }

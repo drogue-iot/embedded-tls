@@ -10,6 +10,7 @@ pub enum AlertLevel {
 }
 
 impl AlertLevel {
+    #[must_use]
     pub fn of(num: u8) -> Option<Self> {
         match num {
             1 => Some(AlertLevel::Warning),
@@ -52,6 +53,7 @@ pub enum AlertDescription {
 }
 
 impl AlertDescription {
+    #[must_use]
     pub fn of(num: u8) -> Option<Self> {
         match num {
             0 => Some(AlertDescription::CloseNotify),
@@ -94,6 +96,7 @@ pub struct Alert {
 }
 
 impl Alert {
+    #[must_use]
     pub fn new(level: AlertLevel, description: AlertDescription) -> Self {
         Self { level, description }
     }

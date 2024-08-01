@@ -127,7 +127,7 @@ impl<'b> CryptoBuffer<'b> {
     }
 
     pub fn truncate(&mut self, len: usize) {
-        self.truncate_internal(len)
+        self.truncate_internal(len);
     }
 
     pub fn len(&self) -> usize {
@@ -235,7 +235,7 @@ impl<'b> Buffer for CryptoBuffer<'b> {
     }
 
     fn truncate(&mut self, len: usize) {
-        self.truncate_internal(len)
+        self.truncate_internal(len);
     }
 }
 

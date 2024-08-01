@@ -52,18 +52,18 @@ where
         let mut hkdf_label = heapless_typenum::Vec::<u8, LabelBufferSize<CipherSuite>>::new();
         hkdf_label
             .extend_from_slice(&N::to_u16().to_be_bytes())
-            .map_err(|_| TlsError::InternalError)?;
+            .map_err(|()| TlsError::InternalError)?;
 
         let label_len = 6 + label.len() as u8;
         hkdf_label
             .extend_from_slice(&label_len.to_be_bytes())
-            .map_err(|_| TlsError::InternalError)?;
+            .map_err(|()| TlsError::InternalError)?;
         hkdf_label
             .extend_from_slice(b"tls13 ")
-            .map_err(|_| TlsError::InternalError)?;
+            .map_err(|()| TlsError::InternalError)?;
         hkdf_label
             .extend_from_slice(label)
-            .map_err(|_| TlsError::InternalError)?;
+            .map_err(|()| TlsError::InternalError)?;
 
         match context_type {
             ContextType::None => {
@@ -72,10 +72,10 @@ where
             ContextType::Hash(context) => {
                 hkdf_label
                     .extend_from_slice(&(context.len() as u8).to_be_bytes())
-                    .map_err(|_| TlsError::InternalError)?;
+                    .map_err(|()| TlsError::InternalError)?;
                 hkdf_label
                     .extend_from_slice(&context)
-                    .map_err(|_| TlsError::InternalError)?;
+                    .map_err(|()| TlsError::InternalError)?;
             }
         }
 
@@ -262,8 +262,8 @@ where
         (self.shared, self.client_state, self.server_state)
     }
 
-    /// Re-creates a KeySchedule from its split parts. Make sure to only pass in
-    /// parts coming from the same original KeySchedule.
+    /// Re-creates a `KeySchedule` from its split parts. Make sure to only pass in
+    /// parts coming from the same original `KeySchedule`.
     pub fn unsplit(
         shared: SharedState<CipherSuite>,
         write: WriteKeySchedule<CipherSuite>,
@@ -423,7 +423,7 @@ where
     CipherSuite: TlsCipherSuite,
 {
     pub(crate) fn increment_counter(&mut self) {
-        self.state.increment_counter()
+        self.state.increment_counter();
     }
 
     pub(crate) fn get_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
@@ -466,7 +466,7 @@ where
     CipherSuite: TlsCipherSuite,
 {
     pub(crate) fn increment_counter(&mut self) {
-        self.state.increment_counter()
+        self.state.increment_counter();
     }
 
     pub(crate) fn transcript_hash(&mut self) -> &mut CipherSuite::Hash {
