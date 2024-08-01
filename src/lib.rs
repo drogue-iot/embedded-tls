@@ -13,14 +13,14 @@ use tokio::net::TcpStream;
 
 #[tokio::main]
 async fn main() {
-    let stream = TcpStream::connect("http.sandbox.drogue.cloud:443")
+    let stream = TcpStream::connect("google.com:443")
         .await
         .expect("error creating TCP connection");
 
     println!("TCP connection opened");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new().with_server_name("http.sandbox.drogue.cloud");
+    let config = TlsConfig::new().with_server_name("google.com").enable_rsa_signatures();
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
         &mut read_record_buffer,
