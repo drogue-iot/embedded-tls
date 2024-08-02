@@ -118,7 +118,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[must_use = "TlsConfig does nothing unless consumed"]
 pub struct TlsConfig<'a> {
