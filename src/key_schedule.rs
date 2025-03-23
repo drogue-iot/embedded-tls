@@ -252,30 +252,6 @@ where
         (&mut self.client_state, &mut self.server_state)
     }
 
-    pub fn split(
-        self,
-    ) -> (
-        SharedState<CipherSuite>,
-        WriteKeySchedule<CipherSuite>,
-        ReadKeySchedule<CipherSuite>,
-    ) {
-        (self.shared, self.client_state, self.server_state)
-    }
-
-    /// Re-creates a `KeySchedule` from its split parts. Make sure to only pass in
-    /// parts coming from the same original `KeySchedule`.
-    pub fn unsplit(
-        shared: SharedState<CipherSuite>,
-        write: WriteKeySchedule<CipherSuite>,
-        read: ReadKeySchedule<CipherSuite>,
-    ) -> Self {
-        Self {
-            shared,
-            client_state: write,
-            server_state: read,
-        }
-    }
-
     pub(crate) fn write_state(&mut self) -> &mut WriteKeySchedule<CipherSuite> {
         &mut self.client_state
     }
