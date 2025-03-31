@@ -90,57 +90,6 @@ fn test_blocking_borrowed() {
     ))
     .expect("error establishing TLS connection");
 
-    let mut state = SplitConnectionState::default();
-    let (mut reader, mut writer) = tls.split_with(&mut state);
-
-    std::thread::scope(|scope| {
-        scope.spawn(|| {
-            let mut buffer = [0; 4];
-            reader.read_exact(&mut buffer).expect("Failed to read data");
-        });
-        scope.spawn(|| {
-            writer.write(b"ping").expect("Failed to write data");
-            writer.flush().expect("Failed to flush");
-        });
-    });
-
-    let tls = TlsConnection::unsplit(reader, writer);
-
-    tls.close()
-        .map_err(|(_, e)| e)
-        .expect("error closing session");
-}
-
-#[test]
-fn test_blocking_managed() {
-    use embedded_tls::blocking::*;
-    use std::net::TcpStream;
-    use std::sync::Arc;
-    let addr = setup();
-    let pem = include_str!("data/ca-cert.pem");
-    let der = pem_parser::pem_to_der(pem);
-
-    let stream = TcpStream::connect(addr).expect("error connecting to server");
-
-    log::info!("Connected");
-    let mut read_record_buffer = [0; 16384];
-    let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
-        .with_server_name("localhost");
-
-    let mut tls = TlsConnection::new(
-        Clonable(Arc::new(stream)),
-        &mut read_record_buffer,
-        &mut write_record_buffer,
-    );
-
-    tls.open(TlsContext::new(
-        &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
-    ))
-    .expect("error establishing TLS connection");
-
     let (mut reader, mut writer) = tls.split();
 
     std::thread::scope(|scope| {
@@ -153,8 +102,6 @@ fn test_blocking_managed() {
             writer.flush().expect("Failed to flush");
         });
     });
-
-    let tls = TlsConnection::unsplit(reader, writer);
 
     tls.close()
         .map_err(|(_, e)| e)

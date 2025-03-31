@@ -16,6 +16,14 @@ pub struct RecordReader<'a> {
     pending: usize,
 }
 
+pub struct RecordReaderBorrowMut<'a> {
+    pub(crate) buf: &'a mut [u8],
+    /// The number of decoded bytes in the buffer
+    decoded: &'a mut usize,
+    /// The number of read but not yet decoded bytes in the buffer
+    pending: &'a mut usize,
+}
+
 impl<'a> RecordReader<'a> {
     pub fn new(buf: &'a mut [u8]) -> Self {
         if buf.len() < 16640 {
@@ -27,111 +35,209 @@ impl<'a> RecordReader<'a> {
             pending: 0,
         }
     }
-
+    pub fn reborrow_mut<'b>(&'b mut self) -> RecordReaderBorrowMut<'b> {
+        RecordReaderBorrowMut {
+            buf: self.buf,
+            decoded: &mut self.decoded,
+            pending: &mut self.pending,
+        }
+    }
     pub async fn read<'m, CipherSuite: TlsCipherSuite>(
         &'m mut self,
         transport: &mut impl AsyncRead,
         key_schedule: &mut ReadKeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
-        self.advance(transport, RecordHeader::LEN).await?;
-        let header = self.record_header()?;
-        self.advance(transport, RecordHeader::LEN + header.content_length())
-            .await?;
-        self.consume(header, key_schedule.transcript_hash())
+        read(
+            self.buf,
+            &mut self.decoded,
+            &mut self.pending,
+            transport,
+            key_schedule,
+        )
+        .await
     }
-
-    async fn advance<'m>(
-        &'m mut self,
-        transport: &mut impl AsyncRead,
-        amount: usize,
-    ) -> Result<(), TlsError> {
-        self.ensure_contiguous(amount)?;
-
-        while self.pending < amount {
-            let read = transport
-                .read(&mut self.buf[self.decoded + self.pending..])
-                .await
-                .map_err(|e| TlsError::Io(e.kind()))?;
-            if read == 0 {
-                return Err(TlsError::IoError);
-            }
-            self.pending += read;
-        }
-
-        Ok(())
-    }
-
     pub fn read_blocking<'m, CipherSuite: TlsCipherSuite>(
         &'m mut self,
         transport: &mut impl BlockingRead,
         key_schedule: &mut ReadKeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
-        self.advance_blocking(transport, RecordHeader::LEN)?;
-        let header = self.record_header()?;
-        self.advance_blocking(transport, RecordHeader::LEN + header.content_length())?;
-        self.consume(header, key_schedule.transcript_hash())
+        read_blocking(
+            self.buf,
+            &mut self.decoded,
+            &mut self.pending,
+            transport,
+            key_schedule,
+        )
     }
+}
 
-    fn advance_blocking(
-        &mut self,
-        transport: &mut impl BlockingRead,
-        amount: usize,
-    ) -> Result<(), TlsError> {
-        self.ensure_contiguous(amount)?;
-
-        while self.pending < amount {
-            let read = transport
-                .read(&mut self.buf[self.decoded + self.pending..])
-                .map_err(|e| TlsError::Io(e.kind()))?;
-            if read == 0 {
-                return Err(TlsError::IoError);
-            }
-            self.pending += read;
-        }
-
-        Ok(())
-    }
-
-    fn record_header(&self) -> Result<RecordHeader, TlsError> {
-        RecordHeader::decode(unwrap!(self.buf
-            [self.decoded..self.decoded + RecordHeader::LEN]
-            .try_into()
-            .ok()))
-    }
-
-    fn consume<'m, CipherSuite: TlsCipherSuite>(
+impl<'a> RecordReaderBorrowMut<'a> {
+    pub async fn read<'m, CipherSuite: TlsCipherSuite>(
         &'m mut self,
-        header: RecordHeader,
-        digest: &mut CipherSuite::Hash,
+        transport: &mut impl AsyncRead,
+        key_schedule: &mut ReadKeySchedule<CipherSuite>,
     ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
-        let content_len = header.content_length();
-
-        let slice = &mut self.buf
-            [self.decoded + RecordHeader::LEN..self.decoded + RecordHeader::LEN + content_len];
-
-        self.decoded += RecordHeader::LEN + content_len;
-        self.pending -= RecordHeader::LEN + content_len;
-
-        ServerRecord::decode(header, slice, digest)
+        read(
+            self.buf,
+            self.decoded,
+            self.pending,
+            transport,
+            key_schedule,
+        )
+        .await
     }
+    pub fn read_blocking<'m, CipherSuite: TlsCipherSuite>(
+        &'m mut self,
+        transport: &mut impl BlockingRead,
+        key_schedule: &mut ReadKeySchedule<CipherSuite>,
+    ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
+        read_blocking(
+            self.buf,
+            self.decoded,
+            self.pending,
+            transport,
+            key_schedule,
+        )
+    }
+}
 
-    fn ensure_contiguous(&mut self, len: usize) -> Result<(), TlsError> {
-        if self.decoded + len > self.buf.len() {
-            if len > self.buf.len() {
-                error!(
-                    "Record too large for buffer. Size: {} Buffer size: {}",
-                    len,
-                    self.buf.len()
-                );
-                return Err(TlsError::InsufficientSpace);
-            }
-            self.buf
-                .copy_within(self.decoded..self.decoded + self.pending, 0);
-            self.decoded = 0;
+pub async fn read<'m, CipherSuite: TlsCipherSuite>(
+    buf: &'m mut [u8],
+    decoded: &mut usize,
+    pending: &mut usize,
+    transport: &mut impl AsyncRead,
+    key_schedule: &mut ReadKeySchedule<CipherSuite>,
+) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
+    advance(buf, decoded, pending, transport, RecordHeader::LEN).await?;
+    let header = record_header(buf, *decoded)?;
+    advance(
+        buf,
+        decoded,
+        pending,
+        transport,
+        RecordHeader::LEN + header.content_length(),
+    )
+    .await?;
+    consume(
+        buf,
+        decoded,
+        pending,
+        header,
+        key_schedule.transcript_hash(),
+    )
+}
+
+pub fn read_blocking<'m, CipherSuite: TlsCipherSuite>(
+    buf: &'m mut [u8],
+    decoded: &mut usize,
+    pending: &mut usize,
+    transport: &mut impl BlockingRead,
+    key_schedule: &mut ReadKeySchedule<CipherSuite>,
+) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
+    advance_blocking(buf, decoded, pending, transport, RecordHeader::LEN)?;
+    let header = record_header(buf, *decoded)?;
+    advance_blocking(
+        buf,
+        decoded,
+        pending,
+        transport,
+        RecordHeader::LEN + header.content_length(),
+    )?;
+    consume(
+        buf,
+        decoded,
+        pending,
+        header,
+        key_schedule.transcript_hash(),
+    )
+}
+
+async fn advance<'m>(
+    buf: &'m mut [u8],
+    decoded: &mut usize,
+    pending: &mut usize,
+    transport: &mut impl AsyncRead,
+    amount: usize,
+) -> Result<(), TlsError> {
+    ensure_contiguous(buf, decoded, pending, amount)?;
+
+    while *pending < amount {
+        let read = transport
+            .read(&mut buf[*decoded + *pending..])
+            .await
+            .map_err(|e| TlsError::Io(e.kind()))?;
+        if read == 0 {
+            return Err(TlsError::IoError);
         }
-
-        Ok(())
+        *pending += read;
     }
+
+    Ok(())
+}
+
+fn advance_blocking<'m>(
+    buf: &'m mut [u8],
+    decoded: &mut usize,
+    pending: &mut usize,
+    transport: &mut impl BlockingRead,
+    amount: usize,
+) -> Result<(), TlsError> {
+    ensure_contiguous(buf, decoded, pending, amount)?;
+
+    while *pending < amount {
+        let read = transport
+            .read(&mut buf[*decoded + *pending..])
+            .map_err(|e| TlsError::Io(e.kind()))?;
+        if read == 0 {
+            return Err(TlsError::IoError);
+        }
+        *pending += read;
+    }
+
+    Ok(())
+}
+
+fn record_header(buf: &[u8], decoded: usize) -> Result<RecordHeader, TlsError> {
+    RecordHeader::decode(unwrap!(buf[decoded..][..RecordHeader::LEN].try_into().ok()))
+}
+
+fn consume<'m, CipherSuite: TlsCipherSuite>(
+    buf: &'m mut [u8],
+    decoded: &mut usize,
+    pending: &mut usize,
+    header: RecordHeader,
+    digest: &mut CipherSuite::Hash,
+) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
+    let content_len = header.content_length();
+
+    let slice = &mut buf[*decoded + RecordHeader::LEN..][..content_len];
+
+    *decoded += RecordHeader::LEN + content_len;
+    *pending -= RecordHeader::LEN + content_len;
+
+    ServerRecord::decode(header, slice, digest)
+}
+
+fn ensure_contiguous<'m>(
+    buf: &'m mut [u8],
+    decoded: &mut usize,
+    pending: &mut usize,
+    len: usize,
+) -> Result<(), TlsError> {
+    if *decoded + len > buf.len() {
+        if len > buf.len() {
+            error!(
+                "Record too large for buffer. Size: {} Buffer size: {}",
+                len,
+                buf.len()
+            );
+            return Err(TlsError::InsufficientSpace);
+        }
+        buf.copy_within(*decoded..*decoded + *pending, 0);
+        *decoded = 0;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

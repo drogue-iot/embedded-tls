@@ -1,20 +1,19 @@
+use core::sync::atomic::Ordering;
+
 use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
 use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::{decrypt_record, Handshake, State};
 use crate::key_schedule::KeySchedule;
-use crate::key_schedule::{ReadKeySchedule, SharedState, WriteKeySchedule};
+use crate::key_schedule::{ReadKeySchedule, WriteKeySchedule};
 use crate::read_buffer::ReadBuffer;
 use crate::record::{ClientRecord, ClientRecordHeader};
-use crate::record_reader::RecordReader;
-use crate::split::{SplitState, SplitStateContainer};
-use crate::write_buffer::WriteBuffer;
+use crate::record_reader::{RecordReader, RecordReaderBorrowMut};
+use crate::write_buffer::{WriteBuffer, WriteBufferBorrowMut};
 use embedded_io::Error as _;
 use embedded_io::{BufRead, ErrorType, Read, Write};
+use portable_atomic::AtomicBool;
 
 pub use crate::config::*;
-#[cfg(feature = "std")]
-pub use crate::split::ManagedSplitState;
-pub use crate::split::SplitConnectionState;
 pub use crate::TlsError;
 
 /// Type representing a TLS connection. An instance of this type can
@@ -26,7 +25,7 @@ where
     CipherSuite: TlsCipherSuite + 'static,
 {
     delegate: Socket,
-    opened: bool,
+    opened: AtomicBool,
     key_schedule: KeySchedule<CipherSuite>,
     record_reader: RecordReader<'a>,
     record_write_buf: WriteBuffer<'a>,
@@ -38,6 +37,10 @@ where
     Socket: Read + Write + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
+    fn is_opened(&mut self) -> bool {
+        *self.opened.get_mut()
+    }
+
     /// Create a new TLS connection with the provided context and a blocking I/O implementation
     ///
     /// NOTE: The record read buffer should be sized to fit an encrypted TLS record. The size of this record
@@ -56,7 +59,7 @@ where
     ) -> Self {
         Self {
             delegate,
-            opened: false,
+            opened: AtomicBool::new(false),
             key_schedule: KeySchedule::new(),
             record_reader: RecordReader::new(record_read_buf),
             record_write_buf: WriteBuffer::new(record_write_buf),
@@ -95,7 +98,7 @@ where
             trace!("State {:?} -> {:?}", state, next_state);
             state = next_state;
         }
-        self.opened = true;
+        *self.opened.get_mut() = true;
 
         Ok(())
     }
@@ -109,7 +112,7 @@ where
     ///
     /// Returns the number of bytes buffered/written.
     pub fn write(&mut self, buf: &[u8]) -> Result<usize, TlsError> {
-        if self.opened {
+        if self.is_opened() {
             if !self
                 .record_write_buf
                 .contains(ClientRecordHeader::ApplicationData)
@@ -169,7 +172,7 @@ where
 
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
     pub fn read_buffered(&mut self) -> Result<ReadBuffer, TlsError> {
-        if self.opened {
+        if self.is_opened() {
             while self.decrypted.is_empty() {
                 self.read_application_data()?;
             }
@@ -190,7 +193,7 @@ where
         let mut handler = DecryptedReadHandler {
             source_buffer: buf_ptr_range,
             buffer_info: &mut self.decrypted,
-            is_open: &mut self.opened,
+            is_open: self.opened.get_mut(),
         };
         decrypt_record(key_schedule, record, |_key_schedule, record| {
             handler.handle(record)
@@ -202,9 +205,10 @@ where
     fn close_internal(&mut self) -> Result<(), TlsError> {
         self.flush()?;
 
+        let is_opened = self.is_opened();
         let (write_key_schedule, read_key_schedule) = self.key_schedule.as_split();
         let slice = self.record_write_buf.write_record(
-            &ClientRecord::close_notify(self.opened),
+            &ClientRecord::close_notify(is_opened),
             write_key_schedule,
             Some(read_key_schedule),
         )?;
@@ -228,76 +232,32 @@ where
         }
     }
 
-    #[cfg(feature = "std")]
-    pub fn split(
-        self,
+    pub fn split<'b>(
+        &'b mut self,
     ) -> (
-        TlsReader<'a, Socket, CipherSuite, ManagedSplitState>,
-        TlsWriter<'a, Socket, CipherSuite, ManagedSplitState>,
+        TlsReader<'b, Socket, CipherSuite>,
+        TlsWriter<'b, Socket, CipherSuite>,
     )
     where
         Socket: Clone,
     {
-        self.split_with(ManagedSplitState::new())
-    }
-
-    #[allow(clippy::type_complexity)] // Requires inherent type aliases to solve well.
-    pub fn split_with<StateContainer>(
-        self,
-        state: StateContainer,
-    ) -> (
-        TlsReader<'a, Socket, CipherSuite, StateContainer::State>,
-        TlsWriter<'a, Socket, CipherSuite, StateContainer::State>,
-    )
-    where
-        Socket: Clone,
-        StateContainer: SplitStateContainer,
-    {
-        let state = state.state();
-        state.set_open(self.opened);
-
-        let (shared, wks, rks) = self.key_schedule.split();
+        let (wks, rks) = self.key_schedule.as_split();
 
         let reader = TlsReader {
-            state: state.clone(),
+            opened: &self.opened,
             delegate: self.delegate.clone(),
             key_schedule: rks,
-            record_reader: self.record_reader,
-            decrypted: self.decrypted,
+            record_reader: self.record_reader.reborrow_mut(),
+            decrypted: &mut self.decrypted,
         };
         let writer = TlsWriter {
-            state,
-            delegate: self.delegate,
-            key_schedule_shared: shared,
+            opened: &self.opened,
+            delegate: self.delegate.clone(),
             key_schedule: wks,
-            record_write_buf: self.record_write_buf,
+            record_write_buf: self.record_write_buf.reborrow_mut(),
         };
 
         (reader, writer)
-    }
-
-    pub fn unsplit<State>(
-        reader: TlsReader<'a, Socket, CipherSuite, State>,
-        writer: TlsWriter<'a, Socket, CipherSuite, State>,
-    ) -> Self
-    where
-        Socket: Clone,
-        State: SplitState,
-    {
-        debug_assert!(reader.state.same(&writer.state));
-
-        TlsConnection {
-            delegate: writer.delegate,
-            opened: writer.state.is_open(),
-            key_schedule: KeySchedule::unsplit(
-                writer.key_schedule_shared,
-                writer.key_schedule,
-                reader.key_schedule,
-            ),
-            record_reader: reader.record_reader,
-            record_write_buf: writer.record_write_buf,
-            decrypted: reader.decrypted,
-        }
     }
 }
 
@@ -347,18 +307,18 @@ where
     }
 }
 
-pub struct TlsReader<'a, Socket, CipherSuite, State>
+pub struct TlsReader<'a, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    state: State,
+    opened: &'a AtomicBool,
     delegate: Socket,
-    key_schedule: ReadKeySchedule<CipherSuite>,
-    record_reader: RecordReader<'a>,
-    decrypted: DecryptedBufferInfo,
+    key_schedule: &'a mut ReadKeySchedule<CipherSuite>,
+    record_reader: RecordReaderBorrowMut<'a>,
+    decrypted: &'a mut DecryptedBufferInfo,
 }
 
-impl<'a, Socket, CipherSuite, State> AsRef<Socket> for TlsReader<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite> AsRef<Socket> for TlsReader<'a, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -367,11 +327,10 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite, State> TlsReader<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite> TlsReader<'a, Socket, CipherSuite>
 where
     Socket: Read + 'a,
     CipherSuite: TlsCipherSuite + 'static,
-    State: SplitState,
 {
     fn create_read_buffer(&mut self) -> ReadBuffer {
         self.decrypted.create_read_buffer(self.record_reader.buf)
@@ -379,7 +338,7 @@ where
 
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
     pub fn read_buffered(&mut self) -> Result<ReadBuffer, TlsError> {
-        if self.state.is_open() {
+        if self.opened.load(Ordering::Acquire) {
             while self.decrypted.is_empty() {
                 self.read_application_data()?;
             }
@@ -396,7 +355,7 @@ where
             .record_reader
             .read_blocking(&mut self.delegate, &mut self.key_schedule)?;
 
-        let mut opened = self.state.is_open();
+        let mut opened = self.opened.load(Ordering::Acquire);
         let mut handler = DecryptedReadHandler {
             source_buffer: buf_ptr_range,
             buffer_info: &mut self.decrypted,
@@ -407,24 +366,23 @@ where
         });
 
         if !opened {
-            self.state.set_open(false);
+            self.opened.store(false, Ordering::Release);
         }
         result
     }
 }
 
-pub struct TlsWriter<'a, Socket, CipherSuite, State>
+pub struct TlsWriter<'a, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
-    state: State,
+    opened: &'a AtomicBool,
     delegate: Socket,
-    key_schedule_shared: SharedState<CipherSuite>,
-    key_schedule: WriteKeySchedule<CipherSuite>,
-    record_write_buf: WriteBuffer<'a>,
+    key_schedule: &'a mut WriteKeySchedule<CipherSuite>,
+    record_write_buf: WriteBufferBorrowMut<'a>,
 }
 
-impl<'a, Socket, CipherSuite, State> AsRef<Socket> for TlsWriter<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite> AsRef<Socket> for TlsWriter<'a, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -433,25 +391,24 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite, State> ErrorType for TlsWriter<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite> ErrorType for TlsWriter<'a, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
     type Error = TlsError;
 }
 
-impl<'a, Socket, CipherSuite, State> ErrorType for TlsReader<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite> ErrorType for TlsReader<'a, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
     type Error = TlsError;
 }
 
-impl<'a, Socket, CipherSuite, State> Read for TlsReader<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite> Read for TlsReader<'a, Socket, CipherSuite>
 where
     Socket: Read + 'a,
     CipherSuite: TlsCipherSuite + 'static,
-    State: SplitState,
 {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         if buf.is_empty() {
@@ -466,11 +423,10 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite, State> BufRead for TlsReader<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite> BufRead for TlsReader<'a, Socket, CipherSuite>
 where
     Socket: Read + 'a,
     CipherSuite: TlsCipherSuite + 'static,
-    State: SplitState,
 {
     fn fill_buf(&mut self) -> Result<&[u8], Self::Error> {
         self.read_buffered().map(|mut buf| buf.peek_all())
@@ -481,14 +437,13 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite, State> Write for TlsWriter<'a, Socket, CipherSuite, State>
+impl<'a, Socket, CipherSuite> Write for TlsWriter<'a, Socket, CipherSuite>
 where
     Socket: Write + 'a,
     CipherSuite: TlsCipherSuite + 'static,
-    State: SplitState,
 {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        if self.state.is_open() {
+        if self.opened.load(Ordering::Acquire) {
             if !self
                 .record_write_buf
                 .contains(ClientRecordHeader::ApplicationData)

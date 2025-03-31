@@ -69,7 +69,6 @@ mod parse_buffer;
 pub mod read_buffer;
 mod record;
 mod record_reader;
-mod split;
 mod write_buffer;
 
 pub use config::UnsecureProvider;
