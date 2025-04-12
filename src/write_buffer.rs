@@ -109,7 +109,7 @@ impl<'a> WriteBuffer<'a> {
     }
 }
 
-impl<'a> WriteBufferBorrow<'a> {
+impl WriteBufferBorrow<'_> {
     fn max_block_size(&self) -> usize {
         self.buffer.len() - TLS_RECORD_OVERHEAD
     }
@@ -135,7 +135,7 @@ impl<'a> WriteBufferBorrow<'a> {
     }
 }
 
-impl<'a> WriteBufferBorrowMut<'a> {
+impl WriteBufferBorrowMut<'_> {
     fn reborrow(&self) -> WriteBufferBorrow<'_> {
         WriteBufferBorrow {
             buffer: self.buffer,

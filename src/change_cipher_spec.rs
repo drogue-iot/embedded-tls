@@ -18,6 +18,7 @@ impl ChangeCipherSpec {
         Ok(Self {})
     }
 
+    #[allow(dead_code)]
     pub fn parse(_: &mut ParseBuffer) -> Result<Self, TlsError> {
         Ok(Self {})
     }

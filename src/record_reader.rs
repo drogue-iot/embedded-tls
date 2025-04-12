@@ -35,7 +35,7 @@ impl<'a> RecordReader<'a> {
             pending: 0,
         }
     }
-    pub fn reborrow_mut<'b>(&'b mut self) -> RecordReaderBorrowMut<'b> {
+    pub fn reborrow_mut(&mut self) -> RecordReaderBorrowMut<'_> {
         RecordReaderBorrowMut {
             buf: self.buf,
             decoded: &mut self.decoded,
@@ -71,7 +71,7 @@ impl<'a> RecordReader<'a> {
     }
 }
 
-impl<'a> RecordReaderBorrowMut<'a> {
+impl RecordReaderBorrowMut<'_> {
     pub async fn read<'m, CipherSuite: TlsCipherSuite>(
         &'m mut self,
         transport: &mut impl AsyncRead,
@@ -152,8 +152,8 @@ pub fn read_blocking<'m, CipherSuite: TlsCipherSuite>(
     )
 }
 
-async fn advance<'m>(
-    buf: &'m mut [u8],
+async fn advance(
+    buf: &mut [u8],
     decoded: &mut usize,
     pending: &mut usize,
     transport: &mut impl AsyncRead,
@@ -175,8 +175,8 @@ async fn advance<'m>(
     Ok(())
 }
 
-fn advance_blocking<'m>(
-    buf: &'m mut [u8],
+fn advance_blocking(
+    buf: &mut [u8],
     decoded: &mut usize,
     pending: &mut usize,
     transport: &mut impl BlockingRead,
@@ -218,8 +218,8 @@ fn consume<'m, CipherSuite: TlsCipherSuite>(
     ServerRecord::decode(header, slice, digest)
 }
 
-fn ensure_contiguous<'m>(
-    buf: &'m mut [u8],
+fn ensure_contiguous(
+    buf: &mut [u8],
     decoded: &mut usize,
     pending: &mut usize,
     len: usize,

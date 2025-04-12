@@ -373,7 +373,7 @@ impl<'a> TlsConfig<'a> {
     }
 }
 
-impl<'a> Default for TlsConfig<'a> {
+impl Default for TlsConfig<'_> {
     fn default() -> Self {
         TlsConfig::new()
     }
