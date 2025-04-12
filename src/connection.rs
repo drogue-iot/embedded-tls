@@ -340,11 +340,11 @@ where
     Ok(())
 }
 
-async fn handle_processing_error<'a, CipherSuite>(
+async fn handle_processing_error<CipherSuite>(
     result: Result<State, TlsError>,
     transport: &mut impl AsyncWrite,
     key_schedule: &mut KeySchedule<CipherSuite>,
-    tx_buf: &mut WriteBuffer<'a>,
+    tx_buf: &mut WriteBuffer<'_>,
 ) -> Result<State, TlsError>
 where
     CipherSuite: TlsCipherSuite,

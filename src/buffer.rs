@@ -217,19 +217,19 @@ impl<'b> CryptoBuffer<'b> {
     }
 }
 
-impl<'b> AsRef<[u8]> for CryptoBuffer<'b> {
+impl AsRef<[u8]> for CryptoBuffer<'_> {
     fn as_ref(&self) -> &[u8] {
         self.as_slice()
     }
 }
 
-impl<'b> AsMut<[u8]> for CryptoBuffer<'b> {
+impl AsMut<[u8]> for CryptoBuffer<'_> {
     fn as_mut(&mut self) -> &mut [u8] {
         self.as_mut_slice()
     }
 }
 
-impl<'b> Buffer for CryptoBuffer<'b> {
+impl Buffer for CryptoBuffer<'_> {
     fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), Error> {
         self.extend_internal(other).map_err(|_| Error)
     }

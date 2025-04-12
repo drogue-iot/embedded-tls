@@ -75,7 +75,7 @@ where
     Finished(Finished<HashOutputSize<CipherSuite>>),
 }
 
-impl<'config, 'a, CipherSuite> ClientHandshake<'config, 'a, CipherSuite>
+impl<CipherSuite> ClientHandshake<'_, '_, CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
@@ -137,7 +137,7 @@ pub enum ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
     Finished(Finished<HashOutputSize<CipherSuite>>),
 }
 
-impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
+impl<CipherSuite: TlsCipherSuite> ServerHandshake<'_, CipherSuite> {
     pub fn handshake_type(&self) -> HandshakeType {
         match self {
             ServerHandshake::ServerHello(_) => HandshakeType::ServerHello,
@@ -151,7 +151,7 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
     }
 }
 
-impl<'a, CipherSuite: TlsCipherSuite> Debug for ServerHandshake<'a, CipherSuite> {
+impl<CipherSuite: TlsCipherSuite> Debug for ServerHandshake<'_, CipherSuite> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             ServerHandshake::ServerHello(inner) => Debug::fmt(inner, f),

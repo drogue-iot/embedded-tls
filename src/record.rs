@@ -78,7 +78,7 @@ impl ClientRecordHeader {
     }
 }
 
-impl<'config, 'a, CipherSuite> ClientRecord<'config, 'a, CipherSuite>
+impl<'config, CipherSuite> ClientRecord<'config, '_, CipherSuite>
 where
     //N: ArrayLength<u8>,
     CipherSuite: TlsCipherSuite,
