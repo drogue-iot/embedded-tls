@@ -1,10 +1,10 @@
 use heapless::Vec;
 
 use crate::{
+    TlsError,
     buffer::CryptoBuffer,
     extensions::ExtensionType,
     parse_buffer::{ParseBuffer, ParseError},
-    TlsError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]

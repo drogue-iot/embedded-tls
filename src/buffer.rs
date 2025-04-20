@@ -1,6 +1,6 @@
 use crate::TlsError;
-use aes_gcm::aead::Buffer;
 use aes_gcm::Error;
+use aes_gcm::aead::Buffer;
 
 pub struct CryptoBuffer<'b> {
     buf: &'b mut [u8],

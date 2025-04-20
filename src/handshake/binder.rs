@@ -1,5 +1,5 @@
-use crate::buffer::CryptoBuffer;
 use crate::TlsError;
+use crate::buffer::CryptoBuffer;
 use core::fmt::{Debug, Formatter};
 //use digest::generic_array::{ArrayLength, GenericArray};
 use generic_array::{ArrayLength, GenericArray};

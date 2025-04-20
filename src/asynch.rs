@@ -1,15 +1,15 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
+use crate::TlsError;
 use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
 use crate::common::decrypted_read_handler::DecryptedReadHandler;
-use crate::connection::{decrypt_record, Handshake, State};
+use crate::connection::{Handshake, State, decrypt_record};
 use crate::key_schedule::KeySchedule;
 use crate::key_schedule::{ReadKeySchedule, WriteKeySchedule};
 use crate::read_buffer::ReadBuffer;
 use crate::record::{ClientRecord, ClientRecordHeader};
 use crate::record_reader::{RecordReader, RecordReaderBorrowMut};
 use crate::write_buffer::{WriteBuffer, WriteBufferBorrowMut};
-use crate::TlsError;
 use embedded_io::Error as _;
 use embedded_io::ErrorType;
 use embedded_io_async::{BufRead, Read as AsyncRead, Write as AsyncWrite};

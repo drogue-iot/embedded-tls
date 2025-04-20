@@ -1,11 +1,11 @@
 use core::marker::PhantomData;
 
+use crate::TlsError;
 use crate::cipher_suites::CipherSuite;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::handshake::certificate::CertificateRef;
 pub use crate::handshake::certificate_verify::CertificateVerifyRef;
-use crate::TlsError;
 use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
 use digest::core_api::BlockSizeUser;
 use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
@@ -273,14 +273,18 @@ impl<'a> TlsConfig<'a> {
             config = config.enable_rsa_signatures();
         }
 
-        unwrap!(config
-            .signature_schemes
-            .push(SignatureScheme::EcdsaSecp256r1Sha256)
-            .ok());
-        unwrap!(config
-            .signature_schemes
-            .push(SignatureScheme::EcdsaSecp384r1Sha384)
-            .ok());
+        unwrap!(
+            config
+                .signature_schemes
+                .push(SignatureScheme::EcdsaSecp256r1Sha256)
+                .ok()
+        );
+        unwrap!(
+            config
+                .signature_schemes
+                .push(SignatureScheme::EcdsaSecp384r1Sha384)
+                .ok()
+        );
         unwrap!(config.signature_schemes.push(SignatureScheme::Ed25519).ok());
 
         unwrap!(config.named_groups.push(NamedGroup::Secp256r1));
@@ -290,30 +294,36 @@ impl<'a> TlsConfig<'a> {
 
     /// Enable RSA ciphers even if they might not be supported.
     pub fn enable_rsa_signatures(mut self) -> Self {
-        unwrap!(self
-            .signature_schemes
-            .push(SignatureScheme::RsaPkcs1Sha256)
-            .ok());
-        unwrap!(self
-            .signature_schemes
-            .push(SignatureScheme::RsaPkcs1Sha384)
-            .ok());
-        unwrap!(self
-            .signature_schemes
-            .push(SignatureScheme::RsaPkcs1Sha512)
-            .ok());
-        unwrap!(self
-            .signature_schemes
-            .push(SignatureScheme::RsaPssRsaeSha256)
-            .ok());
-        unwrap!(self
-            .signature_schemes
-            .push(SignatureScheme::RsaPssRsaeSha384)
-            .ok());
-        unwrap!(self
-            .signature_schemes
-            .push(SignatureScheme::RsaPssRsaeSha512)
-            .ok());
+        unwrap!(
+            self.signature_schemes
+                .push(SignatureScheme::RsaPkcs1Sha256)
+                .ok()
+        );
+        unwrap!(
+            self.signature_schemes
+                .push(SignatureScheme::RsaPkcs1Sha384)
+                .ok()
+        );
+        unwrap!(
+            self.signature_schemes
+                .push(SignatureScheme::RsaPkcs1Sha512)
+                .ok()
+        );
+        unwrap!(
+            self.signature_schemes
+                .push(SignatureScheme::RsaPssRsaeSha256)
+                .ok()
+        );
+        unwrap!(
+            self.signature_schemes
+                .push(SignatureScheme::RsaPssRsaeSha384)
+                .ok()
+        );
+        unwrap!(
+            self.signature_schemes
+                .push(SignatureScheme::RsaPssRsaeSha512)
+                .ok()
+        );
         self
     }
 

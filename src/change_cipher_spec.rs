@@ -1,6 +1,6 @@
+use crate::TlsError;
 use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

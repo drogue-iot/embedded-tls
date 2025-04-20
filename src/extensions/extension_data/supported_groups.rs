@@ -1,9 +1,9 @@
 use heapless::Vec;
 
 use crate::{
+    TlsError,
     buffer::CryptoBuffer,
     parse_buffer::{ParseBuffer, ParseError},
-    TlsError,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq)]

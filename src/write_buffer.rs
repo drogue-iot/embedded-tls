@@ -1,10 +1,10 @@
 use crate::{
+    TlsError,
     buffer::CryptoBuffer,
-    config::{TlsCipherSuite, TLS_RECORD_OVERHEAD},
+    config::{TLS_RECORD_OVERHEAD, TlsCipherSuite},
     connection::encrypt,
     key_schedule::{ReadKeySchedule, WriteKeySchedule},
     record::{ClientRecord, ClientRecordHeader},
-    TlsError,
 };
 
 pub struct WriteBuffer<'a> {

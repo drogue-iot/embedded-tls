@@ -1,7 +1,7 @@
 use crate::buffer::CryptoBuffer;
 
-use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
+use crate::parse_buffer::{ParseBuffer, ParseError};
 
 use heapless::Vec;
 

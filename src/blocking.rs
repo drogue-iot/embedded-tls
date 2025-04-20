@@ -2,7 +2,7 @@ use core::sync::atomic::Ordering;
 
 use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
 use crate::common::decrypted_read_handler::DecryptedReadHandler;
-use crate::connection::{decrypt_record, Handshake, State};
+use crate::connection::{Handshake, State, decrypt_record};
 use crate::key_schedule::KeySchedule;
 use crate::key_schedule::{ReadKeySchedule, WriteKeySchedule};
 use crate::read_buffer::ReadBuffer;
@@ -13,8 +13,8 @@ use embedded_io::Error as _;
 use embedded_io::{BufRead, ErrorType, Read, Write};
 use portable_atomic::AtomicBool;
 
-pub use crate::config::*;
 pub use crate::TlsError;
+pub use crate::config::*;
 
 /// Type representing a TLS connection. An instance of this type can
 /// be used to establish a TLS connection, write and read encrypted data over this connection,
