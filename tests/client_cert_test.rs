@@ -60,7 +60,10 @@ fn setup() -> SocketAddr {
 
             run_with_config(listener, config);
         });
-        unsafe { ADDR.replace(addr) };
+        #[allow(static_mut_refs)]
+        unsafe {
+            ADDR.replace(addr)
+        };
     });
     unsafe { ADDR.unwrap() }
 }

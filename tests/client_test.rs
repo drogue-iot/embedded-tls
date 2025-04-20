@@ -33,7 +33,10 @@ fn setup() -> SocketAddr {
         std::thread::spawn(move || {
             tlsserver::run(listener);
         });
-        unsafe { ADDR.replace(addr) };
+        #[allow(static_mut_refs)]
+        unsafe {
+            ADDR.replace(addr)
+        };
     });
     unsafe { ADDR.unwrap() }
 }
