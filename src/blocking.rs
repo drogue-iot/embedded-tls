@@ -232,11 +232,11 @@ where
         }
     }
 
-    pub fn split<'b>(
-        &'b mut self,
+    pub fn split(
+        &mut self,
     ) -> (
-        TlsReader<'b, Socket, CipherSuite>,
-        TlsWriter<'b, Socket, CipherSuite>,
+        TlsReader<'_, Socket, CipherSuite>,
+        TlsWriter<'_, Socket, CipherSuite>,
     )
     where
         Socket: Clone,
@@ -318,7 +318,7 @@ where
     decrypted: &'a mut DecryptedBufferInfo,
 }
 
-impl<'a, Socket, CipherSuite> AsRef<Socket> for TlsReader<'a, Socket, CipherSuite>
+impl<Socket, CipherSuite> AsRef<Socket> for TlsReader<'_, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -353,15 +353,15 @@ where
         let buf_ptr_range = self.record_reader.buf.as_ptr_range();
         let record = self
             .record_reader
-            .read_blocking(&mut self.delegate, &mut self.key_schedule)?;
+            .read_blocking(&mut self.delegate, self.key_schedule)?;
 
         let mut opened = self.opened.load(Ordering::Acquire);
         let mut handler = DecryptedReadHandler {
             source_buffer: buf_ptr_range,
-            buffer_info: &mut self.decrypted,
+            buffer_info: self.decrypted,
             is_open: &mut opened,
         };
-        let result = decrypt_record(&mut self.key_schedule, record, |_key_schedule, record| {
+        let result = decrypt_record(self.key_schedule, record, |_key_schedule, record| {
             handler.handle(record)
         });
 
@@ -382,7 +382,7 @@ where
     record_write_buf: WriteBufferBorrowMut<'a>,
 }
 
-impl<'a, Socket, CipherSuite> AsRef<Socket> for TlsWriter<'a, Socket, CipherSuite>
+impl<Socket, CipherSuite> AsRef<Socket> for TlsWriter<'_, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -391,14 +391,14 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite> ErrorType for TlsWriter<'a, Socket, CipherSuite>
+impl<Socket, CipherSuite> ErrorType for TlsWriter<'_, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
     type Error = TlsError;
 }
 
-impl<'a, Socket, CipherSuite> ErrorType for TlsReader<'a, Socket, CipherSuite>
+impl<Socket, CipherSuite> ErrorType for TlsReader<'_, Socket, CipherSuite>
 where
     CipherSuite: TlsCipherSuite + 'static,
 {
@@ -467,7 +467,7 @@ where
 
     fn flush(&mut self) -> Result<(), Self::Error> {
         if !self.record_write_buf.is_empty() {
-            let slice = self.record_write_buf.close_record(&mut self.key_schedule)?;
+            let slice = self.record_write_buf.close_record(self.key_schedule)?;
 
             self.delegate
                 .write_all(slice)
