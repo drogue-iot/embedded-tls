@@ -7,7 +7,7 @@ pub struct ApplicationData<'a> {
     pub(crate) data: CryptoBuffer<'a>,
 }
 
-impl<'a> Debug for ApplicationData<'a> {
+impl Debug for ApplicationData<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "ApplicationData {:x?}", self.data.len())
     }
