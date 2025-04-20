@@ -1,6 +1,6 @@
 use crate::extensions::messages::CertificateRequestExtension;
 use crate::parse_buffer::ParseBuffer;
-use crate::{unused, TlsError};
+use crate::{TlsError, unused};
 use heapless::Vec;
 
 #[derive(Debug)]

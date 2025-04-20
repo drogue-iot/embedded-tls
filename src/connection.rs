@@ -4,11 +4,11 @@ use crate::key_schedule::{KeySchedule, ReadKeySchedule, WriteKeySchedule};
 use crate::record::{ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
 use crate::write_buffer::WriteBuffer;
+use crate::{CertificateVerify, CryptoProvider, TlsError, TlsVerifier};
 use crate::{
     alert::{Alert, AlertDescription, AlertLevel},
     handshake::{certificate::CertificateRef, certificate_request::CertificateRequest},
 };
-use crate::{CertificateVerify, CryptoProvider, TlsError, TlsVerifier};
 use core::fmt::Debug;
 use digest::Digest;
 use embedded_io::Error as _;

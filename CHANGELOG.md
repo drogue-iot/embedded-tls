@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 - Add missing implementation to support Client Certificate Authorization (#135)
+- Changed edition from 2021 to 2024.
 
 ## 0.17.0 - 2024-01-06
 
