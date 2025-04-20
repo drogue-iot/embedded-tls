@@ -10,5 +10,6 @@ impl CryptoEngine {
         Self {}
     }
 
+    #[allow(dead_code)]
     pub fn decrypt(&self, _: &ApplicationData) {}
 }

@@ -50,6 +50,7 @@ pub struct KeyShareHelloRetryRequest {
     pub selected_group: NamedGroup,
 }
 
+#[allow(dead_code)]
 impl KeyShareHelloRetryRequest {
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         Ok(Self {

@@ -85,6 +85,7 @@ impl<'a> ServerNameList<'a, 1> {
 }
 
 impl<'a, const N: usize> ServerNameList<'a, N> {
+    #[allow(dead_code)]
     pub const EXTENSION_TYPE: ExtensionType = ExtensionType::ServerName;
 
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<ServerNameList<'a, N>, ParseError> {

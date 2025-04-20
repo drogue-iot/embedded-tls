@@ -32,6 +32,7 @@ impl<N: ArrayLength<u8>> PskBinder<N> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn len() -> usize {
         N::to_usize()
     }
