@@ -138,6 +138,7 @@ pub enum ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
 }
 
 impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
+    #[allow(dead_code)]
     pub fn handshake_type(&self) -> HandshakeType {
         match self {
             ServerHandshake::ServerHello(_) => HandshakeType::ServerHello,
