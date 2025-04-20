@@ -4,10 +4,12 @@ macro_rules! extension_group {
     }) => {
         #[derive(Debug, Clone)]
         #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        #[allow(dead_code)] // extension_data may not be used
         pub enum $name$(<$lt>)? {
             $($extension($extension_data)),+
         }
 
+        #[allow(dead_code)] // not all methods are used
         impl$(<$lt>)? $name$(<$lt>)? {
             pub fn extension_type(&self) -> crate::extensions::ExtensionType {
                 match self {
