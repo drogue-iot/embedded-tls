@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run `cargo ${{ matrix.subcmd }}` for library
-        run: cargo ${{ matrix.subcmd }}
+        run: cargo ${{ matrix.subcmd }} --features webpki
 
   example-ci:
     runs-on: ubuntu-latest
