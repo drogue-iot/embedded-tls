@@ -1,8 +1,8 @@
 use crate::buffer::CryptoBuffer;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 
-use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
+use crate::parse_buffer::{ParseBuffer, ParseError};
 
 use heapless::Vec;
 

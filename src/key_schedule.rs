@@ -1,11 +1,11 @@
 use crate::handshake::binder::PskBinder;
 use crate::handshake::finished::Finished;
-use crate::{config::TlsCipherSuite, TlsError};
-use digest::generic_array::ArrayLength;
+use crate::{TlsError, config::TlsCipherSuite};
 use digest::OutputSizeUser;
+use digest::generic_array::ArrayLength;
 use hmac::{Mac, SimpleHmac};
-use sha2::digest::generic_array::{typenum::Unsigned, GenericArray};
 use sha2::Digest;
+use sha2::digest::generic_array::{GenericArray, typenum::Unsigned};
 
 pub type HashOutputSize<CipherSuite> =
     <<CipherSuite as TlsCipherSuite>::Hash as OutputSizeUser>::OutputSize;
@@ -38,7 +38,7 @@ where
 
     fn as_ref(&self) -> Result<&Hkdf<CipherSuite>, TlsError> {
         match self {
-            Secret::Initialized(ref secret) => Ok(secret),
+            Secret::Initialized(secret) => Ok(secret),
             Secret::Uninitialized => Err(TlsError::InternalError),
         }
     }

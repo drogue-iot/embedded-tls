@@ -3,9 +3,9 @@ use embedded_io::{Error, Read as BlockingRead};
 use embedded_io_async::Read as AsyncRead;
 
 use crate::{
+    TlsError,
     config::TlsCipherSuite,
     record::{RecordHeader, ServerRecord},
-    TlsError,
 };
 
 pub struct RecordReader<'a> {
@@ -245,7 +245,7 @@ mod tests {
     use core::convert::Infallible;
 
     use super::*;
-    use crate::{content_types::ContentType, key_schedule::KeySchedule, Aes128GcmSha256};
+    use crate::{Aes128GcmSha256, content_types::ContentType, key_schedule::KeySchedule};
 
     struct ChunkRead<'a>(&'a [u8], usize);
 

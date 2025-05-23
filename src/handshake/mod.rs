@@ -1,4 +1,5 @@
 //use p256::elliptic_curve::AffinePoint;
+use crate::TlsError;
 use crate::config::TlsCipherSuite;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_request::CertificateRequestRef;
@@ -10,7 +11,6 @@ use crate::handshake::new_session_ticket::NewSessionTicket;
 use crate::handshake::server_hello::ServerHello;
 use crate::key_schedule::HashOutputSize;
 use crate::parse_buffer::{ParseBuffer, ParseError};
-use crate::TlsError;
 use crate::{buffer::CryptoBuffer, key_schedule::WriteKeySchedule};
 use core::fmt::{Debug, Formatter};
 use sha2::Digest;
@@ -138,6 +138,7 @@ pub enum ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
 }
 
 impl<CipherSuite: TlsCipherSuite> ServerHandshake<'_, CipherSuite> {
+    #[allow(dead_code)]
     pub fn handshake_type(&self) -> HandshakeType {
         match self {
             ServerHandshake::ServerHello(_) => HandshakeType::ServerHello,

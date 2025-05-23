@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 
 use crate::extensions::messages::NewSessionTicketExtension;
 use crate::parse_buffer::ParseBuffer;
-use crate::{unused, TlsError};
+use crate::{TlsError, unused};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

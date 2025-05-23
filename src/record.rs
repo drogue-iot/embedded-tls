@@ -1,3 +1,4 @@
+use crate::TlsError;
 use crate::application_data::ApplicationData;
 use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::config::{TlsCipherSuite, TlsConfig};
@@ -5,12 +6,11 @@ use crate::content_types::ContentType;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::WriteKeySchedule;
-use crate::TlsError;
+use crate::{CryptoProvider, buffer::CryptoBuffer};
 use crate::{
     alert::{Alert, AlertDescription, AlertLevel},
     parse_buffer::ParseBuffer,
 };
-use crate::{buffer::CryptoBuffer, CryptoProvider};
 use core::fmt::Debug;
 
 pub type Encrypted = bool;

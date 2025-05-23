@@ -2,11 +2,12 @@ use core::marker::PhantomData;
 
 use digest::{Digest, OutputSizeUser};
 use heapless::Vec;
+use p256::EncodedPoint;
 use p256::ecdh::EphemeralSecret;
 use p256::elliptic_curve::rand_core::RngCore;
-use p256::EncodedPoint;
 use typenum::Unsigned;
 
+use crate::TlsError;
 use crate::config::{TlsCipherSuite, TlsConfig};
 use crate::extensions::extension_data::key_share::{KeyShareClientHello, KeyShareEntry};
 use crate::extensions::extension_data::pre_shared_key::PreSharedKeyClientHello;
@@ -18,10 +19,9 @@ use crate::extensions::extension_data::signature_algorithms::SignatureAlgorithms
 use crate::extensions::extension_data::supported_groups::{NamedGroup, SupportedGroups};
 use crate::extensions::extension_data::supported_versions::{SupportedVersionsClientHello, TLS13};
 use crate::extensions::messages::ClientHelloExtension;
-use crate::handshake::{Random, LEGACY_VERSION};
+use crate::handshake::{LEGACY_VERSION, Random};
 use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
-use crate::TlsError;
-use crate::{buffer::CryptoBuffer, CryptoProvider};
+use crate::{CryptoProvider, buffer::CryptoBuffer};
 
 pub struct ClientHello<'config, CipherSuite>
 where

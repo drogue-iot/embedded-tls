@@ -2,5 +2,5 @@
 # https://rust-lang.github.io/rustup-components-history
 [toolchain]
 channel = "1.85"
-components = [ "rustfmt" ]
+components = [ "rustfmt", "clippy" ]
 targets = [ "thumbv7em-none-eabi" ]

@@ -1,7 +1,7 @@
+use crate::TlsError;
 use crate::buffer::CryptoBuffer;
 use crate::extensions::messages::CertificateExtension;
 use crate::parse_buffer::ParseBuffer;
-use crate::TlsError;
 use heapless::Vec;
 
 #[derive(Debug)]

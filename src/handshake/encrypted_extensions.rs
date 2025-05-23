@@ -2,8 +2,8 @@ use core::marker::PhantomData;
 
 use crate::extensions::messages::EncryptedExtensionsExtension;
 
-use crate::parse_buffer::ParseBuffer;
 use crate::TlsError;
+use crate::parse_buffer::ParseBuffer;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

@@ -9,8 +9,8 @@ use std::net::TcpListener;
 use std::sync::Once;
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
-use tokio::time::timeout;
 use tokio::time::Duration;
+use tokio::time::timeout;
 
 static INIT: Once = Once::new();
 
@@ -81,13 +81,14 @@ async fn test_psk_open() {
             &mut write_record_buffer,
         );
 
-        assert!(tls
-            .open(TlsContext::new(
+        assert!(
+            tls.open(TlsContext::new(
                 &config,
                 UnsecureProvider::new::<Aes128GcmSha256>(OsRng)
             ))
             .await
-            .is_ok());
+            .is_ok()
+        );
         println!("TLS session opened");
 
         tls.write(b"ping").await.unwrap();

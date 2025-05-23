@@ -3,8 +3,8 @@ use heapless::Vec;
 use crate::buffer::CryptoBuffer;
 use crate::extensions::extension_data::supported_groups::NamedGroup;
 
-use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::TlsError;
+use crate::parse_buffer::{ParseBuffer, ParseError};
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -50,6 +50,7 @@ pub struct KeyShareHelloRetryRequest {
     pub selected_group: NamedGroup,
 }
 
+#[allow(dead_code)]
 impl KeyShareHelloRetryRequest {
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         Ok(Self {

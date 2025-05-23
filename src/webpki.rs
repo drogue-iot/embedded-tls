@@ -1,3 +1,4 @@
+use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
@@ -6,7 +7,6 @@ use crate::handshake::{
     },
     certificate_verify::CertificateVerifyRef,
 };
-use crate::TlsError;
 use core::marker::PhantomData;
 use digest::Digest;
 use heapless::Vec;

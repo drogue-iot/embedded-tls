@@ -5,9 +5,9 @@ use crate::crypto_engine::CryptoEngine;
 use crate::extensions::extension_data::key_share::KeyShareEntry;
 use crate::extensions::messages::ServerHelloExtension;
 use crate::parse_buffer::ParseBuffer;
-use crate::{unused, TlsError};
-use p256::ecdh::{EphemeralSecret, SharedSecret};
+use crate::{TlsError, unused};
 use p256::PublicKey;
+use p256::ecdh::{EphemeralSecret, SharedSecret};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -69,6 +69,7 @@ impl<'a> ServerHello<'a> {
         Some(secret.diffie_hellman(&server_public_key))
     }
 
+    #[allow(dead_code)]
     pub fn initialize_crypto_engine(&self, secret: &EphemeralSecret) -> Option<CryptoEngine> {
         let server_key_share = self.key_share()?;
 
