@@ -35,6 +35,7 @@ impl<'a> RecordReader<'a> {
             pending: 0,
         }
     }
+
     pub fn reborrow_mut(&mut self) -> RecordReaderBorrowMut<'_> {
         RecordReaderBorrowMut {
             buf: self.buf,
@@ -42,6 +43,7 @@ impl<'a> RecordReader<'a> {
             pending: &mut self.pending,
         }
     }
+
     pub async fn read<'m, CipherSuite: TlsCipherSuite>(
         &'m mut self,
         transport: &mut impl AsyncRead,
@@ -56,6 +58,7 @@ impl<'a> RecordReader<'a> {
         )
         .await
     }
+
     pub fn read_blocking<'m, CipherSuite: TlsCipherSuite>(
         &'m mut self,
         transport: &mut impl BlockingRead,
@@ -86,6 +89,7 @@ impl RecordReaderBorrowMut<'_> {
         )
         .await
     }
+
     pub fn read_blocking<'m, CipherSuite: TlsCipherSuite>(
         &'m mut self,
         transport: &mut impl BlockingRead,
@@ -108,16 +112,9 @@ pub async fn read<'m, CipherSuite: TlsCipherSuite>(
     transport: &mut impl AsyncRead,
     key_schedule: &mut ReadKeySchedule<CipherSuite>,
 ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
-    advance(buf, decoded, pending, transport, RecordHeader::LEN).await?;
-    let header = record_header(buf, *decoded)?;
-    advance(
-        buf,
-        decoded,
-        pending,
-        transport,
-        RecordHeader::LEN + header.content_length(),
-    )
-    .await?;
+    let header: RecordHeader = next_record_header(transport).await?;
+
+    advance(buf, decoded, pending, transport, header.content_length()).await?;
     consume(
         buf,
         decoded,
@@ -134,15 +131,9 @@ pub fn read_blocking<'m, CipherSuite: TlsCipherSuite>(
     transport: &mut impl BlockingRead,
     key_schedule: &mut ReadKeySchedule<CipherSuite>,
 ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
-    advance_blocking(buf, decoded, pending, transport, RecordHeader::LEN)?;
-    let header = record_header(buf, *decoded)?;
-    advance_blocking(
-        buf,
-        decoded,
-        pending,
-        transport,
-        RecordHeader::LEN + header.content_length(),
-    )?;
+    let header: RecordHeader = next_record_header_blocking(transport)?;
+
+    advance_blocking(buf, decoded, pending, transport, header.content_length())?;
     consume(
         buf,
         decoded,
@@ -150,6 +141,39 @@ pub fn read_blocking<'m, CipherSuite: TlsCipherSuite>(
         header,
         key_schedule.transcript_hash(),
     )
+}
+
+async fn next_record_header(transport: &mut impl AsyncRead) -> Result<RecordHeader, TlsError> {
+    let mut buf: [u8; RecordHeader::LEN] = [0; RecordHeader::LEN];
+    let mut total_read: usize = 0;
+    while total_read != RecordHeader::LEN {
+        let read: usize = transport
+            .read(&mut buf[total_read..])
+            .await
+            .map_err(|e| TlsError::Io(e.kind()))?;
+        if read == 0 {
+            return Err(TlsError::IoError);
+        }
+        total_read += read;
+    }
+    RecordHeader::decode(buf)
+}
+
+fn next_record_header_blocking(
+    transport: &mut impl BlockingRead,
+) -> Result<RecordHeader, TlsError> {
+    let mut buf: [u8; RecordHeader::LEN] = [0; RecordHeader::LEN];
+    let mut total_read: usize = 0;
+    while total_read != RecordHeader::LEN {
+        let read: usize = transport
+            .read(&mut buf[total_read..])
+            .map_err(|e| TlsError::Io(e.kind()))?;
+        if read == 0 {
+            return Err(TlsError::IoError);
+        }
+        total_read += read;
+    }
+    RecordHeader::decode(buf)
 }
 
 async fn advance(
@@ -161,14 +185,16 @@ async fn advance(
 ) -> Result<(), TlsError> {
     ensure_contiguous(buf, decoded, pending, amount)?;
 
+    let mut remain: usize = amount;
     while *pending < amount {
         let read = transport
-            .read(&mut buf[*decoded + *pending..])
+            .read(&mut buf[*decoded + *pending..][..remain])
             .await
             .map_err(|e| TlsError::Io(e.kind()))?;
         if read == 0 {
             return Err(TlsError::IoError);
         }
+        remain -= read;
         *pending += read;
     }
 
@@ -184,21 +210,19 @@ fn advance_blocking(
 ) -> Result<(), TlsError> {
     ensure_contiguous(buf, decoded, pending, amount)?;
 
+    let mut remain: usize = amount;
     while *pending < amount {
         let read = transport
-            .read(&mut buf[*decoded + *pending..])
+            .read(&mut buf[*decoded + *pending..][..remain])
             .map_err(|e| TlsError::Io(e.kind()))?;
         if read == 0 {
             return Err(TlsError::IoError);
         }
+        remain -= read;
         *pending += read;
     }
 
     Ok(())
-}
-
-fn record_header(buf: &[u8], decoded: usize) -> Result<RecordHeader, TlsError> {
-    RecordHeader::decode(unwrap!(buf[decoded..][..RecordHeader::LEN].try_into().ok()))
 }
 
 fn consume<'m, CipherSuite: TlsCipherSuite>(
@@ -210,10 +234,10 @@ fn consume<'m, CipherSuite: TlsCipherSuite>(
 ) -> Result<ServerRecord<'m, CipherSuite>, TlsError> {
     let content_len = header.content_length();
 
-    let slice = &mut buf[*decoded + RecordHeader::LEN..][..content_len];
+    let slice = &mut buf[*decoded..][..content_len];
 
-    *decoded += RecordHeader::LEN + content_len;
-    *pending -= RecordHeader::LEN + content_len;
+    *decoded += content_len;
+    *pending -= content_len;
 
     ServerRecord::decode(header, slice, digest)
 }
@@ -265,25 +289,25 @@ mod tests {
 
     #[test]
     fn can_read_blocking() {
-        can_read_blocking_case(1, 0);
-        can_read_blocking_case(2, 1);
-        can_read_blocking_case(3, 0);
-        can_read_blocking_case(4, 3);
-        can_read_blocking_case(5, 1);
-        can_read_blocking_case(6, 3);
-        can_read_blocking_case(7, 5);
-        can_read_blocking_case(8, 7);
-        can_read_blocking_case(9, 0);
-        can_read_blocking_case(10, 1);
-        can_read_blocking_case(11, 2);
-        can_read_blocking_case(12, 3);
-        can_read_blocking_case(13, 4);
-        can_read_blocking_case(14, 5);
-        can_read_blocking_case(15, 6);
-        can_read_blocking_case(16, 7);
+        can_read_blocking_case(1);
+        can_read_blocking_case(2);
+        can_read_blocking_case(3);
+        can_read_blocking_case(4);
+        can_read_blocking_case(5);
+        can_read_blocking_case(6);
+        can_read_blocking_case(7);
+        can_read_blocking_case(8);
+        can_read_blocking_case(9);
+        can_read_blocking_case(10);
+        can_read_blocking_case(11);
+        can_read_blocking_case(12);
+        can_read_blocking_case(13);
+        can_read_blocking_case(14);
+        can_read_blocking_case(15);
+        can_read_blocking_case(16);
     }
 
-    fn can_read_blocking_case(chunk_size: usize, expected_pending: usize) {
+    fn can_read_blocking_case(chunk_size: usize) {
         let mut transport = ChunkRead(
             &[
                 // Header
@@ -324,8 +348,8 @@ mod tests {
                 panic!("Wrong server record");
             }
 
-            assert_eq!(9, reader.decoded);
-            assert_eq!(expected_pending, reader.pending);
+            assert_eq!(4, reader.decoded);
+            assert_eq!(0, reader.pending);
         }
 
         {
@@ -338,7 +362,7 @@ mod tests {
                 panic!("Wrong server record");
             }
 
-            assert_eq!(16, reader.decoded);
+            assert_eq!(6, reader.decoded);
             assert_eq!(0, reader.pending);
         }
     }
@@ -369,7 +393,7 @@ mod tests {
         ]
         .as_slice();
 
-        let mut buf = [0; 9]; // This buffer is so small that it cannot contain both the header and data
+        let mut buf = [0; 4]; // cannot contain both data portions
         let mut reader = RecordReader::new(&mut buf);
         let mut key_schedule = KeySchedule::<Aes128GcmSha256>::new();
 
@@ -383,7 +407,7 @@ mod tests {
                 panic!("Wrong server record");
             }
 
-            assert_eq!(9, reader.decoded); // The buffer is rotated after decoding the header
+            assert_eq!(4, reader.decoded);
             assert_eq!(0, reader.pending);
         }
 
@@ -397,7 +421,7 @@ mod tests {
                 panic!("Wrong server record");
             }
 
-            assert_eq!(7, reader.decoded);
+            assert_eq!(2, reader.decoded);
             assert_eq!(0, reader.pending);
         }
     }
@@ -411,13 +435,12 @@ mod tests {
             0x03,
             0x00,
             0x00,
-            // Data
+            // Header
             ContentType::ApplicationData as u8,
             0x03,
             0x03,
             0x00,
             0x00,
-            // Data
         ]
         .as_slice();
 
@@ -435,8 +458,8 @@ mod tests {
                 panic!("Wrong server record");
             }
 
-            assert_eq!(5, reader.decoded);
-            assert_eq!(5, reader.pending);
+            assert_eq!(0, reader.decoded);
+            assert_eq!(0, reader.pending);
         }
 
         {
@@ -449,7 +472,7 @@ mod tests {
                 panic!("Wrong server record");
             }
 
-            assert_eq!(10, reader.decoded);
+            assert_eq!(0, reader.decoded);
             assert_eq!(0, reader.pending);
         }
     }
