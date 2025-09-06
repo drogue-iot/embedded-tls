@@ -22,6 +22,11 @@ pub enum NamedGroup {
     Ffdhe4096,
     Ffdhe6144,
     Ffdhe8192,
+
+    /* Post-quantum hybrid groups */
+    X25519MLKEM768,
+    SecP256r1MLKEM768,
+    SecP384r1MLKEM1024,
 }
 
 impl NamedGroup {
@@ -38,6 +43,11 @@ impl NamedGroup {
             0x0102 => Ok(Self::Ffdhe4096),
             0x0103 => Ok(Self::Ffdhe6144),
             0x0104 => Ok(Self::Ffdhe8192),
+
+            0x11EB => Ok(Self::SecP256r1MLKEM768),
+            0x11EC => Ok(Self::X25519MLKEM768),
+            0x11ED => Ok(Self::SecP384r1MLKEM1024),
+
             _ => Err(ParseError::InvalidData),
         }
     }
@@ -55,6 +65,10 @@ impl NamedGroup {
             Self::Ffdhe4096 => 0x0102,
             Self::Ffdhe6144 => 0x0103,
             Self::Ffdhe8192 => 0x0104,
+
+            Self::SecP256r1MLKEM768 => 0x11EB,
+            Self::X25519MLKEM768 => 0x11EC,
+            Self::SecP384r1MLKEM1024 => 0x11ED,
         }
     }
 
