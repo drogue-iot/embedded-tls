@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Added post-quantum hybrid named groups.
 - Add missing implementation to support Client Certificate Authorization (#135)
 - Changed edition from 2021 to 2024.
 
