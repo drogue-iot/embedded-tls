@@ -1,5 +1,6 @@
-use crate::TlsError;
 use heapless::{CapacityError, Vec};
+
+use crate::TlsError;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

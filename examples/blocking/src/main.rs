@@ -1,13 +1,12 @@
+use std::net::TcpStream;
+use std::time::SystemTime;
+
 use embedded_io::Write as _;
 use embedded_io_adapters::std::FromStd;
 use embedded_tls::blocking::*;
 use embedded_tls::webpki::CertVerifier;
-use rand::rngs::OsRng;
-use std::net::TcpStream;
-use std::time::SystemTime;
 
 struct Provider {
-    rng: OsRng,
     verifier: CertVerifier<Aes128GcmSha256, SystemTime, 4096>,
 }
 
@@ -16,8 +15,8 @@ impl CryptoProvider for Provider {
 
     type Signature = &'static [u8];
 
-    fn rng(&mut self) -> impl embedded_tls::CryptoRngCore {
-        &mut self.rng
+    fn rng(&mut self) -> impl embedded_tls::CryptoRng {
+        rand::rng()
     }
 
     fn verifier(
@@ -44,7 +43,6 @@ fn main() {
     tls.open(TlsContext::new(
         &config,
         Provider {
-            rng: OsRng,
             verifier: CertVerifier::new(),
         },
     ))

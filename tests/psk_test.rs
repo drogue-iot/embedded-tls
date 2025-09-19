@@ -1,12 +1,13 @@
 #![macro_use]
-use embedded_io_adapters::tokio_1::FromTokio;
-use embedded_tls::*;
-use openssl::ssl;
-use rand::rngs::OsRng;
+
 use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::sync::Once;
+
+use embedded_io_adapters::tokio_1::FromTokio;
+use embedded_tls::*;
+use openssl::ssl;
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
@@ -84,7 +85,7 @@ async fn test_psk_open() {
         assert!(
             tls.open(TlsContext::new(
                 &config,
-                UnsecureProvider::new::<Aes128GcmSha256>(OsRng)
+                UnsecureProvider::new::<Aes128GcmSha256>(rand::rng())
             ))
             .await
             .is_ok()
