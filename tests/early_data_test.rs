@@ -1,19 +1,27 @@
 #![macro_use]
+
+use std::net::SocketAddr;
+use std::sync::OnceLock;
+
 use embedded_io::{Read, Write};
 use embedded_io_adapters::std::FromStd;
-use rand_core::OsRng;
-use std::net::SocketAddr;
-use std::sync::Once;
 
 mod tlsserver;
 
-static INIT: Once = Once::new();
-static mut ADDR: Option<SocketAddr> = None;
+static ADDR: OnceLock<SocketAddr> = OnceLock::new();
 
 fn setup() -> SocketAddr {
     use mio::net::TcpListener;
-    INIT.call_once(|| {
+
+    *ADDR.get_or_init(|| {
         env_logger::init();
+
+        let mut crypto_provider = rustls::crypto::ring::default_provider();
+        crypto_provider.tls12_cipher_suites = Vec::new();
+        crypto_provider.tls13_cipher_suites =
+            rustls::crypto::ring::ALL_TLS13_CIPHER_SUITES.to_vec();
+        crypto_provider.kx_groups = rustls::crypto::ring::ALL_KX_GROUPS.to_vec();
+        crypto_provider.install_default().unwrap();
 
         let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
 
@@ -25,18 +33,12 @@ fn setup() -> SocketAddr {
         std::thread::spawn(move || {
             use tlsserver::*;
 
-            let versions = &[&rustls::version::TLS13];
-
             let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
 
             let certs = load_certs(&test_dir.join("data").join("server-cert.pem"));
             let privkey = load_private_key(&test_dir.join("data").join("server-key.pem"));
 
             let mut config = rustls::ServerConfig::builder()
-                .with_cipher_suites(rustls::ALL_CIPHER_SUITES)
-                .with_kx_groups(&rustls::ALL_KX_GROUPS)
-                .with_protocol_versions(versions)
-                .unwrap()
                 .with_no_client_auth()
                 .with_single_cert(certs, privkey)
                 .unwrap();
@@ -45,12 +47,9 @@ fn setup() -> SocketAddr {
 
             run_with_config(listener, config);
         });
-        #[allow(static_mut_refs)]
-        unsafe {
-            ADDR.replace(addr)
-        };
-    });
-    unsafe { ADDR.unwrap() }
+
+        addr
+    })
 }
 
 #[test]
@@ -79,7 +78,7 @@ fn early_data_ignored() {
 
     tls.open(TlsContext::new(
         &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(rand::rng()),
     ))
     .expect("error establishing TLS connection");
 

@@ -1,11 +1,11 @@
 use core::marker::PhantomData;
 
+use digest::typenum::Unsigned;
 use digest::{Digest, OutputSizeUser};
 use heapless::Vec;
 use p256::EncodedPoint;
 use p256::ecdh::EphemeralSecret;
 use p256::elliptic_curve::rand_core::RngCore;
-use typenum::Unsigned;
 
 use crate::TlsError;
 use crate::config::{TlsCipherSuite, TlsConfig};
