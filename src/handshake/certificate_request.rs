@@ -1,7 +1,8 @@
+use heapless::Vec;
+
 use crate::extensions::messages::CertificateRequestExtension;
 use crate::parse_buffer::ParseBuffer;
 use crate::{TlsError, unused};
-use heapless::Vec;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -40,7 +41,7 @@ impl<'a> TryFrom<CertificateRequestRef<'a>> for CertificateRequest {
         let mut request_context = Vec::new();
         request_context
             .extend_from_slice(cert.request_context)
-            .map_err(|()| {
+            .map_err(|_| {
                 error!("CertificateRequest: InsufficientSpace");
                 TlsError::InsufficientSpace
             })?;

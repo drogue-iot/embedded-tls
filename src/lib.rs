@@ -14,7 +14,6 @@
 ```
 use embedded_tls::*;
 use embedded_io_adapters::tokio_1::FromTokio;
-use rand::rngs::OsRng;
 use tokio::net::TcpStream;
 
 #[tokio::main]
@@ -37,7 +36,7 @@ async fn main() {
     // otherwise, use embedded_tls::webpki::CertVerifier, which only works on std for now.
     tls.open(TlsContext::new(
         &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(rand::rng()),
     ))
     .await
     .expect("error establishing TLS connection");
@@ -74,7 +73,7 @@ mod write_buffer;
 pub use config::UnsecureProvider;
 pub use extensions::extension_data::signature_algorithms::SignatureScheme;
 pub use handshake::certificate_verify::CertificateVerify;
-pub use rand_core::{CryptoRng, CryptoRngCore};
+pub use rand_core::CryptoRng;
 
 #[cfg(feature = "webpki")]
 pub mod webpki;
@@ -82,7 +81,7 @@ pub mod webpki;
 mod asynch;
 pub use asynch::*;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TlsError {
     ConnectionClosed,
@@ -118,6 +117,12 @@ pub enum TlsError {
     EncodeError,
     DecodeError,
     Io(embedded_io::ErrorKind),
+}
+
+impl core::fmt::Display for TlsError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        core::fmt::Debug::fmt(self, f)
+    }
 }
 
 impl embedded_io::Error for TlsError {

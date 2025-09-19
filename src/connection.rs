@@ -1,6 +1,21 @@
+use core::fmt::Debug;
+
+use aes_gcm::aead::{AeadCore, AeadInOut, KeyInit};
+use digest::Digest;
+use digest::typenum::Unsigned;
+use embedded_io::Error as _;
+use embedded_io::{Read as BlockingRead, Write as BlockingWrite};
+use embedded_io_async::{Read as AsyncRead, Write as AsyncWrite};
+use p256::ecdh::EphemeralSecret;
+use signature::Signer;
+
+use crate::application_data::ApplicationData;
+use crate::buffer::CryptoBuffer;
 use crate::config::{TlsCipherSuite, TlsConfig};
+use crate::content_types::ContentType;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::{KeySchedule, ReadKeySchedule, WriteKeySchedule};
+use crate::parse_buffer::ParseBuffer;
 use crate::record::{ClientRecord, ServerRecord};
 use crate::record_reader::RecordReader;
 use crate::write_buffer::WriteBuffer;
@@ -9,21 +24,6 @@ use crate::{
     alert::{Alert, AlertDescription, AlertLevel},
     handshake::{certificate::CertificateRef, certificate_request::CertificateRequest},
 };
-use core::fmt::Debug;
-use digest::Digest;
-use embedded_io::Error as _;
-use embedded_io::{Read as BlockingRead, Write as BlockingWrite};
-use embedded_io_async::{Read as AsyncRead, Write as AsyncWrite};
-
-use crate::application_data::ApplicationData;
-use crate::buffer::CryptoBuffer;
-use digest::generic_array::typenum::Unsigned;
-use p256::ecdh::EphemeralSecret;
-use signature::SignerMut;
-
-use crate::content_types::ContentType;
-use crate::parse_buffer::ParseBuffer;
-use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 
 pub(crate) fn decrypt_record<CipherSuite>(
     key_schedule: &mut ReadKeySchedule<CipherSuite>,
@@ -548,14 +548,14 @@ where
     Provider: CryptoProvider,
 {
     let (result, record) = match crypto_provider.signer(config.priv_key) {
-        Ok((mut signing_key, signature_scheme)) => {
+        Ok((signing_key, signature_scheme)) => {
             let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
             let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
-            msg.resize(64, 0x20).map_err(|()| TlsError::EncodeError)?;
+            msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
             msg.extend_from_slice(ctx_str)
-                .map_err(|()| TlsError::EncodeError)?;
+                .map_err(|_| TlsError::EncodeError)?;
             msg.extend_from_slice(&key_schedule.transcript_hash().clone().finalize())
-                .map_err(|()| TlsError::EncodeError)?;
+                .map_err(|_| TlsError::EncodeError)?;
 
             let signature = signing_key.sign(&msg);
 
