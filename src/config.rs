@@ -1,23 +1,24 @@
 use core::marker::PhantomData;
 
+use aes_gcm::{AeadInOut, Aes128Gcm, Aes256Gcm, KeyInit};
+use digest::array::ArraySize;
+use digest::block_api::BlockSizeUser;
+use digest::typenum::{Sum, U10, U12, U16, U32};
+use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
+use ecdsa::elliptic_curve::SecretKey;
+use heapless::Vec;
+use p256::ecdsa::SigningKey;
+use rand_core::CryptoRng;
+pub use sha2::Sha256;
+pub use sha2::Sha384;
+
 use crate::TlsError;
 use crate::cipher_suites::CipherSuite;
+pub use crate::extensions::extension_data::max_fragment_length::MaxFragmentLength;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::extensions::extension_data::supported_groups::NamedGroup;
 pub use crate::handshake::certificate::{CertificateEntryRef, CertificateRef};
 pub use crate::handshake::certificate_verify::CertificateVerifyRef;
-use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
-use digest::core_api::BlockSizeUser;
-use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
-use ecdsa::elliptic_curve::SecretKey;
-use generic_array::ArrayLength;
-use heapless::Vec;
-use p256::ecdsa::SigningKey;
-use rand_core::CryptoRngCore;
-pub use sha2::{Sha256, Sha384};
-use typenum::{Sum, U10, U12, U16, U32};
-
-pub use crate::extensions::extension_data::max_fragment_length::MaxFragmentLength;
 
 pub const TLS_RECORD_OVERHEAD: usize = 128;
 
@@ -32,12 +33,12 @@ type LabelBuffer<CipherSuite> = Sum<
 /// Represents a TLS 1.3 cipher suite
 pub trait TlsCipherSuite {
     const CODE_POINT: u16;
-    type Cipher: KeyInit<KeySize = Self::KeyLen> + AeadInPlace<NonceSize = Self::IvLen>;
-    type KeyLen: ArrayLength<u8>;
-    type IvLen: ArrayLength<u8>;
+    type Cipher: KeyInit<KeySize = Self::KeyLen> + AeadInOut<NonceSize = Self::IvLen>;
+    type KeyLen: ArraySize;
+    type IvLen: ArraySize;
 
     type Hash: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser + FixedOutput;
-    type LabelBufferSize: ArrayLength<u8>;
+    type LabelBufferSize: ArraySize;
 }
 
 pub struct Aes128GcmSha256;
@@ -142,7 +143,7 @@ pub trait CryptoProvider {
     type CipherSuite: TlsCipherSuite;
     type Signature: AsRef<[u8]>;
 
-    fn rng(&mut self) -> impl CryptoRngCore;
+    fn rng(&mut self) -> impl CryptoRng;
 
     fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, crate::TlsError> {
         Err::<&mut NoVerify, _>(crate::TlsError::Unimplemented)
@@ -154,8 +155,7 @@ pub trait CryptoProvider {
     /// crypto module such as an HSM/TPM/secure element).
     fn signer(
         &mut self,
-    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
-    {
+    ) -> Result<(impl signature::Signer<Self::Signature>, SignatureScheme), crate::TlsError> {
         Err::<(NoSign, _), crate::TlsError>(crate::TlsError::Unimplemented)
     }
 
@@ -175,7 +175,7 @@ impl<T: CryptoProvider> CryptoProvider for &mut T {
 
     type Signature = T::Signature;
 
-    fn rng(&mut self) -> impl CryptoRngCore {
+    fn rng(&mut self) -> impl CryptoRng {
         T::rng(self)
     }
 
@@ -185,8 +185,7 @@ impl<T: CryptoProvider> CryptoProvider for &mut T {
 
     fn signer(
         &mut self,
-    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
-    {
+    ) -> Result<(impl signature::Signer<Self::Signature>, SignatureScheme), crate::TlsError> {
         T::signer(self)
     }
 
@@ -210,7 +209,7 @@ pub struct UnsecureProvider<'a, CipherSuite, RNG> {
     _marker: PhantomData<CipherSuite>,
 }
 
-impl<RNG: CryptoRngCore> UnsecureProvider<'_, (), RNG> {
+impl<RNG: CryptoRng> UnsecureProvider<'_, (), RNG> {
     pub fn new<CipherSuite: TlsCipherSuite>(
         rng: RNG,
     ) -> UnsecureProvider<'static, CipherSuite, RNG> {
@@ -223,7 +222,7 @@ impl<RNG: CryptoRngCore> UnsecureProvider<'_, (), RNG> {
     }
 }
 
-impl<'a, CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> UnsecureProvider<'a, CipherSuite, RNG> {
+impl<'a, CipherSuite: TlsCipherSuite, RNG: CryptoRng> UnsecureProvider<'a, CipherSuite, RNG> {
     pub fn with_priv_key(mut self, priv_key: &'a [u8]) -> Self {
         self.priv_key = Some(priv_key);
         self
@@ -235,20 +234,19 @@ impl<'a, CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> UnsecureProvider<'a, C
     }
 }
 
-impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
+impl<CipherSuite: TlsCipherSuite, RNG: CryptoRng> CryptoProvider
     for UnsecureProvider<'_, CipherSuite, RNG>
 {
     type CipherSuite = CipherSuite;
     type Signature = p256::ecdsa::DerSignature;
 
-    fn rng(&mut self) -> impl CryptoRngCore {
+    fn rng(&mut self) -> impl CryptoRng {
         &mut self.rng
     }
 
     fn signer(
         &mut self,
-    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
-    {
+    ) -> Result<(impl signature::Signer<Self::Signature>, SignatureScheme), crate::TlsError> {
         let key_der = self.priv_key.ok_or(TlsError::InvalidPrivateKey)?;
         let secret_key =
             SecretKey::from_sec1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
