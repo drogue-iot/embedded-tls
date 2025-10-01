@@ -22,7 +22,7 @@ impl<'b> From<&'b [u8]> for ParseBuffer<'b> {
 
 impl<'b, const N: usize> From<ParseBuffer<'b>> for Result<Vec<u8, N>, ()> {
     fn from(val: ParseBuffer<'b>) -> Self {
-        Vec::from_slice(&val.buffer[val.pos..])
+        Vec::from_slice(&val.buffer[val.pos..]).map_err(|_| ())
     }
 }
 
@@ -133,7 +133,7 @@ impl<'b> ParseBuffer<'b> {
             Err(ParseError::InsufficientSpace)
         } else if self.pos + num_bytes <= self.buffer.len() {
             dest.extend_from_slice(&self.buffer[self.pos..self.pos + num_bytes])
-                .map_err(|()| {
+                .map_err(|_| {
                     error!(
                         "Failed to extend destination buffer. Space: {} required: {}",
                         space, num_bytes

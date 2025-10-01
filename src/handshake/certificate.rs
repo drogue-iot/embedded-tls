@@ -146,11 +146,11 @@ impl<'a, const N: usize> TryFrom<CertificateRef<'a>> for Certificate<N> {
         let mut request_context = Vec::new();
         request_context
             .extend_from_slice(cert.request_context)
-            .map_err(|()| TlsError::OutOfMemory)?;
+            .map_err(|_| TlsError::OutOfMemory)?;
         let mut entries_data = Vec::new();
         entries_data
             .extend_from_slice(cert.raw_entries)
-            .map_err(|()| TlsError::OutOfMemory)?;
+            .map_err(|_| TlsError::OutOfMemory)?;
 
         Ok(Self {
             request_context,

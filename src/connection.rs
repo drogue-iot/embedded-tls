@@ -551,11 +551,11 @@ where
         Ok((mut signing_key, signature_scheme)) => {
             let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
             let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
-            msg.resize(64, 0x20).map_err(|()| TlsError::EncodeError)?;
+            msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
             msg.extend_from_slice(ctx_str)
-                .map_err(|()| TlsError::EncodeError)?;
+                .map_err(|_| TlsError::EncodeError)?;
             msg.extend_from_slice(&key_schedule.transcript_hash().clone().finalize())
-                .map_err(|()| TlsError::EncodeError)?;
+                .map_err(|_| TlsError::EncodeError)?;
 
             let signature = signing_key.sign(&msg);
 
