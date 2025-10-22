@@ -1,6 +1,8 @@
 use crate::handshake::binder::PskBinder;
 use crate::handshake::finished::Finished;
 use crate::{TlsError, config::TlsCipherSuite};
+#[cfg(feature = "key-cache")]
+use core::cell::OnceCell;
 use digest::OutputSizeUser;
 use digest::generic_array::ArrayLength;
 use hmac::{Mac, SimpleHmac};
@@ -135,6 +137,11 @@ where
 {
     traffic_secret: Secret<CipherSuite>,
     counter: u64,
+
+    #[cfg(feature = "key-cache")]
+    key: OnceCell<KeyArray<CipherSuite>>,
+    #[cfg(feature = "key-cache")]
+    iv: OnceCell<IvArray<CipherSuite>>,
 }
 
 impl<CipherSuite> KeyScheduleState<CipherSuite>
@@ -145,18 +152,53 @@ where
         Self {
             traffic_secret: Secret::Uninitialized,
             counter: 0,
+            #[cfg(feature = "key-cache")]
+            key: OnceCell::new(),
+            #[cfg(feature = "key-cache")]
+            iv: OnceCell::new(),
         }
     }
 
+    #[inline]
     pub fn get_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
+        #[cfg(feature = "key-cache")]
+        if let Some(k) = self.key.get() {
+            Ok(k.clone())
+        } else {
+            let k = self.get_key_impl()?;
+            let _ = self.key.set(k.clone());
+            Ok(k)
+        }
+
+        #[cfg(not(feature = "key-cache"))]
+        self.get_key_impl()
+    }
+
+    #[inline]
+    pub fn get_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
+        #[cfg(feature = "key-cache")]
+        if let Some(k) = self.iv.get() {
+            Ok(k.clone())
+        } else {
+            let k = self.get_iv_impl()?;
+            let _ = self.iv.set(k.clone());
+            Ok(k)
+        }
+
+        #[cfg(not(feature = "key-cache"))]
+        self.get_iv_impl()
+    }
+
+    fn get_key_impl(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
         self.traffic_secret
             .make_expanded_hkdf_label(b"key", ContextType::None)
     }
 
-    pub fn get_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
+    fn get_iv_impl(&self) -> Result<IvArray<CipherSuite>, TlsError> {
         self.traffic_secret
             .make_expanded_hkdf_label(b"iv", ContextType::None)
     }
+
 
     pub fn get_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
         let iv = self.get_iv()?;
@@ -174,6 +216,11 @@ where
             Hkdf::<CipherSuite>::from_prk(&secret).map_err(|_| TlsError::InternalError)?;
 
         self.traffic_secret.replace(traffic_secret);
+        #[cfg(feature = "key-cache")]
+        {
+            self.key = OnceCell::new();
+            self.iv = OnceCell::new();
+        }
         self.counter = 0;
         Ok(())
     }
