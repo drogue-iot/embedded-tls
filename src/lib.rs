@@ -63,6 +63,7 @@ mod connection;
 mod content_types;
 mod crypto_engine;
 mod extensions;
+pub mod flush_policy;
 mod handshake;
 mod key_schedule;
 mod parse_buffer;
@@ -81,6 +82,8 @@ pub mod webpki;
 
 mod asynch;
 pub use asynch::*;
+
+pub use flush_policy::*;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
