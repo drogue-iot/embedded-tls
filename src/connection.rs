@@ -44,7 +44,7 @@ where
         let server_key = key_schedule.get_key()?;
         let nonce = key_schedule.get_nonce()?;
 
-        let crypto = <CipherSuite::Cipher as KeyInit>::new(&server_key);
+        let crypto = <CipherSuite::Cipher as KeyInit>::new(server_key);
         crypto
             .decrypt_in_place(&nonce, header.data(), &mut app_data)
             .map_err(|_| TlsError::CryptoError)?;
@@ -106,7 +106,7 @@ where
     // trace!("encrypt nonce {:02x?}", nonce);
     // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
     //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
-    let crypto = <CipherSuite::Cipher as KeyInit>::new(&client_key);
+    let crypto = <CipherSuite::Cipher as KeyInit>::new(client_key);
     let len = buf.len() + <CipherSuite::Cipher as AeadCore>::TagSize::to_usize();
 
     if len > buf.capacity() {
