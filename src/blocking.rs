@@ -178,9 +178,7 @@ where
 
     #[inline]
     fn flush_transport(&mut self) -> Result<(), TlsError> {
-        self.delegate
-            .flush()
-            .map_err(|e| TlsError::Io(e.kind()))
+        self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))
     }
 
     fn create_read_buffer(&mut self) -> ReadBuffer {
@@ -420,9 +418,7 @@ where
     CipherSuite: TlsCipherSuite + 'static,
 {
     fn flush_transport(&mut self) -> Result<(), TlsError> {
-        self.delegate
-            .flush()
-            .map_err(|e| TlsError::Io(e.kind()))
+        self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))
     }
 }
 
@@ -522,7 +518,6 @@ where
             if self.flush_policy.flush_transport() {
                 self.flush_transport()?;
             }
-
         }
 
         Ok(())
