@@ -3,6 +3,7 @@ use core::sync::atomic::Ordering;
 use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
 use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::{Handshake, State, decrypt_record};
+use crate::flush_policy::FlushPolicy;
 use crate::key_schedule::KeySchedule;
 use crate::key_schedule::{ReadKeySchedule, WriteKeySchedule};
 use crate::read_buffer::ReadBuffer;
@@ -30,6 +31,7 @@ where
     record_reader: RecordReader<'a>,
     record_write_buf: WriteBuffer<'a>,
     decrypted: DecryptedBufferInfo,
+    flush_policy: FlushPolicy,
 }
 
 impl<'a, Socket, CipherSuite> TlsConnection<'a, Socket, CipherSuite>
@@ -64,7 +66,26 @@ where
             record_reader: RecordReader::new(record_read_buf),
             record_write_buf: WriteBuffer::new(record_write_buf),
             decrypted: DecryptedBufferInfo::default(),
+            flush_policy: FlushPolicy::default(),
         }
+    }
+
+    /// Returns a reference to the current flush policy.
+    ///
+    /// The flush policy controls whether the underlying transport is flushed
+    /// (via its `flush()` method) after writing a TLS record.
+    #[inline]
+    pub fn flush_policy(&self) -> FlushPolicy {
+        self.flush_policy
+    }
+
+    /// Replace the current flush policy with the provided one.
+    ///
+    /// This sets how and when the connection will call `flush()` on the
+    /// underlying transport after writing records.
+    #[inline]
+    pub fn set_flush_policy(&mut self, policy: FlushPolicy) {
+        self.flush_policy = policy;
     }
 
     /// Open a TLS connection, performing the handshake with the configuration provided when
@@ -147,10 +168,17 @@ where
 
             key_schedule.increment_counter();
 
-            self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))?;
+            if self.flush_policy.flush_transport() {
+                self.flush_transport()?;
+            }
         }
 
         Ok(())
+    }
+
+    #[inline]
+    fn flush_transport(&mut self) -> Result<(), TlsError> {
+        self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))
     }
 
     fn create_read_buffer(&mut self) -> ReadBuffer {
@@ -219,7 +247,7 @@ where
 
         self.key_schedule.write_state().increment_counter();
 
-        self.flush()?;
+        self.flush_transport()?;
 
         Ok(())
     }
@@ -255,6 +283,7 @@ where
             delegate: self.delegate.clone(),
             key_schedule: wks,
             record_write_buf: self.record_write_buf.reborrow_mut(),
+            flush_policy: self.flush_policy,
         };
 
         (reader, writer)
@@ -380,6 +409,17 @@ where
     delegate: Socket,
     key_schedule: &'a mut WriteKeySchedule<CipherSuite>,
     record_write_buf: WriteBufferBorrowMut<'a>,
+    flush_policy: FlushPolicy,
+}
+
+impl<'a, Socket, CipherSuite> TlsWriter<'a, Socket, CipherSuite>
+where
+    Socket: Write + 'a,
+    CipherSuite: TlsCipherSuite + 'static,
+{
+    fn flush_transport(&mut self) -> Result<(), TlsError> {
+        self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))
+    }
 }
 
 impl<Socket, CipherSuite> AsRef<Socket> for TlsWriter<'_, Socket, CipherSuite>
@@ -475,7 +515,9 @@ where
 
             self.key_schedule.increment_counter();
 
-            self.delegate.flush().map_err(|e| TlsError::Io(e.kind()))?;
+            if self.flush_policy.flush_transport() {
+                self.flush_transport()?;
+            }
         }
 
         Ok(())
