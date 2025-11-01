@@ -53,7 +53,7 @@ impl<'a> ServerHello<'a> {
         Ok(Self { extensions })
     }
 
-    pub fn key_share(&self) -> Option<&KeyShareEntry> {
+    pub fn key_share(&self) -> Option<&KeyShareEntry<'_>> {
         self.extensions.iter().find_map(|e| {
             if let ServerHelloExtension::KeyShare(entry) = e {
                 Some(&entry.0)
