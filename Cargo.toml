@@ -27,7 +27,7 @@ digest = { version = "0.10.3", default-features = false, features = [
     "core-api",
 ] }
 typenum = { version = "1.15.0", default-features = false }
-heapless = { version = "0.8", default-features = false }
+heapless = { version = "0.9", default-features = false }
 heapless_typenum = { package = "heapless", version = "0.6", default-features = false }
 embedded-io = "0.7"
 embedded-io-async = "0.7"
@@ -55,7 +55,7 @@ openssl = "0.10.44"
 
 [features]
 default = ["std", "log", "tokio"]
-defmt = ["dep:defmt", "heapless/defmt-03"]
+defmt = ["dep:defmt", "heapless/defmt"]
 std = ["embedded-io/std", "embedded-io-async/std"]
 tokio = ["embedded-io-adapters/tokio-1"]
 alloc = []
