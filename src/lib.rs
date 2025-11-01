@@ -134,6 +134,14 @@ impl embedded_io::Error for TlsError {
     }
 }
 
+impl core::fmt::Display for TlsError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl core::error::Error for TlsError {}
+
 #[cfg(feature = "std")]
 mod stdlib {
     use crate::config::TlsClock;
