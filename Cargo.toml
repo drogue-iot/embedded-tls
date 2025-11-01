@@ -55,7 +55,7 @@ openssl = "0.10.44"
 
 [features]
 default = ["std", "log", "tokio"]
-defmt = ["dep:defmt", "heapless/defmt"]
+defmt = ["dep:defmt", "embedded-io/defmt", "heapless/defmt"]
 std = ["embedded-io/std", "embedded-io-async/std"]
 tokio = ["embedded-io-adapters/tokio-1"]
 alloc = []
