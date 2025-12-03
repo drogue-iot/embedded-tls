@@ -55,9 +55,10 @@ pem-parser = "0.1.1"
 openssl = "0.10.44"
 
 [features]
-default = ["std", "log", "tokio", "webpki"]
+default = ["std", "log", "tokio", "rustpki"]
 defmt = ["dep:defmt", "embedded-io/defmt-03", "heapless/defmt-03"]
 std = ["embedded-io/std", "embedded-io-async/std"]
 tokio = ["embedded-io-adapters/tokio-1"]
 alloc = []
 webpki = []
+rustpki = []

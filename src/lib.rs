@@ -78,9 +78,12 @@ pub use handshake::certificate_verify::CertificateVerify;
 pub use rand_core::{CryptoRng, CryptoRngCore};
 
 #[cfg(feature = "webpki")]
-mod decoded_certificate;
-#[cfg(feature = "webpki")]
 pub mod webpki;
+
+#[cfg(feature = "rustpki")]
+mod der_certificate;
+#[cfg(feature = "rustpki")]
+pub mod pki;
 
 mod asynch;
 pub use asynch::*;
