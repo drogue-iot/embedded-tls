@@ -189,7 +189,7 @@ where
             .map_err(|e| TlsError::Io(e.kind()))
     }
 
-    fn create_read_buffer(&mut self) -> ReadBuffer {
+    fn create_read_buffer(&mut self) -> ReadBuffer<'_> {
         self.decrypted.create_read_buffer(self.record_reader.buf)
     }
 
@@ -207,7 +207,7 @@ where
     }
 
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
-    pub async fn read_buffered(&mut self) -> Result<ReadBuffer, TlsError> {
+    pub async fn read_buffered(&mut self) -> Result<ReadBuffer<'_>, TlsError> {
         if self.is_opened() {
             while self.decrypted.is_empty() {
                 self.read_application_data().await?;
@@ -371,12 +371,12 @@ where
     Socket: AsyncRead + 'a,
     CipherSuite: TlsCipherSuite + 'static,
 {
-    fn create_read_buffer(&mut self) -> ReadBuffer {
+    fn create_read_buffer(&mut self) -> ReadBuffer<'_> {
         self.decrypted.create_read_buffer(self.record_reader.buf)
     }
 
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
-    pub async fn read_buffered(&mut self) -> Result<ReadBuffer, TlsError> {
+    pub async fn read_buffered(&mut self) -> Result<ReadBuffer<'_>, TlsError> {
         if self.opened.load(Ordering::Acquire) {
             while self.decrypted.is_empty() {
                 self.read_application_data().await?;

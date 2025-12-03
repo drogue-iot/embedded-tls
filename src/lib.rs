@@ -78,6 +78,8 @@ pub use handshake::certificate_verify::CertificateVerify;
 pub use rand_core::{CryptoRng, CryptoRngCore};
 
 #[cfg(feature = "webpki")]
+mod decoded_certificate;
+#[cfg(feature = "webpki")]
 pub mod webpki;
 
 mod asynch;
