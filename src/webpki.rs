@@ -1,6 +1,6 @@
 use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
-use crate::decoded_certificate::DecodedCertificate;
+use crate::decoded_certificate::{DecodedCertificate, Time};
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
     certificate::{
@@ -9,9 +9,10 @@ use crate::handshake::{
     certificate_verify::CertificateVerifyRef,
 };
 use crate::parse_buffer::ParseError;
+use const_oid::ObjectIdentifier;
 use core::marker::PhantomData;
 use digest::Digest;
-use heapless::Vec;
+use heapless::{String, Vec};
 
 pub struct CertificateChain<'a> {
     prev: Option<&'a CertificateEntryRef<'a>>,
@@ -106,15 +107,17 @@ where
         let ca = if let Some(ca) = ca {
             ca
         } else {
-            error!("Verifying a chain without ca is not implemented");
+            error!("Verifying a certificate/chain without ca is not implemented");
             return Err(TlsError::Unimplemented);
         };
 
+        let mut cn = None;
         for (p, q) in CertificateChain::new(&ca.into(), &cert) {
-            verify_certificate(p, q, Clock::now())?
+            cn = verify_certificate(p, q, Clock::now())?;
         }
-
-        // FIXME: check if CN or SAN:DNS found in Some(cert.entries.first()) is equal to self.host
+        if self.host.ne(&cn) {
+            return Err(TlsError::InvalidCertificate);
+        }
 
         self.certificate.replace(cert.try_into()?); // FIXME: is this still correct?
         self.certificate_transcript.replace(transcript.clone());
@@ -199,12 +202,20 @@ fn get_certificate_tlv_bytes<'a>(input: &[u8]) -> der::Result<&[u8]> {
     reader.tlv_bytes()
 }
 
+fn parse_cert_time(time: Time) -> u64 {
+    match time {
+        Time::UtcTime(utc_time) => utc_time.to_unix_duration().as_secs(),
+        Time::GeneralTime(generalized_time) => generalized_time.to_unix_duration().as_secs(),
+    }
+}
+
 fn verify_certificate(
     verifier: &CertificateEntryRef,
     certificate: &CertificateEntryRef,
-    _now: Option<u64>,
-) -> Result<(), TlsError> {
+    now: Option<u64>,
+) -> Result<Option<heapless::String<64>>, TlsError> {
     let mut verified = false;
+    let mut common_name = None;
 
     use der::Decode;
 
@@ -234,9 +245,29 @@ fn verify_certificate(
             "Signature alg: {:?}",
             parsed_certificate.signature_algorithm
         );
-        debug!("Subject: {:?}", parsed_certificate.tbs_certificate.subject);
-        debug!("Issuer: {:?}", parsed_certificate.tbs_certificate.issuer);
-        // FIXME: verify _now
+
+        let common_name_oid = ObjectIdentifier::new("2.5.4.3").unwrap();
+        for elems in parsed_certificate.tbs_certificate.subject.iter() {
+            let attrs = elems
+                .get(0)
+                .ok_or(TlsError::ParseError(ParseError::InvalidData))?;
+            if attrs.oid.starts_with(common_name_oid) {
+                let mut v: Vec<u8, 64> = Vec::new();
+                v.extend_from_slice(attrs.value.value())
+                    .map_err(|_| TlsError::ParseError(ParseError::InvalidData))?;
+                common_name = String::from_utf8(v).ok();
+                info!("CommonName: {:?}", common_name);
+            }
+        }
+
+        if let Some(now) = now {
+            if parse_cert_time(parsed_certificate.tbs_certificate.validity.not_before) > now
+                || parse_cert_time(parsed_certificate.tbs_certificate.validity.not_after) < now
+            {
+                return Err(TlsError::InvalidCertificate);
+            }
+            info!("Epoch is {} and certificate is valid!", now)
+        }
 
         let signature = p256::ecdsa::Signature::from_der(
             parsed_certificate
@@ -256,5 +287,5 @@ fn verify_certificate(
         return Err(TlsError::InvalidCertificate);
     }
 
-    Ok(())
+    Ok(common_name)
 }

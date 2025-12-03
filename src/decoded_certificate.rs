@@ -2,8 +2,7 @@
 
 use core::cmp::Ordering;
 use der::asn1::{
-    BitStringRef, GeneralizedTime, IntRef, ObjectIdentifier, SequenceOf, SetOf,
-    UtcTime,
+    BitStringRef, GeneralizedTime, IntRef, ObjectIdentifier, SequenceOf, SetOf, UtcTime,
 };
 use der::{AnyRef, Choice, Enumerated, Sequence, ValueOrd};
 
@@ -19,10 +18,8 @@ pub struct AlgorithmIdentifier<'a> {
 pub enum Version {
     /// Version 1 (default)
     V1 = 0,
-
     /// Version 2
     V2 = 1,
-
     /// Version 3
     V3 = 2,
 }
@@ -72,7 +69,6 @@ pub struct SubjectPublicKeyInfoRef<'a> {
     pub algorithm: AlgorithmIdentifier<'a>,
     pub public_key: BitStringRef<'a>,
 }
-
 
 #[derive(Debug, Sequence, ValueOrd)]
 pub struct TbsCertificate<'a> {
