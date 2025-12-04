@@ -360,8 +360,8 @@ pub fn run(listener: TcpListener) {
 
     let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
 
-    let certs = load_certs(&test_dir.join("data").join("server-cert.pem"));
-    let privkey = load_private_key(&test_dir.join("data").join("server-key.pem"));
+    let certs = load_certs(&test_dir.join("data").join("chain-cert.pem"));
+    let privkey = load_private_key(&test_dir.join("data").join("im-server-key.pem"));
 
     let config = rustls::ServerConfig::builder()
         .with_cipher_suites(rustls::ALL_CIPHER_SUITES)
