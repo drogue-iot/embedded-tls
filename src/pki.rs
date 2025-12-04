@@ -226,7 +226,7 @@ fn verify_certificate(
     use der::Decode;
 
     let ca_certificate = if let CertificateEntryRef::X509(verifier) = verifier {
-        DecodedCertificate::from_der(verifier).map_err(|_e| TlsError::DecodeError)?
+        DecodedCertificate::from_der(verifier).map_err(|_| TlsError::DecodeError)?
     } else {
         return Err(TlsError::DecodeError);
     };
