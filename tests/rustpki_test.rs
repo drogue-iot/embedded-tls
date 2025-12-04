@@ -6,14 +6,17 @@ use embedded_tls::{Aes128GcmSha256, CryptoProvider, SignatureScheme, TlsError, T
 use p256::SecretKey;
 use p256::ecdsa::{DerSignature, SigningKey};
 use rand_core::OsRng;
+use rustls::server::AllowAnyAnonymousOrAuthenticatedClient;
 use signature::SignerMut;
 use std::net::SocketAddr;
-use std::sync::OnceLock;
+use std::sync::Once;
 use std::time::SystemTime;
 
 mod tlsserver;
 
-static LOG_INIT: OnceLock<()> = OnceLock::new();
+static LOG_INIT: Once = Once::new();
+static INIT: Once = Once::new();
+static mut ADDR: Option<SocketAddr> = None;
 
 #[derive(Default)]
 struct RustPkiProvider {
@@ -48,37 +51,65 @@ impl CryptoProvider for RustPkiProvider {
 }
 
 fn init_log() {
-    LOG_INIT.get_or_init(|| {
+    LOG_INIT.call_once(|| {
         env_logger::init();
     });
 }
 
-async fn setup() -> SocketAddr {
-    init_log();
-
+fn setup() -> SocketAddr {
     use mio::net::TcpListener;
-    use std::net::{IpAddr, Ipv4Addr};
+    init_log();
+    INIT.call_once(|| {
+        let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
 
-    let listener = TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0))
-        .expect("cannot listen on port");
+        let listener = TcpListener::bind(addr).expect("cannot listen on port");
+        let addr = listener
+            .local_addr()
+            .expect("error retrieving socket address");
 
-    let addr = listener
-        .local_addr()
-        .expect("error retrieving socket address");
+        std::thread::spawn(move || {
+            use tlsserver::*;
 
-    std::thread::spawn(move || {
-        tlsserver::run(listener);
+            let versions = &[&rustls::version::TLS13];
+
+            let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
+
+            let ca = load_certs(&test_dir.join("data").join("ca-cert.pem"));
+            let certs = load_certs(&test_dir.join("data").join("chain-cert.pem"));
+            let privkey = load_private_key(&test_dir.join("data").join("im-server-key.pem"));
+
+            let mut client_auth_roots = rustls::RootCertStore::empty();
+            for root in ca.iter() {
+                client_auth_roots.add(root).unwrap()
+            }
+
+            let client_cert_verifier =
+                AllowAnyAnonymousOrAuthenticatedClient::new(client_auth_roots);
+
+            let config = rustls::ServerConfig::builder()
+                .with_cipher_suites(rustls::ALL_CIPHER_SUITES)
+                .with_kx_groups(&rustls::ALL_KX_GROUPS)
+                .with_protocol_versions(versions)
+                .unwrap()
+                .with_client_cert_verifier(client_cert_verifier.boxed())
+                .with_single_cert(certs, privkey)
+                .unwrap();
+
+            run_with_config(listener, config);
+        });
+        #[allow(static_mut_refs)]
+        unsafe {
+            ADDR.replace(addr)
+        };
     });
-
-    log::info!("Server at {:?}", addr);
-    addr
+    unsafe { ADDR.unwrap() }
 }
 
 #[tokio::test]
 async fn test_server_certificate_validation() {
     use embedded_tls::*;
 
-    let addr = setup().await;
+    let addr = setup();
     let pem = include_str!("data/ca-cert.pem");
     let der = pem_parser::pem_to_der(pem);
 
@@ -119,7 +150,7 @@ async fn test_server_certificate_validation() {
 async fn test_mutual_certificate_validation() {
     use embedded_tls::*;
 
-    let addr = setup().await;
+    let addr = setup();
     let ca_pem = include_str!("data/ca-cert.pem");
     let ca_der = pem_parser::pem_to_der(ca_pem);
 
