@@ -19,6 +19,7 @@ p256 = { version = "0.13", default-features = false, features = [
     "sha256",
 ] }
 p384 = { version = "0.13", default-features = false, features = [ "ecdh", "ecdsa", "sha384" ] }
+ed25519-dalek = { version = "2.2", default-features = false }
 rand_core = { version = "0.6.3", default-features = false }
 hkdf = "0.12.3"
 hmac = "0.12.1"

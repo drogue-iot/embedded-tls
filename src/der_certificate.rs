@@ -18,6 +18,10 @@ pub const ECDSA_SHA384: AlgorithmIdentifier = AlgorithmIdentifier {
     oid: ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.3"),
     parameters: None,
 };
+pub const ED25519: AlgorithmIdentifier = AlgorithmIdentifier {
+    oid: ObjectIdentifier::new_unwrap("1.3.101.112"),
+    parameters: None,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Enumerated)]
 #[asn1(type = "INTEGER")]

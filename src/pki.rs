@@ -1,6 +1,6 @@
 use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
-use crate::der_certificate::{DecodedCertificate, ECDSA_SHA256, ECDSA_SHA384, Time};
+use crate::der_certificate::{DecodedCertificate, ECDSA_SHA256, ECDSA_SHA384, ED25519, Time};
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
     certificate::{
@@ -190,8 +190,17 @@ fn verify_signature(
                 Signature::from_der(&verify.signature).map_err(|_| TlsError::DecodeError)?;
             verified = verifying_key.verify(message, &signature).is_ok();
         }
+        SignatureScheme::Ed25519 => {
+            use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+            let verifying_key: VerifyingKey =
+                VerifyingKey::from_bytes(public_key.try_into().unwrap())
+                    .map_err(|_| TlsError::DecodeError)?;
+            let signature =
+                Signature::try_from(verify.signature).map_err(|_| TlsError::DecodeError)?;
+            verified = verifying_key.verify(message, &signature).is_ok();
+        }
         _ => {
-            // Ed25519, etc.
+            // RSA...
             return Err(TlsError::InvalidSignatureScheme);
         }
     }
@@ -306,8 +315,24 @@ fn verify_certificate(
 
                 verified = verifying_key.verify(&certificate_data, &signature).is_ok();
             }
+            ED25519 => {
+                use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+                let verifying_key: VerifyingKey =
+                    VerifyingKey::from_bytes(ca_public_key.try_into().unwrap())
+                        .map_err(|_| TlsError::DecodeError)?;
+
+                let signature = Signature::try_from(
+                    parsed_certificate
+                        .signature
+                        .as_bytes()
+                        .ok_or(TlsError::ParseError(ParseError::InvalidData))?,
+                )
+                .map_err(|_| TlsError::ParseError(ParseError::InvalidData))?;
+
+                verified = verifying_key.verify(certificate_data, &signature).is_ok();
+            }
             _ => {
-                debug!(
+                error!(
                     "Unsupported signature alg: {:?}",
                     parsed_certificate.signature_algorithm
                 );
