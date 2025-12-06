@@ -10,6 +10,15 @@ pub struct AlgorithmIdentifier<'a> {
     pub parameters: Option<AnyRef<'a>>,
 }
 
+pub const ECDSA_SHA256: AlgorithmIdentifier = AlgorithmIdentifier {
+    oid: ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.2"),
+    parameters: None,
+};
+pub const ECDSA_SHA384: AlgorithmIdentifier = AlgorithmIdentifier {
+    oid: ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.3"),
+    parameters: None,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Enumerated)]
 #[asn1(type = "INTEGER")]
 #[repr(u8)]

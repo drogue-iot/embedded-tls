@@ -1,6 +1,6 @@
 use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
-use crate::der_certificate::{DecodedCertificate, Time};
+use crate::der_certificate::{DecodedCertificate, ECDSA_SHA256, ECDSA_SHA384, Time};
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
     certificate::{
@@ -15,6 +15,7 @@ use digest::Digest;
 use heapless::{String, Vec};
 
 const HOSTNAME_MAXLEN: usize = 64;
+const COMMON_NAME_OID: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.4.3");
 
 pub struct CertificateChain<'a> {
     prev: Option<&'a CertificateEntryRef<'a>>,
@@ -174,16 +175,23 @@ fn verify_signature(
 
     match verify.signature_scheme {
         SignatureScheme::EcdsaSecp256r1Sha256 => {
-            use p256::ecdsa::{VerifyingKey, signature::Verifier};
-
+            use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
             let verifying_key =
                 VerifyingKey::from_sec1_bytes(public_key).map_err(|_| TlsError::DecodeError)?;
-            let signature = p256::ecdsa::Signature::from_der(&verify.signature)
-                .map_err(|_| TlsError::DecodeError)?;
-
+            let signature =
+                Signature::from_der(&verify.signature).map_err(|_| TlsError::DecodeError)?;
+            verified = verifying_key.verify(message, &signature).is_ok();
+        }
+        SignatureScheme::EcdsaSecp384r1Sha384 => {
+            use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
+            let verifying_key =
+                VerifyingKey::from_sec1_bytes(public_key).map_err(|_| TlsError::DecodeError)?;
+            let signature =
+                Signature::from_der(&verify.signature).map_err(|_| TlsError::DecodeError)?;
             verified = verifying_key.verify(message, &signature).is_ok();
         }
         _ => {
+            // Ed25519, etc.
             return Err(TlsError::InvalidSignatureScheme);
         }
     }
@@ -242,22 +250,11 @@ fn verify_certificate(
             .as_bytes()
             .ok_or(TlsError::DecodeError)?;
 
-        use p256::ecdsa::{VerifyingKey, signature::Verifier};
-
-        let verifying_key =
-            VerifyingKey::from_sec1_bytes(ca_public_key).map_err(|_| TlsError::DecodeError)?;
-
-        debug!(
-            "Signature alg: {:?}",
-            parsed_certificate.signature_algorithm
-        );
-
-        let common_name_oid = ObjectIdentifier::new("2.5.4.3").unwrap();
         for elems in parsed_certificate.tbs_certificate.subject.iter() {
             let attrs = elems
                 .get(0)
                 .ok_or(TlsError::ParseError(ParseError::InvalidData))?;
-            if attrs.oid.starts_with(common_name_oid) {
+            if attrs.oid.starts_with(COMMON_NAME_OID) {
                 let mut v: Vec<u8, HOSTNAME_MAXLEN> = Vec::new();
                 v.extend_from_slice(attrs.value.value())
                     .map_err(|_| TlsError::ParseError(ParseError::InvalidData))?;
@@ -275,18 +272,48 @@ fn verify_certificate(
             debug!("Epoch is {} and certificate is valid!", now)
         }
 
-        let signature = p256::ecdsa::Signature::from_der(
-            parsed_certificate
-                .signature
-                .as_bytes()
-                .ok_or(TlsError::ParseError(ParseError::InvalidData))?,
-        )
-        .map_err(|_| TlsError::ParseError(ParseError::InvalidData))?;
-
         let certificate_data =
             get_certificate_tlv_bytes(certificate).map_err(|_| TlsError::DecodeError)?;
 
-        verified = verifying_key.verify(&certificate_data, &signature).is_ok();
+        match parsed_certificate.signature_algorithm {
+            ECDSA_SHA256 => {
+                use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
+                let verifying_key = VerifyingKey::from_sec1_bytes(ca_public_key)
+                    .map_err(|_| TlsError::DecodeError)?;
+
+                let signature = Signature::from_der(
+                    parsed_certificate
+                        .signature
+                        .as_bytes()
+                        .ok_or(TlsError::ParseError(ParseError::InvalidData))?,
+                )
+                .map_err(|_| TlsError::ParseError(ParseError::InvalidData))?;
+
+                verified = verifying_key.verify(&certificate_data, &signature).is_ok();
+            }
+            ECDSA_SHA384 => {
+                use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
+                let verifying_key = VerifyingKey::from_sec1_bytes(ca_public_key)
+                    .map_err(|_| TlsError::DecodeError)?;
+
+                let signature = Signature::from_der(
+                    parsed_certificate
+                        .signature
+                        .as_bytes()
+                        .ok_or(TlsError::ParseError(ParseError::InvalidData))?,
+                )
+                .map_err(|_| TlsError::ParseError(ParseError::InvalidData))?;
+
+                verified = verifying_key.verify(&certificate_data, &signature).is_ok();
+            }
+            _ => {
+                debug!(
+                    "Unsupported signature alg: {:?}",
+                    parsed_certificate.signature_algorithm
+                );
+                return Err(TlsError::InvalidSignatureScheme);
+            }
+        }
     }
 
     if !verified {
