@@ -110,7 +110,7 @@ where
         let ca = if let Some(ca) = ca {
             ca
         } else {
-            error!("Verifying a certificate/chain without ca is not implemented");
+            error!("Verifying a certificate chain without ca is not implemented");
             return Err(TlsError::Unimplemented);
         };
 
@@ -126,7 +126,7 @@ where
             return Err(TlsError::InvalidCertificate);
         }
 
-        self.certificate.replace(cert.try_into()?); // FIXME: is this still correct?
+        self.certificate.replace(cert.try_into()?);
         self.certificate_transcript.replace(transcript.clone());
         Ok(())
     }
@@ -134,7 +134,7 @@ where
     fn verify_signature(&mut self, verify: CertificateVerifyRef) -> Result<(), TlsError> {
         let handshake_hash = unwrap!(self.certificate_transcript.take());
         let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
-        let mut msg: Vec<u8, 130> = Vec::new();
+        let mut msg: Vec<u8, 146> = Vec::new();
         msg.resize(64, 0x20).map_err(|()| TlsError::EncodeError)?;
         msg.extend_from_slice(ctx_str)
             .map_err(|()| TlsError::EncodeError)?;
@@ -225,7 +225,7 @@ fn get_certificate_tlv_bytes<'a>(input: &[u8]) -> der::Result<&[u8]> {
     reader.tlv_bytes()
 }
 
-fn parse_cert_time(time: Time) -> u64 {
+fn get_cert_time(time: Time) -> u64 {
     match time {
         Time::UtcTime(utc_time) => utc_time.to_unix_duration().as_secs(),
         Time::GeneralTime(generalized_time) => generalized_time.to_unix_duration().as_secs(),
@@ -273,8 +273,8 @@ fn verify_certificate(
         }
 
         if let Some(now) = now {
-            if parse_cert_time(parsed_certificate.tbs_certificate.validity.not_before) > now
-                || parse_cert_time(parsed_certificate.tbs_certificate.validity.not_after) < now
+            if get_cert_time(parsed_certificate.tbs_certificate.validity.not_before) > now
+                || get_cert_time(parsed_certificate.tbs_certificate.validity.not_after) < now
             {
                 return Err(TlsError::InvalidCertificate);
             }
