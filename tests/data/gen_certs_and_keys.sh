@@ -24,10 +24,17 @@ openssl x509 -req -in im-server.csr -CA im-cert.pem -CAkey im-key.pem -CAcreates
 cat im-server-cert.pem im-cert.pem > chain-cert.pem
 
 # Create Ed25519 CA private key and certificate
-# openssl genpkey -algorithm ed25519 -out ed-ca-key.pem
-# openssl req -new -x509 -sha256 -key ed-ca-key.pem -days 10000 -out ed-ca-cert.pem
+#openssl genpkey -algorithm ed25519 -out ed-ca-key.pem
+#openssl req -new -x509 -sha256 -key ed-ca-key.pem -days 10000 -out ed-ca-cert.pem
 
 # Create Ed25519 private key, certificate signing request (CSR) and certificate for server
-# openssl genpkey -algorithm ed25519 -out ed-server-key.pem
-# openssl req -new -key ed-server-key.pem -out ed-server.csr
-# openssl x509 -req -in ed-server.csr -CA ed-ca-cert.pem -CAkey ed-ca-key.pem -CAcreateserial -out ed-server.pem -days 10000
+#openssl genpkey -algorithm ed25519 -out ed-server-key.pem
+#openssl req -new -key ed-server-key.pem -out ed-server.csr
+#openssl x509 -req -in ed-server.csr -CA ed-ca-cert.pem -CAkey ed-ca-key.pem -CAcreateserial -out ed-server.pem -days 10000
+
+# Create RSA CA private key and certificate
+openssl req -x509 -newkey rsa:2048 -keyout rsa-ca-key.pem -nodes -out rsa-ca-cert.pem -sha256 -days 10000
+
+# Create RSA privake key, certificate signing request (CSR) and certificate for server
+openssl req -newkey rsa:2048 -keyout rsa-server-key.pem -nodes -out rsa-server-cert.csr -sha256 -subj "/CN=localhost"
+openssl x509 -req -CA rsa-ca-cert.pem -CAkey rsa-ca-key.pem -in rsa-server-cert.csr -out rsa-server-cert.pem -days 10000 -CAcreateserial

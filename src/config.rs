@@ -304,11 +304,11 @@ impl<'a> TlsConfig<'a> {
                 .push(SignatureScheme::RsaPkcs1Sha384)
                 .ok()
         );
-        unwrap!(
-            self.signature_schemes
-                .push(SignatureScheme::RsaPkcs1Sha512)
-                .ok()
-        );
+        // unwrap!(
+        //     self.signature_schemes
+        //         .push(SignatureScheme::RsaPkcs1Sha512)
+        //         .ok()
+        // );
         unwrap!(
             self.signature_schemes
                 .push(SignatureScheme::RsaPssRsaeSha256)
@@ -319,11 +319,11 @@ impl<'a> TlsConfig<'a> {
                 .push(SignatureScheme::RsaPssRsaeSha384)
                 .ok()
         );
-        unwrap!(
-            self.signature_schemes
-                .push(SignatureScheme::RsaPssRsaeSha512)
-                .ok()
-        );
+        // unwrap!(
+        //     self.signature_schemes
+        //         .push(SignatureScheme::RsaPssRsaeSha512)
+        //         .ok()
+        // );
         self
     }
 
