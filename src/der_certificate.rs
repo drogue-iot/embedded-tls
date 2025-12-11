@@ -39,6 +39,11 @@ pub const RSA_PKCS1_SHA384: AlgorithmIdentifier = AlgorithmIdentifier {
     oid: ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.12"),
     parameters: Some(AnyRef::NULL),
 };
+#[cfg(feature = "alloc")]
+pub const RSA_PKCS1_SHA512: AlgorithmIdentifier = AlgorithmIdentifier {
+    oid: ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.13"),
+    parameters: Some(AnyRef::NULL),
+};
 
 // pub const RSA_PSS_SHA256: AlgorithmIdentifier = AlgorithmIdentifier {
 //     oid: ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.10"),
