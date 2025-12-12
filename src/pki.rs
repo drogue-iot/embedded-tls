@@ -345,7 +345,7 @@ fn verify_certificate(
             let attrs = elems
                 .get(0)
                 .ok_or(TlsError::ParseError(ParseError::InvalidData))?;
-            if attrs.oid.starts_with(COMMON_NAME_OID) {
+            if attrs.oid == COMMON_NAME_OID {
                 let mut v: Vec<u8, HOSTNAME_MAXLEN> = Vec::new();
                 v.extend_from_slice(attrs.value.value())
                     .map_err(|_| TlsError::ParseError(ParseError::InvalidData))?;

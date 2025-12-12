@@ -53,10 +53,11 @@ pem-parser = "0.1.1"
 openssl = "0.10.44"
 
 [features]
-default = ["std", "log", "tokio", "rustpki", "alloc"]
+default = ["std", "log", "tokio", "rsa"]
 defmt = ["dep:defmt", "embedded-io/defmt-03", "heapless/defmt-03"]
 std = ["embedded-io/std", "embedded-io-async/std"]
 tokio = ["embedded-io-adapters/tokio-1"]
-alloc = ["dep:rsa"]
+alloc = []
 webpki = ["dep:webpki"]
 rustpki = ["dep:der","dep:const-oid"]
+rsa = ["dep:rsa", "rustpki", "alloc"]
