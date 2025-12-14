@@ -32,7 +32,7 @@ impl<'a> CertificateVerifyRef<'a> {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateVerify {
     pub(crate) signature_scheme: SignatureScheme,
-    pub(crate) signature: heapless::Vec<u8, 128>,
+    pub(crate) signature: heapless::Vec<u8, 256>, // FIXME: was 128, needs to be 256 (or larger?) for RSA only
 }
 
 impl CertificateVerify {

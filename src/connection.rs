@@ -560,6 +560,12 @@ where
 
             let signature = signing_key.sign(&msg);
 
+            trace!(
+                "Signature: {:?} ({})",
+                signature.as_ref(),
+                signature.as_ref().len()
+            );
+
             let certificate_verify = CertificateVerify {
                 signature_scheme,
                 signature: heapless::Vec::from_slice(signature.as_ref()).unwrap(),
