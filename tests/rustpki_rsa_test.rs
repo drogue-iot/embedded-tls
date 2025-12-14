@@ -3,7 +3,11 @@ use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_tls::pki::CertVerifier;
 use embedded_tls::{Aes128GcmSha256, CryptoProvider, TlsError, TlsVerifier};
 use rand_core::OsRng;
+//use rsa::RsaPrivateKey;
+//use rsa::pkcs1::DecodeRsaPrivateKey;
+//use rsa::pkcs1v15::SigningKey;
 use rustls::server::AllowAnyAnonymousOrAuthenticatedClient;
+//use signature::SignerMut;
 use std::net::SocketAddr;
 use std::sync::Once;
 use std::time::SystemTime;
@@ -22,7 +26,7 @@ struct RustPkiProvider {
 
 impl CryptoProvider for RustPkiProvider {
     type CipherSuite = Aes128GcmSha256;
-    type Signature = &'static [u8];
+    type Signature = Vec<u8>; // rsa::pkcs1v15::Signature does not implement AsRef<u8> Box<[u8]>
 
     fn rng(&mut self) -> impl embedded_tls::CryptoRngCore {
         &mut self.rng
@@ -31,6 +35,19 @@ impl CryptoProvider for RustPkiProvider {
     fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Aes128GcmSha256>, TlsError> {
         Ok(&mut self.verifier)
     }
+
+    // fn signer(
+    //     &mut self,
+    //     key_der: &[u8],
+    // ) -> Result<(impl SignerMut<Self::Signature>, SignatureScheme), TlsError> {
+    //     let private_key =
+    //         RsaPrivateKey::from_pkcs1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
+
+    //     Ok((
+    //         SigningKey::<sha2::Sha256>::new(private_key),
+    //         SignatureScheme::RsaPkcs1Sha256,
+    //     ))
+    // }
 }
 
 fn init_log() {

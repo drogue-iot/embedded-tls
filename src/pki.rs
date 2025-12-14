@@ -1,7 +1,7 @@
 use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
 use crate::der_certificate::{DecodedCertificate, ECDSA_SHA256, ECDSA_SHA384, ED25519, Time};
-#[cfg(feature = "alloc")]
+#[cfg(feature = "rsa")]
 use crate::der_certificate::{RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512};
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
@@ -232,7 +232,7 @@ fn verify_signature(
         //         Signature::try_from(verify.signature).map_err(|_| TlsError::DecodeError)?;
         //     verified = verifying_key.verify(message, &signature).is_ok();
         // }
-        #[cfg(feature = "alloc")]
+        #[cfg(feature = "rsa")]
         SignatureScheme::RsaPssRsaeSha256 => {
             use rsa::{
                 RsaPublicKey,
@@ -249,7 +249,7 @@ fn verify_signature(
                 Signature::try_from(verify.signature).map_err(|_| TlsError::DecodeError)?;
             verified = verifying_key.verify(message, &signature).is_ok();
         }
-        #[cfg(feature = "alloc")]
+        #[cfg(feature = "rsa")]
         SignatureScheme::RsaPssRsaeSha384 => {
             use rsa::{
                 RsaPublicKey,
@@ -259,14 +259,15 @@ fn verify_signature(
             };
             use sha2::Sha384;
 
-            let der_pubkey = RsaPublicKey::from_pkcs1_der(public_key).unwrap();
+            let der_pubkey =
+                RsaPublicKey::from_pkcs1_der(public_key).map_err(|_| TlsError::DecodeError)?;
             let verifying_key = VerifyingKey::<Sha384>::from(der_pubkey);
 
             let signature =
                 Signature::try_from(verify.signature).map_err(|_| TlsError::DecodeError)?;
             verified = verifying_key.verify(message, &signature).is_ok();
         }
-        #[cfg(feature = "alloc")]
+        #[cfg(feature = "rsa")]
         SignatureScheme::RsaPssRsaeSha512 => {
             use rsa::{
                 RsaPublicKey,
@@ -276,7 +277,8 @@ fn verify_signature(
             };
             use sha2::Sha512;
 
-            let der_pubkey = RsaPublicKey::from_pkcs1_der(public_key).unwrap();
+            let der_pubkey =
+                RsaPublicKey::from_pkcs1_der(public_key).map_err(|_| TlsError::DecodeError)?;
             let verifying_key = VerifyingKey::<Sha512>::from(der_pubkey);
 
             let signature =
@@ -413,7 +415,7 @@ fn verify_certificate(
 
                 verified = verifying_key.verify(certificate_data, &signature).is_ok();
             }
-            #[cfg(feature = "alloc")]
+            #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA256 => {
                 use rsa::{
                     pkcs1::DecodeRsaPublicKey,
@@ -441,7 +443,7 @@ fn verify_certificate(
 
                 verified = verifying_key.verify(certificate_data, &signature).is_ok();
             }
-            #[cfg(feature = "alloc")]
+            #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA384 => {
                 use rsa::{
                     pkcs1::DecodeRsaPublicKey,
@@ -463,7 +465,7 @@ fn verify_certificate(
 
                 verified = verifying_key.verify(certificate_data, &signature).is_ok();
             }
-            #[cfg(feature = "alloc")]
+            #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA512 => {
                 use rsa::{
                     pkcs1::DecodeRsaPublicKey,
