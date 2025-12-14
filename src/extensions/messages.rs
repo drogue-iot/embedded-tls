@@ -75,7 +75,8 @@ extension_group! {
         SignedCertificateTimestamp(Unimplemented<'a>),
         CertificateAuthorities(Unimplemented<'a>),
         OidFilters(Unimplemented<'a>),
-        SignatureAlgorithmsCert(Unimplemented<'a>)
+        SignatureAlgorithmsCert(Unimplemented<'a>),
+        CompressCertificate(Unimplemented<'a>)
     }
 }
 
