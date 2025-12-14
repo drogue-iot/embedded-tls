@@ -200,38 +200,6 @@ fn verify_signature(
                 Signature::try_from(verify.signature).map_err(|_| TlsError::DecodeError)?;
             verified = verifying_key.verify(message, &signature).is_ok();
         }
-        // #[cfg(feature = "alloc")]
-        // SignatureScheme::RsaPkcs1Sha256 => {
-        //     use rsa::{
-        //         pkcs1v15::{Signature, VerifyingKey},
-        //         signature::Verifier,
-        //     };
-        //     use sha2::Sha256;
-
-        //     let verifying_key = VerifyingKey::<Sha256>::from_public_key_der(public_key)
-        //         .map_err(|_| TlsError::DecodeError)?;
-
-        //     let signature =
-        //         Signature::try_from(verify.signature).map_err(|_| TlsError::DecodeError)?;
-        //     verified = verifying_key.verify(message, &signature).is_ok();
-        // }
-        // #[cfg(feature = "alloc")]
-        // SignatureScheme::RsaPkcs1Sha384 => {
-        //     use rsa::{
-        //         pkcs1::DecodeRsaPublicKey,
-        //         pkcs1v15::{Signature, VerifyingKey},
-        //         signature::Verifier,
-        //     };
-        //     use sha2::Sha384;
-
-        //     let verifying_key =
-        //         VerifyingKey::<Sha384>::from_pkcs1_der(public_key.try_into().unwrap())
-        //             .map_err(|_| TlsError::DecodeError)?;
-
-        //     let signature =
-        //         Signature::try_from(verify.signature).map_err(|_| TlsError::DecodeError)?;
-        //     verified = verifying_key.verify(message, &signature).is_ok();
-        // }
         #[cfg(feature = "rsa")]
         SignatureScheme::RsaPssRsaeSha256 => {
             use rsa::{
