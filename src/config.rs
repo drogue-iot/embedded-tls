@@ -14,9 +14,7 @@ use generic_array::ArrayLength;
 use heapless::Vec;
 use p256::ecdsa::SigningKey;
 use rand_core::CryptoRngCore;
-pub use sha2::Sha256;
-
-pub use sha2::Sha384;
+pub use sha2::{Sha256, Sha384};
 use typenum::{Sum, U10, U12, U16, U32};
 
 pub use crate::extensions::extension_data::max_fragment_length::MaxFragmentLength;
@@ -124,8 +122,8 @@ where
 pub struct TlsConfig<'a> {
     pub(crate) server_name: Option<&'a str>,
     pub(crate) psk: Option<(&'a [u8], Vec<&'a [u8], 4>)>,
-    pub(crate) signature_schemes: Vec<SignatureScheme, 19>,
-    pub(crate) named_groups: Vec<NamedGroup, 16>,
+    pub(crate) signature_schemes: Vec<SignatureScheme, 25>,
+    pub(crate) named_groups: Vec<NamedGroup, 13>,
     pub(crate) max_fragment_length: Option<MaxFragmentLength>,
     pub(crate) ca: Option<Certificate<'a>>,
     pub(crate) cert: Option<Certificate<'a>>,
