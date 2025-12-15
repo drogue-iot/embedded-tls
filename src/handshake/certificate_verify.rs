@@ -35,8 +35,9 @@ pub struct CertificateVerify {
     // Calculations for max. signature sizes:
     // ecdsaSHA256 -> 6 bytes (ASN.1 structure) + 32-33 bytes (r) + 32-33 bytes (s) = 70..72 bytes
     // ecdsaSHA384 -> 6 bytes (ASN.1 structure) + 48-49 bytes (r) + 48-49 bytes (r) = 102..104 bytes
-    // RSA2048 -> 256 bytes, RSA3072 -> 384 bytes, RSA4096 -> 512 bytes
-    // Explain: RSA+SHA385?, RSA+SHA512?, X25519?
+    // Ed25519 -> 6 bytes (ASN.1 structure) + 32-33 bytes (r) + 32-33 bytes (s) = 70..72 bytes
+    // RSA2048 -> 256 bytes
+    // Not supported: RSA3072 -> 384 bytes, RSA4096 -> 512 bytes
     pub(crate) signature: heapless::Vec<u8, 256>,
 }
 
