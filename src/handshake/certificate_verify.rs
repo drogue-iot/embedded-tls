@@ -28,11 +28,23 @@ impl<'a> CertificateVerifyRef<'a> {
     }
 }
 
+// Calculations for max. signature sizes:
+// ecdsaSHA256 -> 6 bytes (ASN.1 structure) + 32-33 bytes (r) + 32-33 bytes (s) = 70..72 bytes
+// ecdsaSHA384 -> 6 bytes (ASN.1 structure) + 48-49 bytes (r) + 48-49 bytes (s) = 102..104 bytes
+// Ed25519 -> 6 bytes (ASN.1 structure) + 32-33 bytes (r) + 32-33 bytes (s) = 70..72 bytes
+// RSA2048 -> 256 bytes
+// RSA3072 -> 384 bytee
+// RSA4096 -> 512 bytes
+#[cfg(feature = "rsa")]
+const SIGNATURE_SIZE: usize = 512;
+#[cfg(not(feature = "rsa"))]
+const SIGNATURE_SIZE: usize = 104;
+
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct CertificateVerify {
     pub(crate) signature_scheme: SignatureScheme,
-    pub(crate) signature: heapless::Vec<u8, 128>,
+    pub(crate) signature: heapless::Vec<u8, SIGNATURE_SIZE>,
 }
 
 impl CertificateVerify {

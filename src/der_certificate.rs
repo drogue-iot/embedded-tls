@@ -29,6 +29,21 @@ pub const ED25519: AlgorithmIdentifier = AlgorithmIdentifier {
     oid: ObjectIdentifier::new_unwrap("1.3.101.112"),
     parameters: None,
 };
+#[cfg(feature = "rsa")]
+pub const RSA_PKCS1_SHA256: AlgorithmIdentifier = AlgorithmIdentifier {
+    oid: ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.11"),
+    parameters: Some(AnyRef::NULL),
+};
+#[cfg(feature = "rsa")]
+pub const RSA_PKCS1_SHA384: AlgorithmIdentifier = AlgorithmIdentifier {
+    oid: ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.12"),
+    parameters: Some(AnyRef::NULL),
+};
+#[cfg(feature = "rsa")]
+pub const RSA_PKCS1_SHA512: AlgorithmIdentifier = AlgorithmIdentifier {
+    oid: ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.13"),
+    parameters: Some(AnyRef::NULL),
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Enumerated)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
