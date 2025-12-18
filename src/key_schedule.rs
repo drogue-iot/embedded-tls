@@ -135,6 +135,8 @@ where
 {
     traffic_secret: Secret<CipherSuite>,
     counter: u64,
+    key: KeyArray<CipherSuite>,
+    iv: IvArray<CipherSuite>,
 }
 
 impl<CipherSuite> KeyScheduleState<CipherSuite>
@@ -145,22 +147,24 @@ where
         Self {
             traffic_secret: Secret::Uninitialized,
             counter: 0,
+            key: KeyArray::<CipherSuite>::default(),
+            iv: IvArray::<CipherSuite>::default(),
         }
     }
 
-    pub fn get_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
-        self.traffic_secret
-            .make_expanded_hkdf_label(b"key", ContextType::None)
+    #[inline]
+    pub fn get_key(&self) -> Result<&KeyArray<CipherSuite>, TlsError> {
+        Ok(&self.key)
     }
 
-    pub fn get_iv(&self) -> Result<IvArray<CipherSuite>, TlsError> {
-        self.traffic_secret
-            .make_expanded_hkdf_label(b"iv", ContextType::None)
+    #[inline]
+    pub fn get_iv(&self) -> Result<&IvArray<CipherSuite>, TlsError> {
+        Ok(&self.iv)
     }
 
     pub fn get_nonce(&self) -> Result<IvArray<CipherSuite>, TlsError> {
         let iv = self.get_iv()?;
-        Ok(KeySchedule::<CipherSuite>::get_nonce(self.counter, &iv))
+        Ok(KeySchedule::<CipherSuite>::get_nonce(self.counter, iv))
     }
 
     fn calculate_traffic_secret(
@@ -174,6 +178,12 @@ where
             Hkdf::<CipherSuite>::from_prk(&secret).map_err(|_| TlsError::InternalError)?;
 
         self.traffic_secret.replace(traffic_secret);
+        self.key = self
+            .traffic_secret
+            .make_expanded_hkdf_label(b"key", ContextType::None)?;
+        self.iv = self
+            .traffic_secret
+            .make_expanded_hkdf_label(b"iv", ContextType::None)?;
         self.counter = 0;
         Ok(())
     }
@@ -402,7 +412,7 @@ where
         self.state.increment_counter();
     }
 
-    pub(crate) fn get_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
+    pub(crate) fn get_key(&self) -> Result<&KeyArray<CipherSuite>, TlsError> {
         self.state.get_key()
     }
 
@@ -449,7 +459,7 @@ where
         &mut self.transcript_hash
     }
 
-    pub(crate) fn get_key(&self) -> Result<KeyArray<CipherSuite>, TlsError> {
+    pub(crate) fn get_key(&self) -> Result<&KeyArray<CipherSuite>, TlsError> {
         self.state.get_key()
     }
 

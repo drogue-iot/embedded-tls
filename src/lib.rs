@@ -63,6 +63,7 @@ mod connection;
 mod content_types;
 mod crypto_engine;
 mod extensions;
+pub mod flush_policy;
 mod handshake;
 mod key_schedule;
 mod parse_buffer;
@@ -79,8 +80,15 @@ pub use rand_core::{CryptoRng, CryptoRngCore};
 #[cfg(feature = "webpki")]
 pub mod webpki;
 
+#[cfg(feature = "rustpki")]
+mod der_certificate;
+#[cfg(feature = "rustpki")]
+pub mod pki;
+
 mod asynch;
 pub use asynch::*;
+
+pub use flush_policy::*;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
