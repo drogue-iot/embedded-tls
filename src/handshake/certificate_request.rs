@@ -40,7 +40,7 @@ impl<'a> TryFrom<CertificateRequestRef<'a>> for CertificateRequest {
         let mut request_context = Vec::new();
         request_context
             .extend_from_slice(cert.request_context)
-            .map_err(|()| {
+            .map_err(|_| {
                 error!("CertificateRequest: InsufficientSpace");
                 TlsError::InsufficientSpace
             })?;

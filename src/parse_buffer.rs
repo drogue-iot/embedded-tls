@@ -1,5 +1,5 @@
 use crate::TlsError;
-use heapless::Vec;
+use heapless::{CapacityError, Vec};
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -20,7 +20,7 @@ impl<'b> From<&'b [u8]> for ParseBuffer<'b> {
     }
 }
 
-impl<'b, const N: usize> From<ParseBuffer<'b>> for Result<Vec<u8, N>, ()> {
+impl<'b, const N: usize> From<ParseBuffer<'b>> for Result<Vec<u8, N>, CapacityError> {
     fn from(val: ParseBuffer<'b>) -> Self {
         Vec::from_slice(&val.buffer[val.pos..])
     }
@@ -133,7 +133,7 @@ impl<'b> ParseBuffer<'b> {
             Err(ParseError::InsufficientSpace)
         } else if self.pos + num_bytes <= self.buffer.len() {
             dest.extend_from_slice(&self.buffer[self.pos..self.pos + num_bytes])
-                .map_err(|()| {
+                .map_err(|_| {
                     error!(
                         "Failed to extend destination buffer. Space: {} required: {}",
                         space, num_bytes
