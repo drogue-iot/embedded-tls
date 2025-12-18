@@ -18,13 +18,13 @@ use crate::extensions::{
 extension_group! {
     pub enum ClientHelloExtension<'a> {
         ServerName(ServerNameList<'a, 1>),
-        SupportedVersions(SupportedVersionsClientHello<16>),
-        SignatureAlgorithms(SignatureAlgorithms<19>),
-        SupportedGroups(SupportedGroups<16>),
+        SupportedVersions(SupportedVersionsClientHello<1>),
+        SignatureAlgorithms(SignatureAlgorithms<25>),
+        SupportedGroups(SupportedGroups<13>),
         KeyShare(KeyShareClientHello<'a, 1>),
         PreSharedKey(PreSharedKeyClientHello<'a, 4>),
         PskKeyExchangeModes(PskKeyExchangeModes<4>),
-        SignatureAlgorithmsCert(SignatureAlgorithmsCert<19>),
+        SignatureAlgorithmsCert(SignatureAlgorithmsCert<25>),
         MaxFragmentLength(MaxFragmentLength),
         StatusRequest(Unimplemented<'a>),
         UseSrtp(Unimplemented<'a>),
@@ -57,7 +57,7 @@ extension_group! {
     pub enum EncryptedExtensionsExtension<'a> {
         ServerName(ServerNameResponse),
         MaxFragmentLength(MaxFragmentLength),
-        SupportedGroups(SupportedGroups<10>),
+        SupportedGroups(SupportedGroups<13>),
         UseSrtp(Unimplemented<'a>),
         Heartbeat(Unimplemented<'a>),
         ApplicationLayerProtocolNegotiation(Unimplemented<'a>),
@@ -71,11 +71,12 @@ extension_group! {
 extension_group! {
     pub enum CertificateRequestExtension<'a> {
         StatusRequest(Unimplemented<'a>),
-        SignatureAlgorithms(SignatureAlgorithms<19>),
+        SignatureAlgorithms(SignatureAlgorithms<25>),
         SignedCertificateTimestamp(Unimplemented<'a>),
         CertificateAuthorities(Unimplemented<'a>),
         OidFilters(Unimplemented<'a>),
-        SignatureAlgorithmsCert(Unimplemented<'a>)
+        SignatureAlgorithmsCert(Unimplemented<'a>),
+        CompressCertificate(Unimplemented<'a>)
     }
 }
 

@@ -40,6 +40,16 @@ pub enum SignatureScheme {
     /* Legacy algorithms */
     RsaPkcs1Sha1,
     EcdsaSha1,
+
+    /* Brainpool */
+    Sha256BrainpoolP256r1,
+    Sha384BrainpoolP384r1,
+    Sha512BrainpoolP512r1,
+
+    /* ML-DSA */
+    MlDsa44,
+    MlDsa65,
+    MlDsa87,
     /* Reserved Code Points */
     //private_use(0xFE00..0xFFFF),
     //(0xFFFF)
@@ -73,6 +83,15 @@ impl SignatureScheme {
 
             0x0201 => Ok(Self::RsaPkcs1Sha1),
             0x0203 => Ok(Self::EcdsaSha1),
+
+            0x081A => Ok(Self::Sha256BrainpoolP256r1),
+            0x081B => Ok(Self::Sha384BrainpoolP384r1),
+            0x081C => Ok(Self::Sha512BrainpoolP512r1),
+
+            0x0904 => Ok(Self::MlDsa44),
+            0x0905 => Ok(Self::MlDsa65),
+            0x0906 => Ok(Self::MlDsa87),
+
             _ => Err(ParseError::InvalidData),
         }
     }
@@ -105,6 +124,14 @@ impl SignatureScheme {
 
             Self::RsaPkcs1Sha1 => 0x0201,
             Self::EcdsaSha1 => 0x0203,
+
+            Self::Sha256BrainpoolP256r1 => 0x081A,
+            Self::Sha384BrainpoolP384r1 => 0x081B,
+            Self::Sha512BrainpoolP512r1 => 0x081C,
+
+            Self::MlDsa44 => 0x0904,
+            Self::MlDsa65 => 0x0905,
+            Self::MlDsa87 => 0x0906,
         }
     }
 }

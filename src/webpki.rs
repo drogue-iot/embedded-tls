@@ -47,6 +47,16 @@ impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
             SignatureScheme::RsaPkcs1Sha1 | SignatureScheme::EcdsaSha1 => {
                 Err(TlsError::InvalidSignatureScheme)
             }
+
+            /* Ml-DSA */
+            SignatureScheme::MlDsa44 | SignatureScheme::MlDsa65 | SignatureScheme::MlDsa87 => {
+                Err(TlsError::InvalidSignatureScheme)
+            }
+
+            /* Brainpool */
+            SignatureScheme::Sha256BrainpoolP256r1
+            | SignatureScheme::Sha384BrainpoolP384r1
+            | SignatureScheme::Sha512BrainpoolP512r1 => Err(TlsError::InvalidSignatureScheme),
         }
     }
 }
@@ -86,6 +96,16 @@ impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
             /* Legacy algorithms */
             SignatureScheme::RsaPkcs1Sha1 => Err(TlsError::InvalidSignatureScheme),
             SignatureScheme::EcdsaSha1 => Err(TlsError::InvalidSignatureScheme),
+
+            /* MlDsa */
+            SignatureScheme::MlDsa44 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::MlDsa65 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::MlDsa87 => Err(TlsError::InvalidSignatureScheme),
+
+            /* Brainpool */
+            SignatureScheme::Sha256BrainpoolP256r1 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::Sha384BrainpoolP384r1 => Err(TlsError::InvalidSignatureScheme),
+            SignatureScheme::Sha512BrainpoolP512r1 => Err(TlsError::InvalidSignatureScheme),
         }
     }
 }
