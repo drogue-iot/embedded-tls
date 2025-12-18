@@ -376,7 +376,7 @@ where
     }
 
     /// Reads buffered data. If nothing is in memory, it'll wait for a TLS record and process it.
-    pub async fn read_buffered(&'_ mut self) -> Result<ReadBuffer<'_>, TlsError> {
+    pub async fn read_buffered(&mut self) -> Result<ReadBuffer<'_>, TlsError> {
         if self.opened.load(Ordering::Acquire) {
             while self.decrypted.is_empty() {
                 self.read_application_data().await?;

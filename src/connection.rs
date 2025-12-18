@@ -550,14 +550,22 @@ where
     let (result, record) = match crypto_provider.signer(config.priv_key) {
         Ok((mut signing_key, signature_scheme)) => {
             let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
-            let mut msg: heapless::Vec<u8, 130> = heapless::Vec::new();
-            msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
+
+            // 64 (pad) + 34 (ctx) + 48 (SHA-384) = 146 bytes required
+            let mut msg: heapless::Vec<u8, 146> = heapless::Vec::new();
+            msg.resize(64, 0x20).map_err(|()| TlsError::EncodeError)?;
             msg.extend_from_slice(ctx_str)
                 .map_err(|_| TlsError::EncodeError)?;
             msg.extend_from_slice(&key_schedule.transcript_hash().clone().finalize())
                 .map_err(|_| TlsError::EncodeError)?;
 
             let signature = signing_key.sign(&msg);
+
+            trace!(
+                "Signature: {:?} ({})",
+                signature.as_ref(),
+                signature.as_ref().len()
+            );
 
             let certificate_verify = CertificateVerify {
                 signature_scheme,
