@@ -99,7 +99,7 @@ where
 {
     fn set_hostname_verification(&mut self, hostname: &str) -> Result<(), TlsError> {
         self.host.replace(
-            heapless::String::try_from(hostname).map_err(|()| TlsError::InsufficientSpace)?,
+            heapless::String::try_from(hostname).map_err(|_| TlsError::InsufficientSpace)?,
         );
         Ok(())
     }
@@ -138,11 +138,11 @@ where
         let handshake_hash = unwrap!(self.certificate_transcript.take());
         let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
         let mut msg: Vec<u8, 146> = Vec::new();
-        msg.resize(64, 0x20).map_err(|()| TlsError::EncodeError)?;
+        msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
         msg.extend_from_slice(ctx_str)
-            .map_err(|()| TlsError::EncodeError)?;
+            .map_err(|_| TlsError::EncodeError)?;
         msg.extend_from_slice(&handshake_hash.finalize())
-            .map_err(|()| TlsError::EncodeError)?;
+            .map_err(|_| TlsError::EncodeError)?;
 
         let certificate = unwrap!(self.certificate.as_ref()).try_into()?;
         verify_signature(&msg[..], &certificate, &verify)?;
