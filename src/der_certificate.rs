@@ -141,10 +141,10 @@ pub struct TbsCertificate<'a> {
 
     pub serial_number: IntRef<'a>,
     pub signature: AlgorithmIdentifier<'a>,
-    pub issuer: SequenceOf<SetOf<AttributeTypeAndValue<'a>, 1>, 5>,
+    pub issuer: SequenceOf<SetOf<AttributeTypeAndValue<'a>, 1>, 7>,
 
     pub validity: Validity,
-    pub subject: SequenceOf<SetOf<AttributeTypeAndValue<'a>, 1>, 5>,
+    pub subject: SequenceOf<SetOf<AttributeTypeAndValue<'a>, 1>, 7>,
     pub subject_public_key_info: SubjectPublicKeyInfoRef<'a>,
 
     #[asn1(context_specific = "1", tag_mode = "IMPLICIT", optional = "true")]

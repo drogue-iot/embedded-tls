@@ -301,8 +301,10 @@ fn verify_certificate(
     };
 
     if let CertificateEntryRef::X509(certificate) = certificate {
-        let parsed_certificate =
-            DecodedCertificate::from_der(certificate).map_err(|_| TlsError::DecodeError)?;
+        let parsed_certificate = DecodedCertificate::from_der(certificate).map_err(|e| {
+            error!("DecodedCertificate::from_der: {}", e);
+            TlsError::DecodeError
+        })?;
 
         let ca_public_key = ca_certificate
             .tbs_certificate
