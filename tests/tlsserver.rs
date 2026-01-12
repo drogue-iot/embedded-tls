@@ -385,7 +385,13 @@ pub fn run_with_config(mut listener: TcpListener, config: rustls::ServerConfig) 
 
     let mut events = mio::Events::with_capacity(256);
     loop {
-        poll.poll(&mut events, None).unwrap();
+        if let Err(e) = poll.poll(&mut events, None) {
+            if e.kind() == std::io::ErrorKind::Interrupted {
+                log::debug!("I/O error {:?}", e);
+                continue;
+            }
+            panic!("I/O error {:?}", e);
+        }
 
         for event in events.iter() {
             match event.token() {
