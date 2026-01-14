@@ -1,6 +1,10 @@
 use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
-use crate::der_certificate::{DecodedCertificate, ECDSA_SHA256, ECDSA_SHA384, ED25519, Time};
+#[cfg(feature = "p384")]
+use crate::der_certificate::ECDSA_SHA384;
+#[cfg(feature = "ed25519")]
+use crate::der_certificate::ED25519;
+use crate::der_certificate::{DecodedCertificate, ECDSA_SHA256, Time};
 #[cfg(feature = "rsa")]
 use crate::der_certificate::{RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512};
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
@@ -183,6 +187,7 @@ fn verify_signature(
                 Signature::from_der(&verify.signature).map_err(|_| TlsError::DecodeError)?;
             verified = verifying_key.verify(message, &signature).is_ok();
         }
+        #[cfg(feature = "p384")]
         SignatureScheme::EcdsaSecp384r1Sha384 => {
             use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
             let verifying_key =
@@ -191,6 +196,7 @@ fn verify_signature(
                 Signature::from_der(&verify.signature).map_err(|_| TlsError::DecodeError)?;
             verified = verifying_key.verify(message, &signature).is_ok();
         }
+        #[cfg(feature = "ed25519")]
         SignatureScheme::Ed25519 => {
             use ed25519_dalek::{Signature, Verifier, VerifyingKey};
             let verifying_key: VerifyingKey =
@@ -254,7 +260,10 @@ fn verify_signature(
             verified = verifying_key.verify(message, &signature).is_ok();
         }
         _ => {
-            error!("InvalidSignatureScheme: {:?}", verify.signature_scheme);
+            error!(
+                "InvalidSignatureScheme: {:?} Are you missing a feature?",
+                verify.signature_scheme
+            );
             return Err(TlsError::InvalidSignatureScheme);
         }
     }
@@ -352,6 +361,7 @@ fn verify_certificate(
 
                 verified = verifying_key.verify(&certificate_data, &signature).is_ok();
             }
+            #[cfg(feature = "p384")]
             ECDSA_SHA384 => {
                 use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
                 let verifying_key = VerifyingKey::from_sec1_bytes(ca_public_key)
@@ -367,6 +377,7 @@ fn verify_certificate(
 
                 verified = verifying_key.verify(&certificate_data, &signature).is_ok();
             }
+            #[cfg(feature = "ed25519")]
             ED25519 => {
                 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
                 let verifying_key: VerifyingKey =
