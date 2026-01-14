@@ -14,8 +14,8 @@ exclude = [".github"]
 [dependencies]
 portable-atomic = { version = "1.6.0", default-features = false }
 p256 = { version = "0.13", default-features = false, features = [ "ecdh", "ecdsa", "sha256" ] }
-p384 = { version = "0.13", default-features = false, features = [ "ecdh", "ecdsa", "sha384" ] }
-ed25519-dalek = { version = "2.2", default-features = false }
+p384 = { version = "0.13", default-features = false, features = [ "ecdsa", "sha384" ], optional = true }
+ed25519-dalek = { version = "2.2", default-features = false, optional = true }
 rsa = { version = "0.9.9", default-features = false, features = ["sha2"], optional = true }
 rand_core = { version = "0.6.3", default-features = false }
 hkdf = "0.12.3"
@@ -61,3 +61,5 @@ alloc = []
 webpki = ["dep:webpki"]
 rustpki = ["dep:der","dep:const-oid"]
 rsa = ["dep:rsa", "rustpki", "alloc"]
+ed25519 = ["dep:ed25519-dalek", "rustpki"]
+p384 = ["dep:p384", "rustpki"]

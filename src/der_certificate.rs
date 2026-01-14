@@ -21,10 +21,12 @@ pub const ECDSA_SHA256: AlgorithmIdentifier = AlgorithmIdentifier {
     oid: ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.2"),
     parameters: None,
 };
+#[cfg(feature = "p384")]
 pub const ECDSA_SHA384: AlgorithmIdentifier = AlgorithmIdentifier {
     oid: ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.3"),
     parameters: None,
 };
+#[cfg(feature = "ed25519")]
 pub const ED25519: AlgorithmIdentifier = AlgorithmIdentifier {
     oid: ObjectIdentifier::new_unwrap("1.3.101.112"),
     parameters: None,
