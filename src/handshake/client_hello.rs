@@ -1,11 +1,12 @@
 use core::marker::PhantomData;
 
+use digest::typenum::Unsigned;
 use digest::{Digest, OutputSizeUser};
 use heapless::Vec;
 use p256::EncodedPoint;
 use p256::ecdh::EphemeralSecret;
+use p256::elliptic_curve::Generate;
 use p256::elliptic_curve::rand_core::RngCore;
-use typenum::Unsigned;
 
 use crate::TlsError;
 use crate::config::{TlsCipherSuite, TlsConfig};
@@ -48,7 +49,7 @@ where
             config,
             random,
             cipher_suite: PhantomData,
-            secret: EphemeralSecret::random(&mut provider.rng()),
+            secret: EphemeralSecret::generate_from_rng(&mut provider.rng()),
         }
     }
 

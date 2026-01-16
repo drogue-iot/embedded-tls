@@ -1,29 +1,23 @@
+use std::net::SocketAddr;
+use std::sync::{Arc, OnceLock};
+
 use ecdsa::elliptic_curve::SecretKey;
 use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_tls::{CryptoProvider, SignatureScheme};
 use p256::ecdsa::SigningKey;
-use rand::rngs::OsRng;
-use rand_core::CryptoRngCore;
-use rustls::server::AllowAnyAuthenticatedClient;
-use std::net::SocketAddr;
-use std::sync::Once;
+use rand_core::CryptoRng;
+use rustls::server::WebPkiClientVerifier;
 
 mod tlsserver;
 
-static LOG_INIT: Once = Once::new();
-static INIT: Once = Once::new();
-static mut ADDR: Option<SocketAddr> = None;
-
-fn init_log() {
-    LOG_INIT.call_once(|| {
-        env_logger::init();
-    });
-}
+static ADDR: OnceLock<SocketAddr> = OnceLock::new();
 
 fn setup() -> SocketAddr {
     use mio::net::TcpListener;
-    init_log();
-    INIT.call_once(|| {
+
+    *ADDR.get_or_init(|| {
+        env_logger::init();
+
         let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
 
         let listener = TcpListener::bind(addr).expect("cannot listen on port");
@@ -34,8 +28,6 @@ fn setup() -> SocketAddr {
         std::thread::spawn(move || {
             use tlsserver::*;
 
-            let versions = &[&rustls::version::TLS13];
-
             let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
 
             let ca = load_certs(&test_dir.join("data").join("ca-cert.pem"));
@@ -43,48 +35,41 @@ fn setup() -> SocketAddr {
             let privkey = load_private_key(&test_dir.join("data").join("server-key.pem"));
 
             let mut client_auth_roots = rustls::RootCertStore::empty();
-            for root in ca.iter() {
+            for root in ca.into_iter() {
                 client_auth_roots.add(root).unwrap()
             }
 
-            let client_cert_verifier = AllowAnyAuthenticatedClient::new(client_auth_roots);
+            let client_cert_verifier = WebPkiClientVerifier::builder(Arc::new(client_auth_roots))
+                .build()
+                .unwrap();
 
             let config = rustls::ServerConfig::builder()
-                .with_cipher_suites(rustls::ALL_CIPHER_SUITES)
-                .with_kx_groups(&rustls::ALL_KX_GROUPS)
-                .with_protocol_versions(versions)
-                .unwrap()
-                .with_client_cert_verifier(client_cert_verifier.boxed())
+                .with_client_cert_verifier(client_cert_verifier)
                 .with_single_cert(certs, privkey)
                 .unwrap();
 
             run_with_config(listener, config);
         });
-        #[allow(static_mut_refs)]
-        unsafe {
-            ADDR.replace(addr)
-        };
-    });
-    unsafe { ADDR.unwrap() }
+
+        addr
+    })
 }
 
 #[derive(Default)]
-struct Provider {
-    rng: OsRng,
-}
+struct Provider;
 
 impl CryptoProvider for Provider {
     type CipherSuite = embedded_tls::Aes128GcmSha256;
     type Signature = p256::ecdsa::DerSignature;
 
-    fn rng(&mut self) -> impl CryptoRngCore {
-        &mut self.rng
+    fn rng(&mut self) -> impl CryptoRng {
+        rand::rng()
     }
 
     fn signer(
         &mut self,
         key_der: &[u8],
-    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), embedded_tls::TlsError>
+    ) -> Result<(impl signature::Signer<Self::Signature>, SignatureScheme), embedded_tls::TlsError>
     {
         let secret_key = SecretKey::from_sec1_der(key_der)
             .map_err(|_| embedded_tls::TlsError::InvalidPrivateKey)?;
