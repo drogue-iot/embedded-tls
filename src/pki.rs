@@ -397,17 +397,15 @@ fn verify_certificate(
             #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA256 => {
                 use rsa::{
+                    RsaPublicKey,
                     pkcs1::DecodeRsaPublicKey,
                     pkcs1v15::{Signature, VerifyingKey},
                     signature::Verifier,
                 };
                 use sha2::Sha256;
 
-                let verifying_key =
-                    VerifyingKey::<Sha256>::from_pkcs1_der(ca_public_key).map_err(|e| {
-                        error!("VerifyingKey: {}", e);
-                        TlsError::DecodeError
-                    })?;
+                let der_pubkey = RsaPublicKey::from_pkcs1_der(ca_public_key).unwrap();
+                let verifying_key = VerifyingKey::<Sha256>::from(der_pubkey);
 
                 let signature = Signature::try_from(
                     parsed_certificate
@@ -425,14 +423,15 @@ fn verify_certificate(
             #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA384 => {
                 use rsa::{
+                    RsaPublicKey,
                     pkcs1::DecodeRsaPublicKey,
                     pkcs1v15::{Signature, VerifyingKey},
                     signature::Verifier,
                 };
                 use sha2::Sha384;
 
-                let verifying_key = VerifyingKey::<Sha384>::from_pkcs1_der(ca_public_key)
-                    .map_err(|_| TlsError::DecodeError)?;
+                let der_pubkey = RsaPublicKey::from_pkcs1_der(ca_public_key).unwrap();
+                let verifying_key = VerifyingKey::<Sha384>::from(der_pubkey);
 
                 let signature = Signature::try_from(
                     parsed_certificate
@@ -447,14 +446,15 @@ fn verify_certificate(
             #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA512 => {
                 use rsa::{
+                    RsaPublicKey,
                     pkcs1::DecodeRsaPublicKey,
                     pkcs1v15::{Signature, VerifyingKey},
                     signature::Verifier,
                 };
                 use sha2::Sha512;
 
-                let verifying_key = VerifyingKey::<Sha512>::from_pkcs1_der(ca_public_key)
-                    .map_err(|_| TlsError::DecodeError)?;
+                let der_pubkey = RsaPublicKey::from_pkcs1_der(ca_public_key).unwrap();
+                let verifying_key = VerifyingKey::<Sha512>::from(der_pubkey);
 
                 let signature = Signature::try_from(
                     parsed_certificate

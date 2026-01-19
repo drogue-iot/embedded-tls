@@ -7,6 +7,7 @@ use std::time::SystemTime;
 use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_tls::webpki::CertVerifier;
 use embedded_tls::{Aes128GcmSha256, CryptoProvider, TlsVerifier};
+use rand_core::CryptoRng;
 
 mod tlsserver;
 
@@ -21,7 +22,7 @@ impl CryptoProvider for WebPkiProvider {
     type CipherSuite = Aes128GcmSha256;
     type Signature = &'static [u8];
 
-    fn rng(&mut self) -> impl embedded_tls::CryptoRng {
+    fn rng(&mut self) -> impl CryptoRng {
         rand::rng()
     }
 
