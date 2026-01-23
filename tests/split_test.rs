@@ -1,18 +1,19 @@
 #![macro_use]
+
+use std::net::{SocketAddr, TcpStream};
+use std::sync::OnceLock;
+
 use embedded_io::{Read, Write};
 use embedded_io_adapters::std::FromStd;
-use rand_core::OsRng;
-use std::net::{SocketAddr, TcpStream};
-use std::sync::Once;
 
 mod tlsserver;
 
-static INIT: Once = Once::new();
-static mut ADDR: Option<SocketAddr> = None;
+static ADDR: OnceLock<SocketAddr> = OnceLock::new();
 
 fn setup() -> SocketAddr {
     use mio::net::TcpListener;
-    INIT.call_once(|| {
+
+    *ADDR.get_or_init(|| {
         env_logger::init();
 
         let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
@@ -25,12 +26,9 @@ fn setup() -> SocketAddr {
         std::thread::spawn(move || {
             tlsserver::run(listener);
         });
-        #[allow(static_mut_refs)]
-        unsafe {
-            ADDR.replace(addr)
-        };
-    });
-    unsafe { ADDR.unwrap() }
+
+        addr
+    })
 }
 
 pub struct Clonable<T: ?Sized>(std::sync::Arc<T>);
@@ -89,7 +87,7 @@ fn test_blocking_borrowed() {
 
     tls.open(TlsContext::new(
         &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(rand::rng()),
     ))
     .expect("error establishing TLS connection");
 

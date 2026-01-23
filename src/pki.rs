@@ -181,6 +181,7 @@ fn verify_signature(
     match verify.signature_scheme {
         SignatureScheme::EcdsaSecp256r1Sha256 => {
             use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
+
             let verifying_key =
                 VerifyingKey::from_sec1_bytes(public_key).map_err(|_| TlsError::DecodeError)?;
             let signature =
@@ -190,6 +191,7 @@ fn verify_signature(
         #[cfg(feature = "p384")]
         SignatureScheme::EcdsaSecp384r1Sha384 => {
             use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
+
             let verifying_key =
                 VerifyingKey::from_sec1_bytes(public_key).map_err(|_| TlsError::DecodeError)?;
             let signature =
@@ -198,10 +200,12 @@ fn verify_signature(
         }
         #[cfg(feature = "ed25519")]
         SignatureScheme::Ed25519 => {
-            use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+            use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signature, Verifier, VerifyingKey};
+
+            let public_key = <&[u8; PUBLIC_KEY_LENGTH]>::try_from(public_key)
+                .map_err(|_| TlsError::DecodeError)?;
             let verifying_key: VerifyingKey =
-                VerifyingKey::from_bytes(public_key.try_into().unwrap())
-                    .map_err(|_| TlsError::DecodeError)?;
+                VerifyingKey::from_bytes(public_key).map_err(|_| TlsError::DecodeError)?;
             let signature =
                 Signature::try_from(verify.signature).map_err(|_| TlsError::DecodeError)?;
             verified = verifying_key.verify(message, &signature).is_ok();
@@ -216,7 +220,8 @@ fn verify_signature(
             };
             use sha2::Sha256;
 
-            let der_pubkey = RsaPublicKey::from_pkcs1_der(public_key).unwrap();
+            let der_pubkey =
+                RsaPublicKey::from_pkcs1_der(public_key).map_err(|_| TlsError::DecodeError)?;
             let verifying_key = VerifyingKey::<Sha256>::from(der_pubkey);
 
             let signature =
@@ -348,6 +353,7 @@ fn verify_certificate(
         match parsed_certificate.signature_algorithm {
             ECDSA_SHA256 => {
                 use p256::ecdsa::{Signature, VerifyingKey, signature::Verifier};
+
                 let verifying_key = VerifyingKey::from_sec1_bytes(ca_public_key)
                     .map_err(|_| TlsError::DecodeError)?;
 
@@ -364,6 +370,7 @@ fn verify_certificate(
             #[cfg(feature = "p384")]
             ECDSA_SHA384 => {
                 use p384::ecdsa::{Signature, VerifyingKey, signature::Verifier};
+
                 let verifying_key = VerifyingKey::from_sec1_bytes(ca_public_key)
                     .map_err(|_| TlsError::DecodeError)?;
 
@@ -379,10 +386,12 @@ fn verify_certificate(
             }
             #[cfg(feature = "ed25519")]
             ED25519 => {
-                use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+                use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signature, Verifier, VerifyingKey};
+
+                let ca_public_key = <&[u8; PUBLIC_KEY_LENGTH]>::try_from(ca_public_key)
+                    .map_err(|_| TlsError::DecodeError)?;
                 let verifying_key: VerifyingKey =
-                    VerifyingKey::from_bytes(ca_public_key.try_into().unwrap())
-                        .map_err(|_| TlsError::DecodeError)?;
+                    VerifyingKey::from_bytes(ca_public_key).map_err(|_| TlsError::DecodeError)?;
 
                 let signature = Signature::try_from(
                     parsed_certificate
@@ -397,17 +406,16 @@ fn verify_certificate(
             #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA256 => {
                 use rsa::{
+                    RsaPublicKey,
                     pkcs1::DecodeRsaPublicKey,
                     pkcs1v15::{Signature, VerifyingKey},
                     signature::Verifier,
                 };
                 use sha2::Sha256;
 
-                let verifying_key =
-                    VerifyingKey::<Sha256>::from_pkcs1_der(ca_public_key).map_err(|e| {
-                        error!("VerifyingKey: {}", e);
-                        TlsError::DecodeError
-                    })?;
+                let der_pubkey = RsaPublicKey::from_pkcs1_der(ca_public_key)
+                    .map_err(|_| TlsError::DecodeError)?;
+                let verifying_key = VerifyingKey::<Sha256>::from(der_pubkey);
 
                 let signature = Signature::try_from(
                     parsed_certificate
@@ -425,14 +433,16 @@ fn verify_certificate(
             #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA384 => {
                 use rsa::{
+                    RsaPublicKey,
                     pkcs1::DecodeRsaPublicKey,
                     pkcs1v15::{Signature, VerifyingKey},
                     signature::Verifier,
                 };
                 use sha2::Sha384;
 
-                let verifying_key = VerifyingKey::<Sha384>::from_pkcs1_der(ca_public_key)
+                let der_pubkey = RsaPublicKey::from_pkcs1_der(ca_public_key)
                     .map_err(|_| TlsError::DecodeError)?;
+                let verifying_key = VerifyingKey::<Sha384>::from(der_pubkey);
 
                 let signature = Signature::try_from(
                     parsed_certificate
@@ -447,14 +457,16 @@ fn verify_certificate(
             #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA512 => {
                 use rsa::{
+                    RsaPublicKey,
                     pkcs1::DecodeRsaPublicKey,
                     pkcs1v15::{Signature, VerifyingKey},
                     signature::Verifier,
                 };
                 use sha2::Sha512;
 
-                let verifying_key = VerifyingKey::<Sha512>::from_pkcs1_der(ca_public_key)
+                let der_pubkey = RsaPublicKey::from_pkcs1_der(ca_public_key)
                     .map_err(|_| TlsError::DecodeError)?;
+                let verifying_key = VerifyingKey::<Sha512>::from(der_pubkey);
 
                 let signature = Signature::try_from(
                     parsed_certificate

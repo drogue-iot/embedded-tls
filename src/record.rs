@@ -1,3 +1,5 @@
+use core::fmt::Debug;
+
 use crate::TlsError;
 use crate::application_data::ApplicationData;
 use crate::change_cipher_spec::ChangeCipherSpec;
@@ -11,14 +13,12 @@ use crate::{
     alert::{Alert, AlertDescription, AlertLevel},
     parse_buffer::ParseBuffer,
 };
-use core::fmt::Debug;
 
 pub type Encrypted = bool;
 
 #[allow(clippy::large_enum_variant)]
 pub enum ClientRecord<'config, 'a, CipherSuite>
 where
-    // N: ArrayLength<u8>,
     CipherSuite: TlsCipherSuite,
 {
     Handshake(ClientHandshake<'config, 'a, CipherSuite>, Encrypted),
@@ -80,7 +80,6 @@ impl ClientRecordHeader {
 
 impl<'config, CipherSuite> ClientRecord<'config, '_, CipherSuite>
 where
-    //N: ArrayLength<u8>,
     CipherSuite: TlsCipherSuite,
 {
     pub fn header(&self) -> ClientRecordHeader {

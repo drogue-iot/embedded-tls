@@ -5,11 +5,10 @@ use embedded_tls::pki::CertVerifier;
 use embedded_tls::{Aes128GcmSha256, CryptoProvider, SignatureScheme, TlsError, TlsVerifier};
 use p256::SecretKey;
 use p256::ecdsa::{DerSignature, SigningKey};
-use rand_core::OsRng;
-use rustls::server::AllowAnyAnonymousOrAuthenticatedClient;
-use signature::SignerMut;
+use rand_core::CryptoRng;
+use rustls::server::WebPkiClientVerifier;
 use std::net::SocketAddr;
-use std::sync::Once;
+use std::sync::{Arc, Once};
 use std::time::SystemTime;
 
 mod tlsserver;
@@ -20,7 +19,6 @@ static mut ADDR: Option<SocketAddr> = None;
 
 #[derive(Default)]
 struct RustPkiProvider {
-    rng: rand::rngs::OsRng,
     verifier: CertVerifier<Aes128GcmSha256, SystemTime, 4096>,
 }
 
@@ -28,8 +26,8 @@ impl CryptoProvider for RustPkiProvider {
     type CipherSuite = Aes128GcmSha256;
     type Signature = DerSignature;
 
-    fn rng(&mut self) -> impl embedded_tls::CryptoRngCore {
-        &mut self.rng
+    fn rng(&mut self) -> impl CryptoRng {
+        rand::rng()
     }
 
     fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Aes128GcmSha256>, TlsError> {
@@ -39,7 +37,8 @@ impl CryptoProvider for RustPkiProvider {
     fn signer(
         &mut self,
         key_der: &[u8],
-    ) -> Result<(impl SignerMut<Self::Signature>, SignatureScheme), TlsError> {
+    ) -> Result<(impl signature::Signer<Self::Signature>, SignatureScheme), embedded_tls::TlsError>
+    {
         let secret_key =
             SecretKey::from_sec1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
 
@@ -70,8 +69,6 @@ fn setup() -> SocketAddr {
         std::thread::spawn(move || {
             use tlsserver::*;
 
-            let versions = &[&rustls::version::TLS13];
-
             let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
 
             let ca = load_certs(&test_dir.join("data").join("ca-cert.pem"));
@@ -79,19 +76,17 @@ fn setup() -> SocketAddr {
             let privkey = load_private_key(&test_dir.join("data").join("im-server-key.pem"));
 
             let mut client_auth_roots = rustls::RootCertStore::empty();
-            for root in ca.iter() {
+            for root in ca.into_iter() {
                 client_auth_roots.add(root).unwrap()
             }
 
-            let client_cert_verifier =
-                AllowAnyAnonymousOrAuthenticatedClient::new(client_auth_roots);
+            let client_cert_verifier = WebPkiClientVerifier::builder(Arc::new(client_auth_roots))
+                .allow_unauthenticated()
+                .build()
+                .unwrap();
 
             let config = rustls::ServerConfig::builder()
-                .with_cipher_suites(rustls::ALL_CIPHER_SUITES)
-                .with_kx_groups(&rustls::ALL_KX_GROUPS)
-                .with_protocol_versions(versions)
-                .unwrap()
-                .with_client_cert_verifier(client_cert_verifier.boxed())
+                .with_client_cert_verifier(client_cert_verifier)
                 .with_single_cert(certs, privkey)
                 .unwrap();
 
@@ -133,7 +128,6 @@ async fn test_server_certificate_validation() {
     let open_fut = tls.open(TlsContext::new(
         &config,
         RustPkiProvider {
-            rng: OsRng,
             verifier: CertVerifier::new(),
         },
     ));
@@ -182,7 +176,6 @@ async fn test_mutual_certificate_validation() {
     let open_fut = tls.open(TlsContext::new(
         &config,
         RustPkiProvider {
-            rng: OsRng,
             verifier: CertVerifier::new(),
         },
     ));
