@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        example: [blocking, tokio, tokio-psk]
+        example: [blocking, tokio, tokio-psk, embassy]
 
     steps:
       - uses: actions/checkout@v4
