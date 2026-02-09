@@ -29,12 +29,27 @@ impl CryptoProvider for Provider {
 
 fn main() {
     env_logger::init();
+
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: {} <cert.pem>", args[0]);
+        std::process::exit(1);
+    }
+
+    let cert_path = &args[1];
+    let pem_content = std::fs::read_to_string(cert_path)
+        .expect(&format!("Failed to read certificate file: {}", cert_path));
+
     let stream = TcpStream::connect("127.0.0.1:12345").expect("error connecting to server");
 
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new().with_server_name("localhost");
+
+    let der = pem_parser::pem_to_der(&pem_content);
+    let config = TlsConfig::new()
+        .with_server_name("localhost")
+        .with_ca(Certificate::X509(&der[..]));
     let mut tls = TlsConnection::new(
         FromStd::new(stream),
         &mut read_record_buffer,
