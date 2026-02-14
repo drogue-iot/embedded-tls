@@ -33,13 +33,14 @@ impl<D: Digest + FixedOutputReset, R: CryptoRngCore> SignerMut<Box<[u8]>>
     }
 }
 
-#[derive(Default)]
-struct RustPkiProvider {
+struct RustPkiProvider<'a> {
     rng: rand::rngs::OsRng,
-    verifier: CertVerifier<Aes128GcmSha256, SystemTime, 4096>,
+    verifier: CertVerifier<'a, Aes128GcmSha256, SystemTime, 4096>,
+    priv_key: Option<&'a [u8]>,
+    client_cert: Option<embedded_tls::Certificate<&'a [u8]>>,
 }
 
-impl CryptoProvider for RustPkiProvider {
+impl CryptoProvider for RustPkiProvider<'_> {
     type CipherSuite = Aes128GcmSha256;
     type Signature = Box<[u8]>;
 
@@ -51,10 +52,8 @@ impl CryptoProvider for RustPkiProvider {
         Ok(&mut self.verifier)
     }
 
-    fn signer(
-        &mut self,
-        key_der: &[u8],
-    ) -> Result<(impl SignerMut<Self::Signature>, SignatureScheme), TlsError> {
+    fn signer(&mut self) -> Result<(impl SignerMut<Self::Signature>, SignatureScheme), TlsError> {
+        let key_der = self.priv_key.ok_or(TlsError::InvalidPrivateKey)?;
         let private_key =
             rsa::RsaPrivateKey::from_pkcs8_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
         let signer = RsaPssSigningKey {
@@ -63,6 +62,10 @@ impl CryptoProvider for RustPkiProvider {
         };
 
         Ok((signer, SignatureScheme::RsaPssRsaeSha256))
+    }
+
+    fn client_cert(&mut self) -> Option<embedded_tls::Certificate<impl AsRef<[u8]>>> {
+        self.client_cert.clone()
     }
 }
 
@@ -142,11 +145,7 @@ async fn test_server_certificate_validation() {
     let mut read_record_buffer = [0; 16640];
     let mut write_record_buffer = [0; 16640];
 
-    let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
-        .with_server_name("localhost")
-        .with_cert(Certificate::X509(&cli_der[..]))
-        .with_priv_key(&key_der);
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
@@ -158,7 +157,9 @@ async fn test_server_certificate_validation() {
         &config,
         RustPkiProvider {
             rng: OsRng,
-            verifier: CertVerifier::new(),
+            verifier: CertVerifier::new(Certificate::X509(&der[..])),
+            priv_key: Some(&key_der),
+            client_cert: Some(Certificate::X509(&cli_der[..])),
         },
     ));
 

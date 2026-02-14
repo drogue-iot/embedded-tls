@@ -58,35 +58,27 @@ impl<'a> Iterator for CertificateChain<'a> {
     }
 }
 
-pub struct CertVerifier<CipherSuite, Clock, const CERT_SIZE: usize>
+pub struct CertVerifier<'a, CipherSuite, Clock, const CERT_SIZE: usize>
 where
     Clock: TlsClock,
     CipherSuite: TlsCipherSuite,
 {
+    ca: Certificate<&'a [u8]>,
     host: Option<heapless::String<64>>,
     certificate_transcript: Option<CipherSuite::Hash>,
     certificate: Option<OwnedCertificate<CERT_SIZE>>,
     _clock: PhantomData<Clock>,
 }
 
-impl<Cs, C, const CERT_SIZE: usize> Default for CertVerifier<Cs, C, CERT_SIZE>
-where
-    C: TlsClock,
-    Cs: TlsCipherSuite,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<CipherSuite, Clock, CERT_SIZE>
+impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
 where
     Clock: TlsClock,
     CipherSuite: TlsCipherSuite,
 {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(ca: Certificate<&'a [u8]>) -> Self {
         Self {
+            ca,
             host: None,
             certificate_transcript: None,
             certificate: None,
@@ -96,7 +88,7 @@ where
 }
 
 impl<CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<CipherSuite>
-    for CertVerifier<CipherSuite, Clock, CERT_SIZE>
+    for CertVerifier<'_, CipherSuite, Clock, CERT_SIZE>
 where
     CipherSuite: TlsCipherSuite,
     Clock: TlsClock,
@@ -111,18 +103,10 @@ where
     fn verify_certificate(
         &mut self,
         transcript: &CipherSuite::Hash,
-        ca: &Option<Certificate>,
         cert: ServerCertificate,
     ) -> Result<(), TlsError> {
-        let ca = if let Some(ca) = ca {
-            ca
-        } else {
-            error!("Verifying a certificate chain without ca is not implemented");
-            return Err(TlsError::Unimplemented);
-        };
-
         let mut cn = None;
-        for (p, q) in CertificateChain::new(&ca.into(), &cert) {
+        for (p, q) in CertificateChain::new(&(&self.ca).into(), &cert) {
             cn = verify_certificate(p, q, Clock::now())?;
         }
         if self.host.ne(&cn) {

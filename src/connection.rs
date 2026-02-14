@@ -202,20 +202,19 @@ impl<'a> State {
                     .await?;
 
                 let result =
-                    process_server_verify(handshake, key_schedule, config, crypto_provider, record);
+                    process_server_verify(handshake, key_schedule, crypto_provider, record);
 
                 handle_processing_error(result, transport, key_schedule, tx_buf).await
             }
             State::ClientCert => {
-                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
+                let (state, tx) = client_cert(handshake, key_schedule, crypto_provider, tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
                 Ok(state)
             }
             State::ClientCertVerify => {
-                let (result, tx) =
-                    client_cert_verify(key_schedule, config, crypto_provider, tx_buf)?;
+                let (result, tx) = client_cert_verify(key_schedule, crypto_provider, tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
@@ -267,20 +266,19 @@ impl<'a> State {
                 let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
 
                 let result =
-                    process_server_verify(handshake, key_schedule, config, crypto_provider, record);
+                    process_server_verify(handshake, key_schedule, crypto_provider, record);
 
                 handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
             }
             State::ClientCert => {
-                let (state, tx) = client_cert(handshake, key_schedule, config, tx_buf)?;
+                let (state, tx) = client_cert(handshake, key_schedule, crypto_provider, tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
                 Ok(state)
             }
             State::ClientCertVerify => {
-                let (result, tx) =
-                    client_cert_verify(key_schedule, config, crypto_provider, tx_buf)?;
+                let (result, tx) = client_cert_verify(key_schedule, crypto_provider, tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 
@@ -440,7 +438,6 @@ where
 fn process_server_verify<Provider>(
     handshake: &mut Handshake<Provider::CipherSuite>,
     key_schedule: &mut KeySchedule<Provider::CipherSuite>,
-    config: &TlsConfig<'_>,
     crypto_provider: &mut Provider,
     record: ServerRecord<'_, Provider::CipherSuite>,
 ) -> Result<State, TlsError>
@@ -456,7 +453,7 @@ where
                     ServerHandshake::Certificate(certificate) => {
                         let transcript = key_schedule.transcript_hash();
                         if let Ok(verifier) = crypto_provider.verifier() {
-                            verifier.verify_certificate(transcript, &config.ca, certificate)?;
+                            verifier.verify_certificate(transcript, certificate)?;
                             debug!("Certificate verified!");
                         } else {
                             debug!("Certificate verification skipped due to no verifier!");
@@ -501,14 +498,14 @@ where
     Ok(state)
 }
 
-fn client_cert<'r, CipherSuite>(
-    handshake: &mut Handshake<CipherSuite>,
-    key_schedule: &mut KeySchedule<CipherSuite>,
-    config: &TlsConfig,
+fn client_cert<'r, Provider>(
+    handshake: &mut Handshake<Provider::CipherSuite>,
+    key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+    crypto_provider: &mut Provider,
     buffer: &'r mut WriteBuffer,
 ) -> Result<(State, &'r [u8]), TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     handshake
         .traffic_hash
@@ -520,8 +517,10 @@ where
         .ok_or(TlsError::InvalidHandshake)?
         .request_context;
 
+    // Declare cert before certificate so owned data outlives the CertificateRef that borrows it
+    let cert = crypto_provider.client_cert();
     let mut certificate = CertificateRef::with_context(request_context);
-    let next_state = if let Some(cert) = &config.cert {
+    let next_state = if let Some(ref cert) = cert {
         certificate.add(cert.into())?;
         State::ClientCertVerify
     } else {
@@ -540,14 +539,13 @@ where
 
 fn client_cert_verify<'r, Provider>(
     key_schedule: &mut KeySchedule<Provider::CipherSuite>,
-    config: &TlsConfig,
     crypto_provider: &mut Provider,
     buffer: &'r mut WriteBuffer,
 ) -> Result<(Result<State, TlsError>, &'r [u8]), TlsError>
 where
     Provider: CryptoProvider,
 {
-    let (result, record) = match crypto_provider.signer(config.priv_key) {
+    let (result, record) = match crypto_provider.signer() {
         Ok((mut signing_key, signature_scheme)) => {
             let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
 

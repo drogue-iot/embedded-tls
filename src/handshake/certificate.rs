@@ -10,7 +10,7 @@ pub struct CertificateRef<'a> {
     raw_entries: &'a [u8],
     request_context: &'a [u8],
 
-    pub(crate) entries: Vec<CertificateEntryRef<'a>, 16>,
+    pub entries: Vec<CertificateEntryRef<'a>, 16>,
 }
 
 impl<'a> CertificateRef<'a> {
@@ -116,12 +116,12 @@ impl<'a> CertificateEntryRef<'a> {
     }
 }
 
-impl<'a> From<&crate::config::Certificate<'a>> for CertificateEntryRef<'a> {
-    fn from(cert: &crate::config::Certificate<'a>) -> Self {
+impl<'a, D: AsRef<[u8]>> From<&'a crate::config::Certificate<D>> for CertificateEntryRef<'a> {
+    fn from(cert: &'a crate::config::Certificate<D>) -> Self {
         match cert {
-            crate::config::Certificate::X509(data) => CertificateEntryRef::X509(data),
+            crate::config::Certificate::X509(data) => CertificateEntryRef::X509(data.as_ref()),
             crate::config::Certificate::RawPublicKey(data) => {
-                CertificateEntryRef::RawPublicKey(data)
+                CertificateEntryRef::RawPublicKey(data.as_ref())
             }
         }
     }

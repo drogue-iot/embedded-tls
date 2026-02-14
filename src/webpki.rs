@@ -118,35 +118,27 @@ static ALL_SIGALGS: &[&webpki::SignatureAlgorithm] = &[
     &webpki::ED25519,
 ];
 
-pub struct CertVerifier<CipherSuite, Clock, const CERT_SIZE: usize>
+pub struct CertVerifier<'a, CipherSuite, Clock, const CERT_SIZE: usize>
 where
     Clock: TlsClock,
     CipherSuite: TlsCipherSuite,
 {
+    ca: Certificate<&'a [u8]>,
     host: Option<heapless::String<64>>,
     certificate_transcript: Option<CipherSuite::Hash>,
     certificate: Option<OwnedCertificate<CERT_SIZE>>,
     _clock: PhantomData<Clock>,
 }
 
-impl<Cs, C, const CERT_SIZE: usize> Default for CertVerifier<Cs, C, CERT_SIZE>
-where
-    C: TlsClock,
-    Cs: TlsCipherSuite,
-{
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<CipherSuite, Clock, CERT_SIZE>
+impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
 where
     Clock: TlsClock,
     CipherSuite: TlsCipherSuite,
 {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(ca: Certificate<&'a [u8]>) -> Self {
         Self {
+            ca,
             host: None,
             certificate_transcript: None,
             certificate: None,
@@ -156,7 +148,7 @@ where
 }
 
 impl<CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<CipherSuite>
-    for CertVerifier<CipherSuite, Clock, CERT_SIZE>
+    for CertVerifier<'_, CipherSuite, Clock, CERT_SIZE>
 where
     CipherSuite: TlsCipherSuite,
     Clock: TlsClock,
@@ -171,10 +163,9 @@ where
     fn verify_certificate(
         &mut self,
         transcript: &CipherSuite::Hash,
-        ca: &Option<Certificate>,
         cert: ServerCertificate,
     ) -> Result<(), TlsError> {
-        verify_certificate(self.host.as_deref(), ca, &cert, Clock::now())?;
+        verify_certificate(self.host.as_deref(), &self.ca, &cert, Clock::now())?;
         self.certificate.replace(cert.try_into()?);
         self.certificate_transcript.replace(transcript.clone());
         Ok(())
@@ -234,13 +225,13 @@ fn verify_signature(
 
 fn verify_certificate(
     verify_host: Option<&str>,
-    ca: &Option<Certificate>,
+    ca: &Certificate<&[u8]>,
     certificate: &ServerCertificate,
     now: Option<u64>,
 ) -> Result<(), TlsError> {
     let mut verified = false;
     let mut host_verified = false;
-    if let Some(Certificate::X509(ca)) = ca {
+    if let Certificate::X509(ca) = ca {
         let trust = webpki::TrustAnchor::try_from_cert_der(ca).map_err(|e| {
             warn!("Error loading CA: {:?}", e);
             TlsError::DecodeError
