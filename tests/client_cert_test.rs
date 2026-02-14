@@ -1,6 +1,6 @@
 use ecdsa::elliptic_curve::SecretKey;
 use embedded_io_adapters::tokio_1::FromTokio;
-use embedded_tls::{CryptoProvider, SignatureScheme};
+use embedded_tls::{Certificate, CryptoProvider, SignatureScheme};
 use p256::ecdsa::SigningKey;
 use rand::rngs::OsRng;
 use rand_core::CryptoRngCore;
@@ -68,12 +68,13 @@ fn setup() -> SocketAddr {
     unsafe { ADDR.unwrap() }
 }
 
-#[derive(Default)]
-struct Provider {
+struct Provider<'a> {
     rng: OsRng,
+    priv_key: &'a [u8],
+    client_cert: Option<Certificate<&'a [u8]>>,
 }
 
-impl CryptoProvider for Provider {
+impl CryptoProvider for Provider<'_> {
     type CipherSuite = embedded_tls::Aes128GcmSha256;
     type Signature = p256::ecdsa::DerSignature;
 
@@ -83,16 +84,19 @@ impl CryptoProvider for Provider {
 
     fn signer(
         &mut self,
-        key_der: &[u8],
     ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), embedded_tls::TlsError>
     {
-        let secret_key = SecretKey::from_sec1_der(key_der)
+        let secret_key = SecretKey::from_sec1_der(self.priv_key)
             .map_err(|_| embedded_tls::TlsError::InvalidPrivateKey)?;
 
         Ok((
             SigningKey::from(&secret_key),
             SignatureScheme::EcdsaSecp256r1Sha256,
         ))
+    }
+
+    fn client_cert(&mut self) -> Option<Certificate<impl AsRef<[u8]>>> {
+        self.client_cert.clone()
     }
 }
 
@@ -101,9 +105,6 @@ async fn test_client_certificate_auth() {
     use embedded_tls::*;
     use tokio::net::TcpStream;
     let addr = setup();
-
-    let ca_pem = include_str!("data/ca-cert.pem");
-    let ca_der = pem_parser::pem_to_der(ca_pem);
 
     let client_cert_pem = include_str!("data/client-cert.pem");
     let client_cert_der = pem_parser::pem_to_der(client_cert_pem);
@@ -119,9 +120,6 @@ async fn test_client_certificate_auth() {
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&ca_der))
-        .with_cert(Certificate::X509(&client_cert_der))
-        .with_priv_key(&private_key_der)
         .with_server_name("factbird.com");
 
     let mut tls = TlsConnection::new(
@@ -132,7 +130,11 @@ async fn test_client_certificate_auth() {
 
     log::info!("SIZE of connection is {}", core::mem::size_of_val(&tls));
 
-    let mut provider = Provider::default();
+    let mut provider = Provider {
+        rng: OsRng,
+        priv_key: &private_key_der,
+        client_cert: Some(Certificate::X509(&client_cert_der)),
+    };
     let open_fut = tls.open(TlsContext::new(&config, &mut provider));
     log::info!("SIZE of open fut is {}", core::mem::size_of_val(&open_fut));
     open_fut.await.expect("error establishing TLS connection");

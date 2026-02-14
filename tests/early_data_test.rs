@@ -59,16 +59,12 @@ fn early_data_ignored() {
     use std::net::TcpStream;
 
     let addr = setup();
-    let pem = include_str!("data/ca-cert.pem");
-    let der = pem_parser::pem_to_der(pem);
-
     let stream = TcpStream::connect(addr).expect("error connecting to server");
 
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
     let mut tls = TlsConnection::new(

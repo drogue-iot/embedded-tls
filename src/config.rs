@@ -4,7 +4,7 @@ use crate::TlsError;
 use crate::cipher_suites::CipherSuite;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::extensions::extension_data::supported_groups::NamedGroup;
-use crate::handshake::certificate::CertificateRef;
+pub use crate::handshake::certificate::{CertificateEntryRef, CertificateRef};
 pub use crate::handshake::certificate_verify::CertificateVerifyRef;
 use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
 use digest::core_api::BlockSizeUser;
@@ -77,12 +77,11 @@ where
     /// Verify a certificate.
     ///
     /// The handshake transcript up to this point and the server certificate is provided
-    /// for the implementation
-    /// to use.
+    /// for the implementation to use. The verifier is responsible for resolving the CA
+    /// certificate internally.
     fn verify_certificate(
         &mut self,
         transcript: &CipherSuite::Hash,
-        ca: &Option<Certificate>,
         cert: CertificateRef,
     ) -> Result<(), TlsError>;
 
@@ -105,7 +104,6 @@ where
     fn verify_certificate(
         &mut self,
         _transcript: &CipherSuite::Hash,
-        _ca: &Option<Certificate>,
         _cert: CertificateRef,
     ) -> Result<(), TlsError> {
         Ok(())
@@ -125,9 +123,6 @@ pub struct TlsConfig<'a> {
     pub(crate) signature_schemes: Vec<SignatureScheme, 25>,
     pub(crate) named_groups: Vec<NamedGroup, 13>,
     pub(crate) max_fragment_length: Option<MaxFragmentLength>,
-    pub(crate) ca: Option<Certificate<'a>>,
-    pub(crate) cert: Option<Certificate<'a>>,
-    pub(crate) priv_key: &'a [u8],
 }
 
 pub trait TlsClock {
@@ -152,13 +147,25 @@ pub trait CryptoProvider {
         Err::<&mut NoVerify, _>(crate::TlsError::Unimplemented)
     }
 
-    /// Decode and validate a private signing key from `key_der`.
+    /// Provide a signing key for client certificate authentication.
+    ///
+    /// The provider resolves the private key internally (e.g. from memory, flash, or a hardware
+    /// crypto module such as an HSM/TPM/secure element).
     fn signer(
         &mut self,
-        _key_der: &[u8],
     ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
     {
         Err::<(NoSign, _), crate::TlsError>(crate::TlsError::Unimplemented)
+    }
+
+    /// Resolve the client certificate for mutual TLS authentication.
+    ///
+    /// Return `None` if no client certificate is available (an empty certificate message will
+    /// be sent to the server). The data type `D` can be borrowed (`&[u8]`) or owned
+    /// (e.g. `heapless::Vec<u8, N>`) — the certificate is only needed long enough to encode
+    /// into the TLS message.
+    fn client_cert(&mut self) -> Option<Certificate<impl AsRef<[u8]>>> {
+        None::<Certificate<&[u8]>>
     }
 }
 
@@ -177,10 +184,13 @@ impl<T: CryptoProvider> CryptoProvider for &mut T {
 
     fn signer(
         &mut self,
-        key_der: &[u8],
     ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
     {
-        T::signer(self, key_der)
+        T::signer(self)
+    }
+
+    fn client_cert(&mut self) -> Option<Certificate<impl AsRef<[u8]>>> {
+        T::client_cert(self)
     }
 }
 
@@ -192,22 +202,38 @@ impl<S> signature::Signer<S> for NoSign {
     }
 }
 
-pub struct UnsecureProvider<CipherSuite, RNG> {
+pub struct UnsecureProvider<'a, CipherSuite, RNG> {
     rng: RNG,
+    priv_key: Option<&'a [u8]>,
+    client_cert: Option<Certificate<&'a [u8]>>,
     _marker: PhantomData<CipherSuite>,
 }
 
-impl<RNG: CryptoRngCore> UnsecureProvider<(), RNG> {
-    pub fn new<CipherSuite: TlsCipherSuite>(rng: RNG) -> UnsecureProvider<CipherSuite, RNG> {
+impl<RNG: CryptoRngCore> UnsecureProvider<'_, (), RNG> {
+    pub fn new<CipherSuite: TlsCipherSuite>(rng: RNG) -> UnsecureProvider<'static, CipherSuite, RNG> {
         UnsecureProvider {
             rng,
+            priv_key: None,
+            client_cert: None,
             _marker: PhantomData,
         }
     }
 }
 
+impl<'a, CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> UnsecureProvider<'a, CipherSuite, RNG> {
+    pub fn with_priv_key(mut self, priv_key: &'a [u8]) -> Self {
+        self.priv_key = Some(priv_key);
+        self
+    }
+
+    pub fn with_cert(mut self, cert: Certificate<&'a [u8]>) -> Self {
+        self.client_cert = Some(cert);
+        self
+    }
+}
+
 impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
-    for UnsecureProvider<CipherSuite, RNG>
+    for UnsecureProvider<'_, CipherSuite, RNG>
 {
     type CipherSuite = CipherSuite;
     type Signature = p256::ecdsa::DerSignature;
@@ -218,9 +244,9 @@ impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
 
     fn signer(
         &mut self,
-        key_der: &[u8],
     ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
     {
+        let key_der = self.priv_key.ok_or(TlsError::InvalidPrivateKey)?;
         let secret_key =
             SecretKey::from_sec1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
 
@@ -228,6 +254,10 @@ impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
             SigningKey::from(&secret_key),
             SignatureScheme::EcdsaSecp256r1Sha256,
         ))
+    }
+
+    fn client_cert(&mut self) -> Option<Certificate<impl AsRef<[u8]>>> {
+        self.client_cert.clone()
     }
 }
 
@@ -262,9 +292,6 @@ impl<'a> TlsConfig<'a> {
             max_fragment_length: None,
             psk: None,
             server_name: None,
-            ca: None,
-            cert: None,
-            priv_key: &[],
         };
 
         if cfg!(feature = "alloc") {
@@ -359,21 +386,6 @@ impl<'a> TlsConfig<'a> {
         self
     }
 
-    pub fn with_ca(mut self, ca: Certificate<'a>) -> Self {
-        self.ca = Some(ca);
-        self
-    }
-
-    pub fn with_cert(mut self, cert: Certificate<'a>) -> Self {
-        self.cert = Some(cert);
-        self
-    }
-
-    pub fn with_priv_key(mut self, priv_key: &'a [u8]) -> Self {
-        self.priv_key = priv_key;
-        self
-    }
-
     pub fn with_psk(mut self, psk: &'a [u8], identities: &[&'a [u8]]) -> Self {
         // TODO: Remove potential panic
         self.psk = Some((psk, unwrap!(Vec::from_slice(identities).ok())));
@@ -389,7 +401,7 @@ impl Default for TlsConfig<'_> {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Certificate<'a> {
-    X509(&'a [u8]),
-    RawPublicKey(&'a [u8]),
+pub enum Certificate<D> {
+    X509(D),
+    RawPublicKey(D),
 }

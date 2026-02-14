@@ -18,13 +18,14 @@ static LOG_INIT: Once = Once::new();
 static INIT: Once = Once::new();
 static mut ADDR: Option<SocketAddr> = None;
 
-#[derive(Default)]
-struct RustPkiProvider {
+struct RustPkiProvider<'a> {
     rng: rand::rngs::OsRng,
-    verifier: CertVerifier<Aes128GcmSha256, SystemTime, 4096>,
+    verifier: CertVerifier<'a, Aes128GcmSha256, SystemTime, 4096>,
+    priv_key: Option<&'a [u8]>,
+    client_cert: Option<embedded_tls::Certificate<&'a [u8]>>,
 }
 
-impl CryptoProvider for RustPkiProvider {
+impl CryptoProvider for RustPkiProvider<'_> {
     type CipherSuite = Aes128GcmSha256;
     type Signature = DerSignature;
 
@@ -38,8 +39,8 @@ impl CryptoProvider for RustPkiProvider {
 
     fn signer(
         &mut self,
-        key_der: &[u8],
     ) -> Result<(impl SignerMut<Self::Signature>, SignatureScheme), TlsError> {
+        let key_der = self.priv_key.ok_or(TlsError::InvalidPrivateKey)?;
         let secret_key =
             SecretKey::from_sec1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
 
@@ -47,6 +48,10 @@ impl CryptoProvider for RustPkiProvider {
             SigningKey::from(&secret_key),
             SignatureScheme::EcdsaSecp256r1Sha256,
         ))
+    }
+
+    fn client_cert(&mut self) -> Option<embedded_tls::Certificate<impl AsRef<[u8]>>> {
+        self.client_cert.clone()
     }
 }
 
@@ -121,7 +126,6 @@ async fn test_server_certificate_validation() {
     let mut write_record_buffer = [0; 16384];
 
     let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
         .with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
@@ -134,7 +138,9 @@ async fn test_server_certificate_validation() {
         &config,
         RustPkiProvider {
             rng: OsRng,
-            verifier: CertVerifier::new(),
+            verifier: CertVerifier::new(Certificate::X509(&der[..])),
+            priv_key: None,
+            client_cert: None,
         },
     ));
 
@@ -168,10 +174,7 @@ async fn test_mutual_certificate_validation() {
     let mut write_record_buffer = [0; 16384];
 
     let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&ca_der[..]))
-        .with_server_name("localhost")
-        .with_cert(Certificate::X509(&cli_der[..]))
-        .with_priv_key(&key_der);
+        .with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
@@ -183,7 +186,9 @@ async fn test_mutual_certificate_validation() {
         &config,
         RustPkiProvider {
             rng: OsRng,
-            verifier: CertVerifier::new(),
+            verifier: CertVerifier::new(Certificate::X509(&ca_der[..])),
+            priv_key: Some(&key_der),
+            client_cert: Some(Certificate::X509(&cli_der[..])),
         },
     ));
 

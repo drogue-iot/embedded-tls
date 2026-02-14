@@ -11,13 +11,12 @@ mod tlsserver;
 
 static LOG_INIT: OnceLock<()> = OnceLock::new();
 
-#[derive(Default)]
-struct WebPkiProvider {
+struct WebPkiProvider<'a> {
     rng: rand::rngs::OsRng,
-    verifier: CertVerifier<Aes128GcmSha256, SystemTime, 4096>,
+    verifier: CertVerifier<'a, Aes128GcmSha256, SystemTime, 4096>,
 }
 
-impl CryptoProvider for WebPkiProvider {
+impl CryptoProvider for WebPkiProvider<'_> {
     type CipherSuite = Aes128GcmSha256;
     type Signature = &'static [u8];
 
@@ -75,7 +74,7 @@ async fn test_server_certificate_validation() {
     let mut write_record_buffer = [0; 16384];
 
     // Hostname verification is not enabled
-    let config = TlsConfig::new().with_ca(Certificate::X509(&der[..]));
+    let config = TlsConfig::new();
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
@@ -83,7 +82,13 @@ async fn test_server_certificate_validation() {
         &mut write_record_buffer,
     );
 
-    let open_fut = tls.open(TlsContext::new(&config, WebPkiProvider::default()));
+    let open_fut = tls.open(TlsContext::new(
+        &config,
+        WebPkiProvider {
+            rng: rand::rngs::OsRng,
+            verifier: CertVerifier::new(Certificate::X509(&der[..])),
+        },
+    ));
 
     open_fut.await.expect("error establishing TLS connection");
 
