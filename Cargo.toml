@@ -32,7 +32,7 @@ embedded-io-adapters = { version = "0.7", optional = true }
 generic-array = { version = "0.14", default-features = false }
 webpki = { package = "rustls-webpki", version = "0.101.7", default-features = false, optional = true }
 const-oid = { version = "0.10.1", optional = true }
-der = { version = "0.8.0-rc.2", features = ["derive", "oid", "time"], optional = true }
+der = { version = "0.8.0-rc.2", features = ["derive", "oid", "time", "heapless"], optional = true }
 signature = { version = "2.2", default-features = false }
 ecdsa = { version = "0.16.9", default-features = false }
 
