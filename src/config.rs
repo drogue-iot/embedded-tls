@@ -210,7 +210,9 @@ pub struct UnsecureProvider<'a, CipherSuite, RNG> {
 }
 
 impl<RNG: CryptoRngCore> UnsecureProvider<'_, (), RNG> {
-    pub fn new<CipherSuite: TlsCipherSuite>(rng: RNG) -> UnsecureProvider<'static, CipherSuite, RNG> {
+    pub fn new<CipherSuite: TlsCipherSuite>(
+        rng: RNG,
+    ) -> UnsecureProvider<'static, CipherSuite, RNG> {
         UnsecureProvider {
             rng,
             priv_key: None,

@@ -74,8 +74,7 @@ fn test_blocking_borrowed() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         Clonable(Arc::new(stream)),

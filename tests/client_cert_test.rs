@@ -119,8 +119,7 @@ async fn test_client_certificate_auth() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("factbird.com");
+    let config = TlsConfig::new().with_server_name("factbird.com");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),

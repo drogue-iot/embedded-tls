@@ -214,8 +214,7 @@ impl<'a> State {
                 Ok(state)
             }
             State::ClientCertVerify => {
-                let (result, tx) =
-                    client_cert_verify(key_schedule, crypto_provider, tx_buf)?;
+                let (result, tx) = client_cert_verify(key_schedule, crypto_provider, tx_buf)?;
 
                 respond(tx, transport, key_schedule).await?;
 
@@ -279,8 +278,7 @@ impl<'a> State {
                 Ok(state)
             }
             State::ClientCertVerify => {
-                let (result, tx) =
-                    client_cert_verify(key_schedule, crypto_provider, tx_buf)?;
+                let (result, tx) = client_cert_verify(key_schedule, crypto_provider, tx_buf)?;
 
                 respond_blocking(tx, transport, key_schedule)?;
 

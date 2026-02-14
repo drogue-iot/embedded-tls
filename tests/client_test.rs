@@ -99,8 +99,7 @@ async fn test_ping() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
@@ -165,8 +164,7 @@ async fn test_ping_nocopy() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
@@ -234,8 +232,7 @@ async fn test_ping_nocopy_bufread() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
@@ -278,8 +275,7 @@ fn test_blocking_ping() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
         FromStd::new(stream),
@@ -328,8 +324,7 @@ fn test_blocking_ping_nocopy() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
         FromStd::new(stream),
@@ -372,8 +367,7 @@ fn test_blocking_ping_nocopy_bufread() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
         FromStd::new(stream),

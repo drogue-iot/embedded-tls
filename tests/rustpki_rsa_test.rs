@@ -52,9 +52,7 @@ impl CryptoProvider for RustPkiProvider<'_> {
         Ok(&mut self.verifier)
     }
 
-    fn signer(
-        &mut self,
-    ) -> Result<(impl SignerMut<Self::Signature>, SignatureScheme), TlsError> {
+    fn signer(&mut self) -> Result<(impl SignerMut<Self::Signature>, SignatureScheme), TlsError> {
         let key_der = self.priv_key.ok_or(TlsError::InvalidPrivateKey)?;
         let private_key =
             rsa::RsaPrivateKey::from_pkcs8_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
@@ -147,8 +145,7 @@ async fn test_server_certificate_validation() {
     let mut read_record_buffer = [0; 16640];
     let mut write_record_buffer = [0; 16640];
 
-    let config = TlsConfig::new()
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
