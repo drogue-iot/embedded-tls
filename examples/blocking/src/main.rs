@@ -6,12 +6,12 @@ use rand::rngs::OsRng;
 use std::net::TcpStream;
 use std::time::SystemTime;
 
-struct Provider {
+struct Provider<'a> {
     rng: OsRng,
-    verifier: CertVerifier<Aes128GcmSha256, SystemTime, 4096>,
+    verifier: CertVerifier<'a, Aes128GcmSha256, SystemTime, 4096>,
 }
 
-impl CryptoProvider for Provider {
+impl CryptoProvider for Provider<'_> {
     type CipherSuite = Aes128GcmSha256;
 
     type Signature = &'static [u8];
@@ -60,7 +60,7 @@ fn main() {
         &config,
         Provider {
             rng: OsRng,
-            verifier: CertVerifier::new(),
+            verifier: CertVerifier::new(Certificate::X509(&ca_der)),
         },
     ))
     .expect("error establishing TLS connection");
