@@ -91,8 +91,6 @@ async fn test_ping() {
     use embedded_tls::*;
     use tokio::net::TcpStream;
     let addr = setup();
-    let pem = include_str!("data/ca-cert.pem");
-    let der = pem_parser::pem_to_der(pem);
 
     let stream = TcpStream::connect(addr)
         .await
@@ -101,9 +99,7 @@ async fn test_ping() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
@@ -160,8 +156,6 @@ async fn test_ping_nocopy() {
     use embedded_tls::*;
     use tokio::net::TcpStream;
     let addr = setup();
-    let pem = include_str!("data/ca-cert.pem");
-    let der = pem_parser::pem_to_der(pem);
 
     let stream = TcpStream::connect(addr)
         .await
@@ -170,9 +164,7 @@ async fn test_ping_nocopy() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
@@ -232,8 +224,6 @@ async fn test_ping_nocopy_bufread() {
     use tokio::net::TcpStream;
 
     let addr = setup();
-    let pem = include_str!("data/ca-cert.pem");
-    let der = pem_parser::pem_to_der(pem);
 
     let stream = TcpStream::connect(addr)
         .await
@@ -242,9 +232,7 @@ async fn test_ping_nocopy_bufread() {
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls = TlsConnection::new(
         FromTokio::new(stream),
@@ -282,16 +270,12 @@ fn test_blocking_ping() {
     use std::net::TcpStream;
 
     let addr = setup();
-    let pem = include_str!("data/ca-cert.pem");
-    let der = pem_parser::pem_to_der(pem);
     let stream = TcpStream::connect(addr).expect("error connecting to server");
 
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
         FromStd::new(stream),
@@ -335,16 +319,12 @@ fn test_blocking_ping_nocopy() {
     use std::net::TcpStream;
 
     let addr = setup();
-    let pem = include_str!("data/ca-cert.pem");
-    let der = pem_parser::pem_to_der(pem);
     let stream = TcpStream::connect(addr).expect("error connecting to server");
 
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
         FromStd::new(stream),
@@ -382,16 +362,12 @@ fn test_blocking_ping_nocopy_bufread() {
     use std::net::TcpStream;
 
     let addr = setup();
-    let pem = include_str!("data/ca-cert.pem");
-    let der = pem_parser::pem_to_der(pem);
     let stream = TcpStream::connect(addr).expect("error connecting to server");
 
     log::info!("Connected");
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let config = TlsConfig::new()
-        .with_ca(Certificate::X509(&der[..]))
-        .with_server_name("localhost");
+    let config = TlsConfig::new().with_server_name("localhost");
 
     let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
         FromStd::new(stream),
