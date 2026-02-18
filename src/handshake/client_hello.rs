@@ -9,6 +9,7 @@ use typenum::Unsigned;
 
 use crate::TlsError;
 use crate::config::{TlsCipherSuite, TlsConfig};
+use crate::extensions::extension_data::alpn::AlpnProtocolNameList;
 use crate::extensions::extension_data::key_share::{KeyShareClientHello, KeyShareEntry};
 use crate::extensions::extension_data::pre_shared_key::PreSharedKeyClientHello;
 use crate::extensions::extension_data::psk_key_exchange_modes::{
@@ -119,6 +120,13 @@ where
             if let Some(server_name) = self.config.server_name {
                 ClientHelloExtension::ServerName(ServerNameList::single(server_name))
                     .encode(buf)?;
+            }
+
+            if let Some(alpn_protocols) = self.config.alpn_protocols {
+                ClientHelloExtension::ApplicationLayerProtocolNegotiation(AlpnProtocolNameList {
+                    protocols: alpn_protocols,
+                })
+                .encode(buf)?;
             }
 
             // Section 4.2

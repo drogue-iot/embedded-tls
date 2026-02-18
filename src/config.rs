@@ -119,6 +119,7 @@ where
 #[must_use = "TlsConfig does nothing unless consumed"]
 pub struct TlsConfig<'a> {
     pub(crate) server_name: Option<&'a str>,
+    pub(crate) alpn_protocols: Option<&'a [&'a [u8]]>,
     pub(crate) psk: Option<(&'a [u8], Vec<&'a [u8], 4>)>,
     pub(crate) signature_schemes: Vec<SignatureScheme, 25>,
     pub(crate) named_groups: Vec<NamedGroup, 13>,
@@ -294,6 +295,7 @@ impl<'a> TlsConfig<'a> {
             max_fragment_length: None,
             psk: None,
             server_name: None,
+            alpn_protocols: None,
         };
 
         if cfg!(feature = "alloc") {
@@ -356,6 +358,16 @@ impl<'a> TlsConfig<'a> {
 
     pub fn with_server_name(mut self, server_name: &'a str) -> Self {
         self.server_name = Some(server_name);
+        self
+    }
+
+    /// Configure ALPN protocol names to send in the ClientHello.
+    ///
+    /// The server will select one of the offered protocols and echo it back
+    /// in EncryptedExtensions. This is required for endpoints that multiplex
+    /// protocols on a single port (e.g. AWS IoT Core MQTT over port 443).
+    pub fn with_alpn(mut self, protocols: &'a [&'a [u8]]) -> Self {
+        self.alpn_protocols = Some(protocols);
         self
     }
 
