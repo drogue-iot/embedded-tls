@@ -47,9 +47,7 @@ fn main() {
     let mut write_record_buffer = [0; 16384];
 
     let der = pem_parser::pem_to_der(&pem_content);
-    let config = TlsConfig::new()
-        .with_server_name("localhost")
-        .with_ca(Certificate::X509(&der[..]));
+    let config = TlsConfig::new().with_server_name("localhost");
     let mut tls = TlsConnection::new(
         FromStd::new(stream),
         &mut read_record_buffer,
@@ -60,7 +58,7 @@ fn main() {
         &config,
         Provider {
             rng: OsRng,
-            verifier: CertVerifier::new(Certificate::X509(&ca_der)),
+            verifier: CertVerifier::new(Certificate::X509(&der)),
         },
     ))
     .expect("error establishing TLS connection");
