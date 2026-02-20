@@ -1,5 +1,6 @@
 use crate::extensions::{
     extension_data::{
+        alpn::AlpnProtocolNameList,
         key_share::{KeyShareClientHello, KeyShareServerHello},
         max_fragment_length::MaxFragmentLength,
         pre_shared_key::{PreSharedKeyClientHello, PreSharedKeyServerHello},
@@ -29,7 +30,7 @@ extension_group! {
         StatusRequest(Unimplemented<'a>),
         UseSrtp(Unimplemented<'a>),
         Heartbeat(Unimplemented<'a>),
-        ApplicationLayerProtocolNegotiation(Unimplemented<'a>),
+        ApplicationLayerProtocolNegotiation(AlpnProtocolNameList<'a>),
         SignedCertificateTimestamp(Unimplemented<'a>),
         ClientCertificateType(Unimplemented<'a>),
         ServerCertificateType(Unimplemented<'a>),
@@ -60,7 +61,7 @@ extension_group! {
         SupportedGroups(SupportedGroups<13>),
         UseSrtp(Unimplemented<'a>),
         Heartbeat(Unimplemented<'a>),
-        ApplicationLayerProtocolNegotiation(Unimplemented<'a>),
+        ApplicationLayerProtocolNegotiation(AlpnProtocolNameList<'a>),
         ClientCertificateType(Unimplemented<'a>),
         ServerCertificateType(Unimplemented<'a>),
         EarlyData(Unimplemented<'a>)
