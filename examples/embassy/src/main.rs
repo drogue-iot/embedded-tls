@@ -1,7 +1,7 @@
 use clap::Parser;
 use embassy_executor::{Executor, Spawner};
 use embassy_net::tcp::TcpSocket;
-use embassy_net::{Config, Ipv4Address, Ipv4Cidr, StackResources, Stack};
+use embassy_net::{Config, Ipv4Address, Ipv4Cidr, Runner, StackResources};
 use embassy_net_tuntap::TunTapDevice;
 use embassy_time::Duration;
 use embedded_io_async::Write;
@@ -23,8 +23,8 @@ struct Opts {
 }
 
 #[embassy_executor::task]
-async fn net_task(stack: Stack<'static>) -> ! {
-    stack.run().await
+async fn net_task(mut runner: Runner<'static, TunTapDevice>) -> ! {
+    runner.run().await
 }
 
 #[embassy_executor::task]
@@ -52,10 +52,11 @@ async fn main_task(spawner: Spawner) {
 
     // Init network stack
     static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
-    let (stack, runner) = embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
+    let (stack, runner) =
+        embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
 
     // Launch network task
-    spawner.spawn(net_task(runner).unwrap());
+    spawner.must_spawn(net_task(runner));
 
     // Then we can use it!
     let mut rx_buffer = [0; 4096];
@@ -105,6 +106,6 @@ fn main() {
 
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
-        spawner.spawn(main_task(spawner).unwrap());
+        spawner.must_spawn(main_task(spawner));
     });
 }
