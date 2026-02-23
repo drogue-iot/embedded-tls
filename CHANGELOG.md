@@ -7,9 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.19.0
+
 - Added post-quantum hybrid named groups.
 - Add missing implementation to support Client Certificate Authorization (#135)
 - Changed edition from 2021 to 2024.
+- Add ALPN extension support.
+- Move certificate resolution from TlsConfig into CryptoProvider
+- Upgrade defmt, embedded-io
+- Support RSA signatures
+- Add brainpool and ml-dsa signature algorithms
+- Add CompressCertificate extension
+- Add server chain validation with rust native pki using RustCrypto (rustpki feature)
+- Added EcdsaSecp384r1Sha384 and ability to exdend signature schemes
+- Introduce a configurable FlushPolicy to control when the TLS layer flushes its underlying transport.
 
 ## 0.17.0 - 2024-01-06
 
