@@ -157,7 +157,11 @@ impl<'b> ParseBuffer<'b> {
         let mut data = self.slice(data_length)?;
         while !data.is_empty() {
             result.push(read(&mut data)?).map_err(|_| {
-                error!("Failed to store parse result");
+                error!(
+                    "Failed to store parse result. Type: {} Parsed: {}",
+                    core::any::type_name::<T>(),
+                    N
+                );
                 ParseError::InsufficientSpace
             })?;
         }
