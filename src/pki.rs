@@ -109,7 +109,8 @@ where
         for (p, q) in CertificateChain::new(&(&self.ca).into(), &cert) {
             cn = verify_certificate(p, q, Clock::now())?;
         }
-        if self.host.ne(&cn) {
+
+        if !tls_hostname_match(&cn, &self.host) {
             error!(
                 "Hostname ({:?}) does not match CommonName ({:?})",
                 self.host, cn
@@ -268,7 +269,6 @@ fn get_certificate_tlv_bytes<'a>(input: &[u8]) -> der::Result<&[u8]> {
     let header = der::Header::peek(&mut reader)?;
     header.tag().assert_eq(der::Tag::Sequence)?;
 
-    // Should we read the remaining two fields and call reader.finish() just be certain here?
     reader.tlv_bytes()
 }
 
@@ -465,4 +465,204 @@ fn verify_certificate(
     }
 
     Ok(common_name)
+}
+
+fn tls_hostname_match(
+    cn: &Option<heapless::String<HOSTNAME_MAXLEN>>,
+    hostname: &Option<heapless::String<HOSTNAME_MAXLEN>>,
+) -> bool {
+    match (cn.as_ref(), hostname.as_ref()) {
+        (None, None) => true,
+        (Some(cn), Some(hostname)) => tls_hostname_match_impl(cn.as_bytes(), hostname.as_bytes()),
+        _ => false,
+    }
+}
+
+fn tls_hostname_match_impl(cn: &[u8], host: &[u8]) -> bool {
+    let mut cn_labels = 1;
+    let mut host_labels = 1;
+    let mut stars = 0;
+
+    for &b in cn {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'.' | b'*' => {}
+            _ => return false,
+        }
+        if b == b'.' {
+            cn_labels += 1;
+        }
+        if b == b'*' {
+            stars += 1;
+        }
+    }
+
+    for &b in host {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'.' => {}
+            _ => return false,
+        }
+        if b == b'.' {
+            host_labels += 1;
+        }
+    }
+
+    if stars == 0 {
+        if cn.len() != host.len() {
+            return false;
+        }
+        for i in 0..cn.len() {
+            if cn[i].to_ascii_lowercase() != host[i].to_ascii_lowercase() {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // RFC 6125 wildcard rules
+    if stars != 1 {
+        return false;
+    }
+    if !cn.starts_with(b"*.") {
+        return false;
+    }
+    if cn_labels < 3 {
+        return false;
+    }
+    if cn_labels != host_labels {
+        return false;
+    }
+
+    let suffix = &cn[2..];
+    let mut dot_idx = None;
+    for i in 0..host.len() {
+        if host[i] == b'.' {
+            dot_idx = Some(i);
+            break;
+        }
+    }
+    let dot_idx = match dot_idx {
+        Some(i) => i,
+        None => return false,
+    };
+    let host_suffix = &host[dot_idx + 1..];
+
+    if suffix.len() != host_suffix.len() {
+        return false;
+    }
+
+    for i in 0..suffix.len() {
+        if suffix[i].to_ascii_lowercase() != host_suffix[i].to_ascii_lowercase() {
+            return false;
+        }
+    }
+
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tls_hostname_match_impl;
+
+    #[test]
+    fn exact_match() {
+        assert!(tls_hostname_match_impl(b"example.com", b"example.com"));
+        assert!(tls_hostname_match_impl(b"EXAMPLE.COM", b"example.com"));
+        assert!(tls_hostname_match_impl(b"example.com", b"EXAMPLE.COM"));
+    }
+
+    #[test]
+    fn exact_mismatch() {
+        assert!(!tls_hostname_match_impl(b"example.com", b"example.org"));
+        assert!(!tls_hostname_match_impl(b"example.com", b"sub.example.com"));
+    }
+
+    #[test]
+    fn valid_wildcard_match() {
+        assert!(tls_hostname_match_impl(
+            b"*.example.com",
+            b"api.example.com"
+        ));
+        assert!(tls_hostname_match_impl(
+            b"*.example.com",
+            b"WWW.example.com"
+        ));
+    }
+
+    #[test]
+    fn wildcard_single_label_only() {
+        assert!(!tls_hostname_match_impl(
+            b"*.example.com",
+            b"a.b.example.com"
+        ));
+    }
+
+    #[test]
+    fn wildcard_requires_same_label_count() {
+        assert!(!tls_hostname_match_impl(b"*.example.com", b"example.com"));
+        assert!(!tls_hostname_match_impl(
+            b"*.example.com",
+            b"deep.api.example.com"
+        ));
+    }
+
+    #[test]
+    fn wildcard_must_be_leftmost_label() {
+        assert!(!tls_hostname_match_impl(
+            b"api.*.example.com",
+            b"api.test.example.com"
+        ));
+        assert!(!tls_hostname_match_impl(
+            b"foo*.example.xx",
+            b"foobar.example.xx"
+        ));
+    }
+
+    #[test]
+    fn wildcard_requires_minimum_three_labels() {
+        assert!(!tls_hostname_match_impl(b"*.com", b"example.com"));
+        assert!(!tls_hostname_match_impl(b"*.org", b"test.org"));
+    }
+
+    #[test]
+    fn multiple_wildcards_rejected() {
+        assert!(!tls_hostname_match_impl(
+            b"*.*.example.com",
+            b"a.b.example.com"
+        ));
+        assert!(!tls_hostname_match_impl(
+            b"**.example.com",
+            b"api.example.com"
+        ));
+    }
+
+    #[test]
+    fn idna_a_label_supported() {
+        assert!(tls_hostname_match_impl(
+            b"xn--bcher-kva.example",
+            b"xn--bcher-kva.example"
+        ));
+
+        assert!(tls_hostname_match_impl(
+            b"*.xn--bcher-kva.example",
+            b"api.xn--bcher-kva.example"
+        ));
+    }
+
+    #[test]
+    fn unicode_rejected() {
+        assert!(!tls_hostname_match_impl(
+            "bücher.example".as_bytes(),
+            "bücher.example".as_bytes()
+        ));
+        assert!(!tls_hostname_match_impl(
+            "*.bücher.example".as_bytes(),
+            "api.bücher.example".as_bytes()
+        ));
+    }
+
+    #[test]
+    fn invalid_characters_rejected() {
+        assert!(!tls_hostname_match_impl(b"example!.com", b"example!.com"));
+        assert!(!tls_hostname_match_impl(b"example.com", b"exa mple.com"));
+    }
 }
