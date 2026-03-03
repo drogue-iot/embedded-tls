@@ -2,7 +2,18 @@ use core::cmp::Ordering;
 use der::asn1::{
     BitStringRef, GeneralizedTime, IntRef, ObjectIdentifier, SequenceOf, SetOf, UtcTime,
 };
-use der::{AnyRef, Choice, Enumerated, Sequence, ValueOrd};
+use der::{
+    AnyRef, Choice, Decode, Enumerated, Header, Reader, Sequence, SliceReader, Tag, Tagged,
+    ValueOrd,
+};
+use heapless::Vec;
+
+pub const MAX_SAN_DNS_NAMES: usize = 3;
+pub const HOSTNAME_MAXLEN: usize = 64;
+
+const DNS_NAME_TAG: u8 = 0x82;
+const COMMON_NAME_OID: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.4.3");
+const SUBJECT_ALT_NAME_OID: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.29.17");
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Sequence, ValueOrd)]
 pub struct AlgorithmIdentifier<'a> {
@@ -98,6 +109,26 @@ impl<'a> defmt::Format for AttributeTypeAndValue<'a> {
     }
 }
 
+#[derive(Debug, Sequence, ValueOrd)]
+pub struct ExtensionIdAndValue<'a> {
+    pub extn_id: ObjectIdentifier,
+    pub critical: Option<bool>,
+    pub extn_value: AnyRef<'a>, // always type OCTET STRING
+}
+
+#[cfg(feature = "defmt")]
+impl<'a> defmt::Format for ExtensionIdAndValue<'a> {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "extnID:{} extnValue:{} critical:{}",
+            &self.extn_id.as_bytes(),
+            &self.extn_value.value(),
+            &self.critical,
+        )
+    }
+}
+
 #[derive(Debug, Choice, ValueOrd)]
 pub enum Time {
     #[asn1(type = "UTCTime")]
@@ -156,5 +187,95 @@ pub struct TbsCertificate<'a> {
     pub subject_unique_id: Option<BitStringRef<'a>>,
 
     #[asn1(context_specific = "3", tag_mode = "EXPLICIT", optional = "true")]
-    pub extensions: Option<AnyRef<'a>>,
+    pub extensions: Option<SequenceOf<ExtensionIdAndValue<'a>, 5>>,
+}
+
+/// Extract CommonName (CN) from the subject.
+///
+/// Parses the rdnSequence field of a TBS certificate, locates the
+/// Common Name (OID 2.5.4.3), and returns it.
+///
+/// Returns `None` if no common name is present or does not fit into
+/// `heapless::String<64>`.
+pub fn extract_common_name<'a>(
+    tbs: &TbsCertificate<'a>,
+) -> Result<Option<heapless::String<64>>, der::Error> {
+    let mut common_name = None;
+
+    for elems in tbs.subject.iter() {
+        let attrs = elems
+            .get(0)
+            .ok_or(der::ErrorKind::Value { tag: Tag::Set })?;
+
+        if attrs.oid == COMMON_NAME_OID {
+            let mut v: Vec<u8, HOSTNAME_MAXLEN> = Vec::new();
+            v.extend_from_slice(attrs.value.value())
+                .map_err(|_| der::ErrorKind::Value {
+                    tag: Tag::Utf8String,
+                })?;
+
+            common_name = heapless::String::from_utf8(v).ok();
+        }
+    }
+    Ok(common_name)
+}
+
+/// Extract DNS names from the Subject Alternative Name (SAN) extension.
+///
+/// Parses the extensions field of a TBS certificate, locates the SAN
+/// extension (OID 2.5.29.17), and returns all GeneralName entries of
+/// type dNSName (tag [2] IMPLICIT IA5String).
+///
+/// Returns an empty vector if no SAN extension is present.
+pub fn extract_san_dns_names<'a>(
+    tbs: &TbsCertificate<'a>,
+) -> Result<heapless::Vec<heapless::String<HOSTNAME_MAXLEN>, MAX_SAN_DNS_NAMES>, der::Error> {
+    let mut dns_names = heapless::Vec::new();
+
+    let extensions_any = match &tbs.extensions {
+        Some(ext) => ext,
+        None => return Ok(dns_names),
+    };
+
+    for elems in extensions_any.iter() {
+        if elems.extn_id != SUBJECT_ALT_NAME_OID {
+            continue;
+        }
+
+        elems.extn_value.tag().assert_eq(Tag::OctetString)?;
+        let mut san_reader = SliceReader::new(elems.extn_value.value())?;
+        let san_header = Header::decode(&mut san_reader)?;
+        san_header.tag().assert_eq(Tag::Sequence)?;
+        let san_content = san_reader.read_slice(san_header.length())?;
+        let mut gn_reader = SliceReader::new(san_content)?;
+        while !gn_reader.is_finished() {
+            let tag_byte = gn_reader.peek_byte().ok_or(der::ErrorKind::Incomplete {
+                expected_len: 1u8.into(),
+                actual_len: 0u8.into(),
+            })?;
+
+            let gn_header = Header::decode(&mut gn_reader)?;
+            let gn_value = gn_reader.read_slice(gn_header.length())?;
+
+            if tag_byte == DNS_NAME_TAG {
+                // dNSName [2] IMPLICIT IA5String
+                let gn_value_str =
+                    core::str::from_utf8(gn_value).map_err(|_| der::ErrorKind::Value {
+                        tag: Tag::Ia5String,
+                    })?;
+
+                let dns_name = heapless::String::try_from(gn_value_str).map_err(|_| {
+                    der::ErrorKind::Value {
+                        tag: Tag::Ia5String,
+                    }
+                })?;
+
+                let _ = dns_names.push(dns_name);
+                if dns_names.is_full() {
+                    break;
+                }
+            }
+        }
+    }
+    Ok(dns_names)
 }
