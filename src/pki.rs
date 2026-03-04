@@ -4,7 +4,10 @@ use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
 use crate::der_certificate::ECDSA_SHA384;
 #[cfg(feature = "ed25519")]
 use crate::der_certificate::ED25519;
-use crate::der_certificate::{DecodedCertificate, ECDSA_SHA256, Time};
+use crate::der_certificate::{
+    DecodedCertificate, ECDSA_SHA256, HOSTNAME_MAXLEN, MAX_SAN_DNS_NAMES, Time,
+    extract_common_name, extract_san_dns_names,
+};
 #[cfg(feature = "rsa")]
 use crate::der_certificate::{RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512};
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
@@ -15,17 +18,18 @@ use crate::handshake::{
     certificate_verify::CertificateVerifyRef,
 };
 use crate::parse_buffer::ParseError;
-use const_oid::ObjectIdentifier;
 use core::marker::PhantomData;
 use der::Decode;
 use digest::Digest;
-use heapless::{String, Vec};
+use heapless::Vec;
 
-const HOSTNAME_MAXLEN: usize = 64;
-const COMMON_NAME_OID: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.4.3");
+pub struct CertificateNames {
+    pub common_name: Option<heapless::String<HOSTNAME_MAXLEN>>,
+    pub san_dns_names: heapless::Vec<heapless::String<HOSTNAME_MAXLEN>, MAX_SAN_DNS_NAMES>,
+}
 
 pub struct CertificateChain<'a> {
-    prev: Option<&'a CertificateEntryRef<'a>>,
+    prev: &'a CertificateEntryRef<'a>,
     chain: &'a ServerCertificate<'a>,
     idx: isize,
 }
@@ -33,7 +37,7 @@ pub struct CertificateChain<'a> {
 impl<'a> CertificateChain<'a> {
     pub fn new(ca: &'a CertificateEntryRef, chain: &'a ServerCertificate<'a>) -> Self {
         Self {
-            prev: Some(ca),
+            prev: ca,
             chain,
             idx: chain.entries.len() as isize - 1,
         }
@@ -49,9 +53,9 @@ impl<'a> Iterator for CertificateChain<'a> {
         }
 
         let cur = &self.chain.entries[self.idx as usize];
-        let out = (self.prev.unwrap(), cur);
+        let out = (self.prev, cur);
 
-        self.prev = Some(cur);
+        self.prev = cur;
         self.idx -= 1;
 
         Some(out)
@@ -105,14 +109,19 @@ where
         transcript: &CipherSuite::Hash,
         cert: ServerCertificate,
     ) -> Result<(), TlsError> {
-        let mut cn = None;
+        let mut names = CertificateNames {
+            common_name: None,
+            san_dns_names: heapless::Vec::new(),
+        };
+
         for (p, q) in CertificateChain::new(&(&self.ca).into(), &cert) {
-            cn = verify_certificate(p, q, Clock::now())?;
+            names = verify_certificate(p, q, Clock::now())?;
         }
-        if self.host.ne(&cn) {
+
+        if !tls_hostname_match(&names, &self.host) {
             error!(
-                "Hostname ({:?}) does not match CommonName ({:?})",
-                self.host, cn
+                "Hostname ({:?}) does not match certificate names (CN={:?}, SANs={:?})",
+                self.host, names.common_name, names.san_dns_names
             );
             return Err(TlsError::InvalidCertificate);
         }
@@ -268,7 +277,6 @@ fn get_certificate_tlv_bytes<'a>(input: &[u8]) -> der::Result<&[u8]> {
     let header = der::Header::peek(&mut reader)?;
     header.tag().assert_eq(der::Tag::Sequence)?;
 
-    // Should we read the remaining two fields and call reader.finish() just be certain here?
     reader.tlv_bytes()
 }
 
@@ -283,9 +291,10 @@ fn verify_certificate(
     verifier: &CertificateEntryRef,
     certificate: &CertificateEntryRef,
     now: Option<u64>,
-) -> Result<Option<heapless::String<HOSTNAME_MAXLEN>>, TlsError> {
+) -> Result<CertificateNames, TlsError> {
     let mut verified = false;
     let mut common_name = None;
+    let mut san_dns_names = heapless::Vec::new();
 
     let ca_certificate = if let CertificateEntryRef::X509(verifier) = verifier {
         DecodedCertificate::from_der(verifier).map_err(|_| TlsError::DecodeError)?
@@ -304,18 +313,13 @@ fn verify_certificate(
             .as_bytes()
             .ok_or(TlsError::DecodeError)?;
 
-        for elems in parsed_certificate.tbs_certificate.subject.iter() {
-            let attrs = elems
-                .get(0)
-                .ok_or(TlsError::ParseError(ParseError::InvalidData))?;
-            if attrs.oid == COMMON_NAME_OID {
-                let mut v: Vec<u8, HOSTNAME_MAXLEN> = Vec::new();
-                v.extend_from_slice(attrs.value.value())
-                    .map_err(|_| TlsError::ParseError(ParseError::InvalidData))?;
-                common_name = String::from_utf8(v).ok();
-                debug!("CommonName: {:?}", common_name);
-            }
-        }
+        common_name = extract_common_name(&parsed_certificate.tbs_certificate)
+            .map_err(|_| TlsError::DecodeError)?;
+        debug!("CommonName: {:?}", common_name);
+
+        san_dns_names = extract_san_dns_names(&parsed_certificate.tbs_certificate)
+            .map_err(|_| TlsError::DecodeError)?;
+        debug!("SANs: {:?}", san_dns_names);
 
         if let Some(now) = now {
             if get_cert_time(parsed_certificate.tbs_certificate.validity.not_before) > now
@@ -464,5 +468,225 @@ fn verify_certificate(
         return Err(TlsError::InvalidCertificate);
     }
 
-    Ok(common_name)
+    Ok(CertificateNames {
+        common_name,
+        san_dns_names,
+    })
+}
+
+/// Match a hostname against the certificate's names.
+///
+/// Per RFC 6125 Section 6.4.4, if the certificate contains Subject Alternative
+/// Names (SANs), only the SANs are used for matching and the Common Name (CN)
+/// is ignored. If no SANs are present, the CN is used as a fallback.
+fn tls_hostname_match(
+    names: &CertificateNames,
+    hostname: &Option<heapless::String<HOSTNAME_MAXLEN>>,
+) -> bool {
+    let hostname = match hostname.as_ref() {
+        Some(h) => h,
+        None => {
+            return names.common_name.is_none() && names.san_dns_names.is_empty();
+        }
+    };
+
+    for san in &names.san_dns_names {
+        if tls_hostname_match_impl(san.as_bytes(), hostname.as_bytes()) {
+            return true;
+        }
+    }
+
+    match names.common_name.as_ref() {
+        Some(cn) => tls_hostname_match_impl(cn.as_bytes(), hostname.as_bytes()),
+        None => false,
+    }
+}
+
+fn tls_hostname_match_impl(cn: &[u8], host: &[u8]) -> bool {
+    let mut cn_labels = 1;
+    let mut host_labels = 1;
+    let mut stars = 0;
+
+    for &b in cn {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'.' | b'*' => {}
+            _ => return false,
+        }
+        if b == b'.' {
+            cn_labels += 1;
+        }
+        if b == b'*' {
+            stars += 1;
+        }
+    }
+
+    for &b in host {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'.' => {}
+            _ => return false,
+        }
+        if b == b'.' {
+            host_labels += 1;
+        }
+    }
+
+    if stars == 0 {
+        if cn.len() != host.len() {
+            return false;
+        }
+        for i in 0..cn.len() {
+            if cn[i].to_ascii_lowercase() != host[i].to_ascii_lowercase() {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // RFC 6125 wildcard rules
+    if stars != 1 {
+        return false;
+    }
+    if !cn.starts_with(b"*.") {
+        return false;
+    }
+    if cn_labels < 3 {
+        return false;
+    }
+    if cn_labels != host_labels {
+        return false;
+    }
+
+    let suffix = &cn[2..];
+    let mut dot_idx = None;
+    for i in 0..host.len() {
+        if host[i] == b'.' {
+            dot_idx = Some(i);
+            break;
+        }
+    }
+    let dot_idx = match dot_idx {
+        Some(i) => i,
+        None => return false,
+    };
+    let host_suffix = &host[dot_idx + 1..];
+
+    if suffix.len() != host_suffix.len() {
+        return false;
+    }
+
+    for i in 0..suffix.len() {
+        if suffix[i].to_ascii_lowercase() != host_suffix[i].to_ascii_lowercase() {
+            return false;
+        }
+    }
+
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tls_hostname_match_impl;
+
+    #[test]
+    fn exact_match() {
+        assert!(tls_hostname_match_impl(b"example.com", b"example.com"));
+        assert!(tls_hostname_match_impl(b"EXAMPLE.COM", b"example.com"));
+        assert!(tls_hostname_match_impl(b"example.com", b"EXAMPLE.COM"));
+    }
+
+    #[test]
+    fn exact_mismatch() {
+        assert!(!tls_hostname_match_impl(b"example.com", b"example.org"));
+        assert!(!tls_hostname_match_impl(b"example.com", b"sub.example.com"));
+    }
+
+    #[test]
+    fn valid_wildcard_match() {
+        assert!(tls_hostname_match_impl(
+            b"*.example.com",
+            b"api.example.com"
+        ));
+        assert!(tls_hostname_match_impl(
+            b"*.example.com",
+            b"WWW.example.com"
+        ));
+    }
+
+    #[test]
+    fn wildcard_single_label_only() {
+        assert!(!tls_hostname_match_impl(
+            b"*.example.com",
+            b"a.b.example.com"
+        ));
+    }
+
+    #[test]
+    fn wildcard_requires_same_label_count() {
+        assert!(!tls_hostname_match_impl(b"*.example.com", b"example.com"));
+        assert!(!tls_hostname_match_impl(
+            b"*.example.com",
+            b"deep.api.example.com"
+        ));
+    }
+
+    #[test]
+    fn wildcard_must_be_leftmost_label() {
+        assert!(!tls_hostname_match_impl(
+            b"api.*.example.com",
+            b"api.test.example.com"
+        ));
+        assert!(!tls_hostname_match_impl(
+            b"foo*.example.xx",
+            b"foobar.example.xx"
+        ));
+    }
+
+    #[test]
+    fn wildcard_requires_minimum_three_labels() {
+        assert!(!tls_hostname_match_impl(b"*.com", b"example.com"));
+        assert!(!tls_hostname_match_impl(b"*.org", b"test.org"));
+    }
+
+    #[test]
+    fn multiple_wildcards_rejected() {
+        assert!(!tls_hostname_match_impl(
+            b"*.*.example.com",
+            b"a.b.example.com"
+        ));
+        assert!(!tls_hostname_match_impl(
+            b"**.example.com",
+            b"api.example.com"
+        ));
+    }
+
+    #[test]
+    fn idna_a_label_supported() {
+        assert!(tls_hostname_match_impl(
+            b"xn--bcher-kva.example",
+            b"xn--bcher-kva.example"
+        ));
+
+        assert!(tls_hostname_match_impl(
+            b"*.xn--bcher-kva.example",
+            b"api.xn--bcher-kva.example"
+        ));
+    }
+
+    #[test]
+    fn unicode_rejected() {
+        assert!(!tls_hostname_match_impl(
+            "bücher.example".as_bytes(),
+            "bücher.example".as_bytes()
+        ));
+        assert!(!tls_hostname_match_impl(
+            "*.bücher.example".as_bytes(),
+            "api.bücher.example".as_bytes()
+        ));
+    }
+
+    #[test]
+    fn invalid_characters_rejected() {
+        assert!(!tls_hostname_match_impl(b"example!.com", b"example!.com"));
+        assert!(!tls_hostname_match_impl(b"example.com", b"exa mple.com"));
+    }
 }
