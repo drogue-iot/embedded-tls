@@ -187,7 +187,7 @@ pub struct TbsCertificate<'a> {
     pub subject_unique_id: Option<BitStringRef<'a>>,
 
     #[asn1(context_specific = "3", tag_mode = "EXPLICIT", optional = "true")]
-    pub extensions: Option<SequenceOf<ExtensionIdAndValue<'a>, 5>>,
+    pub extensions: Option<SequenceOf<ExtensionIdAndValue<'a>, 12>>,
 }
 
 /// Extract CommonName (CN) from the subject.
