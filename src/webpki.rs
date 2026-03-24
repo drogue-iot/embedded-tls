@@ -7,8 +7,8 @@ use crate::handshake::{
     },
     certificate_verify::CertificateVerifyRef,
 };
+use crate::crypto_ops::TlsHash;
 use core::marker::PhantomData;
-use digest::Digest;
 use heapless::Vec;
 #[cfg(all(not(feature = "alloc"), feature = "webpki"))]
 impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {

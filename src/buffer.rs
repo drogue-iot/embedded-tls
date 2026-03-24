@@ -1,4 +1,5 @@
 use crate::TlsError;
+use crate::crypto_ops::TlsBuffer;
 use aes_gcm::Error;
 use aes_gcm::aead::Buffer;
 
@@ -214,6 +215,32 @@ impl<'b> CryptoBuffer<'b> {
         self.set_u24(len_pos, len)?;
 
         Ok(r)
+    }
+}
+
+impl TlsBuffer for CryptoBuffer<'_> {
+    fn as_slice(&self) -> &[u8] {
+        self.as_slice()
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.as_mut_slice()
+    }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), TlsError> {
+        self.extend_from_slice(other)
+    }
+
+    fn truncate(&mut self, len: usize) {
+        self.truncate(len);
+    }
+
+    fn capacity(&self) -> usize {
+        self.capacity()
     }
 }
 

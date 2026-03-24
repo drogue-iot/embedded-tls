@@ -18,9 +18,9 @@ use crate::handshake::{
     certificate_verify::CertificateVerifyRef,
 };
 use crate::parse_buffer::ParseError;
+use crate::crypto_ops::TlsHash;
 use core::marker::PhantomData;
 use der::Decode;
-use digest::Digest;
 use heapless::Vec;
 
 pub struct CertificateNames {

@@ -116,7 +116,7 @@ where
         match self {
             ClientRecord::Handshake(handshake, _) => handshake.encode(buf)?,
             ClientRecord::Alert(alert, _) => alert.encode(buf)?,
-        };
+        }
 
         Ok(buf.len() - record_length_marker)
     }
@@ -140,8 +140,7 @@ where
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+/// Server-side record types
 #[allow(clippy::large_enum_variant)]
 pub enum ServerRecord<'a, CipherSuite: TlsCipherSuite> {
     Handshake(ServerHandshake<'a, CipherSuite>),

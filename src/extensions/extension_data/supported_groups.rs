@@ -87,10 +87,17 @@ pub struct SupportedGroups<const N: usize> {
 impl<const N: usize> SupportedGroups<N> {
     pub fn parse(buf: &mut ParseBuffer) -> Result<Self, ParseError> {
         let data_length = buf.read_u16()? as usize;
-
-        Ok(Self {
-            supported_groups: buf.read_list::<_, N>(data_length, NamedGroup::parse)?,
-        })
+        let mut data = buf.slice(data_length)?;
+        let mut supported_groups = Vec::new();
+        // Skip unknown named groups per RFC 8446 Section 9.3
+        while !data.is_empty() {
+            match NamedGroup::parse(&mut data) {
+                Ok(group) => { let _ = supported_groups.push(group); }
+                Err(ParseError::InvalidData) => {} // unknown group, skip
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(Self { supported_groups })
     }
 
     pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {

@@ -17,6 +17,7 @@ p256 = { version = "0.13", default-features = false, features = [ "ecdh", "ecdsa
 p384 = { version = "0.13", default-features = false, features = [ "ecdsa", "sha384" ], optional = true }
 ed25519-dalek = { version = "2.2", default-features = false, optional = true }
 rsa = { version = "0.9.9", default-features = false, features = ["sha2"], optional = true }
+x25519-dalek = { version = "2", default-features = false, features = ["static_secrets"], optional = true }
 rand_core = { version = "0.6.3", default-features = false }
 hkdf = "0.12.3"
 hmac = "0.12.1"
@@ -44,7 +45,7 @@ defmt = { version = "1.0.1", optional = true }
 env_logger = "0.11"
 tokio = { version = "1", features = ["full"] }
 mio = { version = "0.8.3", features = ["os-poll", "net"] }
-rustls = "0.21.6"
+rustls = { version = "0.21.6", features = ["dangerous_configuration"] }
 rustls-pemfile = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.8"
@@ -53,7 +54,8 @@ pem-parser = "0.1.1"
 openssl = "0.10.44"
 
 [features]
-default = ["std", "log", "tokio"]
+default = ["std", "log", "tokio", "x25519"]
+x25519 = ["dep:x25519-dalek"]
 defmt = ["dep:defmt", "embedded-io/defmt", "heapless/defmt"]
 std = ["embedded-io/std", "embedded-io-async/std"]
 tokio = ["embedded-io-adapters/tokio-1"]
