@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use digest::{Digest, OutputSizeUser};
+use crate::crypto_ops::TlsHash;
 use heapless::Vec;
 use p256::EncodedPoint;
 use p256::ecdh::EphemeralSecret;
@@ -23,6 +23,7 @@ use crate::extensions::messages::ClientHelloExtension;
 use crate::handshake::{LEGACY_VERSION, Random};
 use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
 use crate::{CryptoProvider, buffer::CryptoBuffer};
+use crate::parse_buffer::ParseBuffer;
 
 pub struct ClientHello<'config, CipherSuite>
 where
@@ -123,8 +124,12 @@ where
             }
 
             if let Some(alpn_protocols) = self.config.alpn_protocols {
+                let mut protos = Vec::new();
+                for p in alpn_protocols {
+                    let _ = protos.push(*p);
+                }
                 ClientHelloExtension::ApplicationLayerProtocolNegotiation(AlpnProtocolNameList {
-                    protocols: alpn_protocols,
+                    protocols: protos,
                 })
                 .encode(buf)?;
             }
@@ -137,7 +142,7 @@ where
             if let Some((_, identities)) = &self.config.psk {
                 ClientHelloExtension::PreSharedKey(PreSharedKeyClientHello {
                     identities: identities.clone(),
-                    hash_size: <CipherSuite::Hash as OutputSizeUser>::output_size(),
+                    hash_size: <CipherSuite::Hash as TlsHash>::OutputSize::to_usize(),
                 })
                 .encode(buf)?;
             }
@@ -185,4 +190,81 @@ where
 
         Ok(())
     }
+}
+
+/// Parsed `ClientHello` for server-side processing.
+#[derive(Debug)]
+pub struct ParsedClientHello<'a> {
+    pub session_id: &'a [u8],
+    pub key_shares: Vec<KeyShareEntry<'a>, 4>,
+    pub alpn_protocols: Vec<&'a [u8], 4>,
+}
+
+impl<'a> ParsedClientHello<'a> {
+    pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, TlsError> {
+        let legacy_version = buf.read_u16().map_err(|_| TlsError::InvalidHandshake)?;
+        if legacy_version != LEGACY_VERSION {
+            return Err(TlsError::InvalidHandshake);
+        }
+
+        // Random (skip, not needed by server currently)
+        buf.slice(32).map_err(|_| TlsError::InvalidHandshake)?;
+
+        // Session ID
+        let session_id_len = buf.read_u8().map_err(|_| TlsError::InvalidSessionIdLength)?;
+        let session_id = buf
+            .slice(session_id_len as usize)
+            .map_err(|_| TlsError::InvalidSessionIdLength)?
+            .as_slice();
+
+        // Cipher suites (skip over, we use the compile-time CipherSuite)
+        let cipher_suites_len = buf.read_u16().map_err(|_| TlsError::InvalidHandshake)? as usize;
+        buf.slice(cipher_suites_len).map_err(|_| TlsError::InvalidHandshake)?;
+
+        // Compression methods
+        let compression_len = buf.read_u8().map_err(|_| TlsError::InvalidHandshake)?;
+        buf.slice(compression_len as usize)
+            .map_err(|_| TlsError::InvalidHandshake)?;
+
+        // Extensions
+        let extensions = ClientHelloExtension::parse_vector::<16>(buf)?;
+
+        let mut key_shares = Vec::new();
+        let mut alpn_protocols = Vec::new();
+        let mut has_tls13 = false;
+
+        for ext in &extensions {
+            match ext {
+                ClientHelloExtension::KeyShare(ks) => {
+                    for share in &ks.client_shares {
+                        let _ = key_shares.push(share.clone());
+                    }
+                }
+                ClientHelloExtension::SupportedVersions(sv) => {
+                    for v in &sv.versions {
+                        if *v == TLS13 {
+                            has_tls13 = true;
+                        }
+                    }
+                }
+                ClientHelloExtension::ApplicationLayerProtocolNegotiation(alpn) => {
+                    for proto in &alpn.protocols {
+                        let _ = alpn_protocols.push(*proto);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if !has_tls13 {
+            return Err(TlsError::InvalidSupportedVersions);
+        }
+
+        Ok(Self {
+            session_id,
+            key_shares,
+            alpn_protocols,
+        })
+    }
+
 }

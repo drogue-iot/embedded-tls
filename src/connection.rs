@@ -10,20 +10,18 @@ use crate::{
     handshake::{certificate::CertificateRef, certificate_request::CertificateRequest},
 };
 use core::fmt::Debug;
-use digest::Digest;
 use embedded_io::Error as _;
 use embedded_io::{Read as BlockingRead, Write as BlockingWrite};
 use embedded_io_async::{Read as AsyncRead, Write as AsyncWrite};
 
 use crate::application_data::ApplicationData;
 use crate::buffer::CryptoBuffer;
-use digest::generic_array::typenum::Unsigned;
+use crate::crypto_ops::{TlsCipher, TlsHash};
 use p256::ecdh::EphemeralSecret;
 use signature::SignerMut;
 
 use crate::content_types::ContentType;
 use crate::parse_buffer::ParseBuffer;
-use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
 
 pub(crate) fn decrypt_record<CipherSuite>(
     key_schedule: &mut ReadKeySchedule<CipherSuite>,
@@ -44,10 +42,8 @@ where
         let server_key = key_schedule.get_key()?;
         let nonce = key_schedule.get_nonce()?;
 
-        let crypto = <CipherSuite::Cipher as KeyInit>::new(server_key);
-        crypto
-            .decrypt_in_place(&nonce, header.data(), &mut app_data)
-            .map_err(|_| TlsError::CryptoError)?;
+        let crypto = CipherSuite::Cipher::new(server_key);
+        crypto.decrypt_in_place(&nonce, header.data(), &mut app_data)?;
 
         let padding = app_data
             .as_slice()
@@ -56,7 +52,7 @@ where
             .rfind(|(_, b)| **b != 0);
         if let Some((index, _)) = padding {
             app_data.truncate(index + 1);
-        };
+        }
 
         let content_type =
             ContentType::of(*app_data.as_slice().last().unwrap()).ok_or(TlsError::InvalidRecord)?;
@@ -106,8 +102,8 @@ where
     // trace!("encrypt nonce {:02x?}", nonce);
     // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
     //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
-    let crypto = <CipherSuite::Cipher as KeyInit>::new(client_key);
-    let len = buf.len() + <CipherSuite::Cipher as AeadCore>::TagSize::to_usize();
+    let crypto = CipherSuite::Cipher::new(client_key);
+    let len = buf.len() + CipherSuite::Cipher::tag_size();
 
     if len > buf.capacity() {
         return Err(TlsError::InsufficientSpace);
@@ -123,9 +119,7 @@ where
         len_bytes[1],
     ];
 
-    crypto
-        .encrypt_in_place(&nonce, &additional_data, buf)
-        .map_err(|_| TlsError::InvalidApplicationData)
+    crypto.encrypt_in_place(&nonce, &additional_data, buf)
 }
 
 pub struct Handshake<CipherSuite>

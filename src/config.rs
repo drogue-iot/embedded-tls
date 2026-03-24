@@ -6,9 +6,8 @@ use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::extensions::extension_data::supported_groups::NamedGroup;
 pub use crate::handshake::certificate::{CertificateEntryRef, CertificateRef};
 pub use crate::handshake::certificate_verify::CertificateVerifyRef;
-use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
-use digest::core_api::BlockSizeUser;
-use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
+use aes_gcm::{Aes128Gcm, Aes256Gcm};
+use crate::crypto_ops::{SoftwareCipher, SoftwareHash, SoftwareHkdf, SoftwareHmac, TlsCipher, TlsHash, TlsHkdf, TlsHmac};
 use ecdsa::elliptic_curve::SecretKey;
 use generic_array::ArrayLength;
 use heapless::Vec;
@@ -25,41 +24,52 @@ pub const TLS_RECORD_OVERHEAD: usize = 128;
 type LongestLabel = U12;
 type LabelOverhead = U10;
 type LabelBuffer<CipherSuite> = Sum<
-    <<CipherSuite as TlsCipherSuite>::Hash as OutputSizeUser>::OutputSize,
+    <<CipherSuite as TlsCipherSuite>::Hash as TlsHash>::OutputSize,
     Sum<LongestLabel, LabelOverhead>,
 >;
 
 /// Represents a TLS 1.3 cipher suite
 pub trait TlsCipherSuite {
     const CODE_POINT: u16;
-    type Cipher: KeyInit<KeySize = Self::KeyLen> + AeadInPlace<NonceSize = Self::IvLen>;
+    type Cipher: TlsCipher<KeySize = Self::KeyLen, NonceSize = Self::IvLen>;
     type KeyLen: ArrayLength<u8>;
     type IvLen: ArrayLength<u8>;
 
-    type Hash: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser + FixedOutput;
+    type Hash: TlsHash;
     type LabelBufferSize: ArrayLength<u8>;
+
+    /// HMAC implementation for key schedule operations.
+    type Hmac: TlsHmac<OutputSize = <Self::Hash as TlsHash>::OutputSize>;
+    /// HKDF implementation for key derivation.
+    type Hkdf: TlsHkdf<OutputSize = <Self::Hash as TlsHash>::OutputSize>;
 }
 
 pub struct Aes128GcmSha256;
 impl TlsCipherSuite for Aes128GcmSha256 {
     const CODE_POINT: u16 = CipherSuite::TlsAes128GcmSha256 as u16;
-    type Cipher = Aes128Gcm;
+    type Cipher = SoftwareCipher<Aes128Gcm>;
     type KeyLen = U16;
     type IvLen = U12;
 
-    type Hash = Sha256;
+    type Hash = SoftwareHash<Sha256>;
     type LabelBufferSize = LabelBuffer<Self>;
+
+    type Hmac = SoftwareHmac<Sha256>;
+    type Hkdf = SoftwareHkdf<Sha256>;
 }
 
 pub struct Aes256GcmSha384;
 impl TlsCipherSuite for Aes256GcmSha384 {
     const CODE_POINT: u16 = CipherSuite::TlsAes256GcmSha384 as u16;
-    type Cipher = Aes256Gcm;
+    type Cipher = SoftwareCipher<Aes256Gcm>;
     type KeyLen = U32;
     type IvLen = U12;
 
-    type Hash = Sha384;
+    type Hash = SoftwareHash<Sha384>;
     type LabelBufferSize = LabelBuffer<Self>;
+
+    type Hmac = SoftwareHmac<Sha384>;
+    type Hkdf = SoftwareHkdf<Sha384>;
 }
 
 /// A TLS 1.3 verifier.
@@ -224,11 +234,13 @@ impl<RNG: CryptoRngCore> UnsecureProvider<'_, (), RNG> {
 }
 
 impl<'a, CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> UnsecureProvider<'a, CipherSuite, RNG> {
+    #[must_use]
     pub fn with_priv_key(mut self, priv_key: &'a [u8]) -> Self {
         self.priv_key = Some(priv_key);
         self
     }
 
+    #[must_use]
     pub fn with_cert(mut self, cert: Certificate<&'a [u8]>) -> Self {
         self.client_cert = Some(cert);
         self
@@ -361,11 +373,11 @@ impl<'a> TlsConfig<'a> {
         self
     }
 
-    /// Configure ALPN protocol names to send in the ClientHello.
+    /// Configure ALPN protocol names to send in the `ClientHello`.
     ///
     /// The server will select one of the offered protocols and echo it back
-    /// in EncryptedExtensions. This is required for endpoints that multiplex
-    /// protocols on a single port (e.g. AWS IoT Core MQTT over port 443).
+    /// in `EncryptedExtensions`. This is required for endpoints that multiplex
+    /// protocols on a single port (e.g. AWS `IoT` Core MQTT over port 443).
     pub fn with_alpn(mut self, protocols: &'a [&'a [u8]]) -> Self {
         self.alpn_protocols = Some(protocols);
         self

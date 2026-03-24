@@ -4,11 +4,12 @@ use crate::TlsError;
 use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
 use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::{Handshake, State, decrypt_record};
+use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::flush_policy::FlushPolicy;
 use crate::key_schedule::KeySchedule;
 use crate::key_schedule::{ReadKeySchedule, WriteKeySchedule};
 use crate::read_buffer::ReadBuffer;
-use crate::record::{ClientRecord, ClientRecordHeader};
+use crate::record::{ClientRecord, ClientRecordHeader, ServerRecord};
 use crate::record_reader::{RecordReader, RecordReaderBorrowMut};
 use crate::write_buffer::{WriteBuffer, WriteBufferBorrowMut};
 use embedded_io::Error as _;
@@ -124,6 +125,404 @@ where
             state = next_state;
         }
         *self.opened.get_mut() = true;
+
+        Ok(())
+    }
+
+    /// Open a TLS server connection, performing the server-side handshake.
+    #[allow(clippy::too_many_lines, clippy::needless_continue, clippy::match_same_arms)]
+    pub async fn open_server<Provider>(
+        &mut self,
+        context: crate::server_config::TlsServerContext<'_, Provider>,
+    ) -> Result<(), TlsError>
+    where
+        Provider: CryptoProvider<CipherSuite = CipherSuite>,
+    {
+        use crate::connection::decrypt_record;
+        use crate::handshake::ServerHandshake;
+        use crate::server::{
+            compute_ecdh, encode_certificate, encode_certificate_verify,
+            encode_certificate_request, encode_encrypted_extensions,
+            encode_finished, encode_hello_retry_request, encode_server_hello,
+            OwnedAlpn, OwnedKeyShare,
+        };
+        use crate::extensions::extension_data::key_share::KeyShareEntry;
+        use p256::elliptic_curve::rand_core::RngCore;
+        use signature::SignerMut;
+
+        let crate::server_config::TlsServerContext {
+            config: server_config,
+            mut crypto_provider,
+        } = context;
+
+        // === Step 1: Read ClientHello, extract session_id, ALPN, find best key share ===
+        let mut session_id_buf = [0u8; 32];
+        let session_id_len: usize;
+        let mut owned_key_share: Option<OwnedKeyShare> = None;
+        let mut owned_alpn = OwnedAlpn::new();
+        let mut did_hrr = false;
+
+        {
+            let record = self
+                .record_reader
+                .read(&mut self.delegate, self.key_schedule.read_state())
+                .await?;
+
+            match record {
+                ServerRecord::Handshake(ServerHandshake::ClientHello(ref ch)) => {
+                    // Copy session_id
+                    session_id_len = ch.session_id.len().min(32);
+                    session_id_buf[..session_id_len]
+                        .copy_from_slice(&ch.session_id[..session_id_len]);
+
+                    // Copy ALPN protocols
+                    for proto in &ch.alpn_protocols {
+                        if owned_alpn.count < 4 {
+                            let plen = proto.len().min(32);
+                            owned_alpn.data[owned_alpn.count][..plen]
+                                .copy_from_slice(&proto[..plen]);
+                            owned_alpn.lens[owned_alpn.count] = plen;
+                            owned_alpn.count += 1;
+                        }
+                    }
+
+                    // Find best key share: prefer X25519, then P-256
+                    #[cfg(feature = "x25519")]
+                    {
+                        for share in &ch.key_shares {
+                            if share.group == NamedGroup::X25519 {
+                                let mut ks = OwnedKeyShare {
+                                    group: NamedGroup::X25519,
+                                    bytes: [0u8; 65],
+                                    len: share.opaque.len().min(65),
+                                };
+                                ks.bytes[..ks.len]
+                                    .copy_from_slice(&share.opaque[..ks.len]);
+                                owned_key_share = Some(ks);
+                                break;
+                            }
+                        }
+                    }
+                    if owned_key_share.is_none() {
+                        for share in &ch.key_shares {
+                            if share.group == NamedGroup::Secp256r1 {
+                                let mut ks = OwnedKeyShare {
+                                    group: NamedGroup::Secp256r1,
+                                    bytes: [0u8; 65],
+                                    len: share.opaque.len().min(65),
+                                };
+                                ks.bytes[..ks.len]
+                                    .copy_from_slice(&share.opaque[..ks.len]);
+                                owned_key_share = Some(ks);
+                                break;
+                            }
+                        }
+                    }
+                }
+                _ => return Err(TlsError::InvalidHandshake),
+            }
+        }
+
+        // === Step 2: HRR if no supported key share found ===
+        if owned_key_share.is_none() {
+            // Replace transcript with message_hash construct
+            self.key_schedule.replace_transcript_with_message_hash()?;
+
+            // Send HelloRetryRequest requesting P-256
+            {
+                let (wks, rks) = self.key_schedule.as_split();
+                let sid = &session_id_buf[..session_id_len];
+                let slice = self.record_write_buf.write_handshake_record(
+                    false,
+                    wks,
+                    rks.transcript_hash(),
+                    |buf| {
+                        encode_hello_retry_request(
+                            buf,
+                            sid,
+                            CipherSuite::CODE_POINT,
+                            NamedGroup::Secp256r1,
+                        )
+                    },
+                )?;
+                self.delegate
+                    .write_all(slice)
+                    .await
+                    .map_err(|e| TlsError::Io(e.kind()))?;
+            }
+
+            // Send CCS
+            {
+                let ccs = [0x14, 0x03, 0x03, 0x00, 0x01, 0x01];
+                self.delegate
+                    .write_all(&ccs)
+                    .await
+                    .map_err(|e| TlsError::Io(e.kind()))?;
+                self.delegate
+                    .flush()
+                    .await
+                    .map_err(|e| TlsError::Io(e.kind()))?;
+            }
+            did_hrr = true;
+
+            // Read CH2 (may get CCS first)
+            loop {
+                let record = self
+                    .record_reader
+                    .read(&mut self.delegate, self.key_schedule.read_state())
+                    .await?;
+
+                match record {
+                    ServerRecord::ChangeCipherSpec(_) => continue,
+                    ServerRecord::Handshake(ServerHandshake::ClientHello(ref ch)) => {
+                        // Find P-256 key share in retry
+                        for share in &ch.key_shares {
+                            if share.group == NamedGroup::Secp256r1 {
+                                let mut ks = OwnedKeyShare {
+                                    group: NamedGroup::Secp256r1,
+                                    bytes: [0u8; 65],
+                                    len: share.opaque.len().min(65),
+                                };
+                                ks.bytes[..ks.len]
+                                    .copy_from_slice(&share.opaque[..ks.len]);
+                                owned_key_share = Some(ks);
+                                break;
+                            }
+                        }
+                        if owned_key_share.is_none() {
+                            return Err(TlsError::InvalidKeyShare);
+                        }
+                        break;
+                    }
+                    _ => return Err(TlsError::InvalidHandshake),
+                }
+            }
+        }
+
+        let key_share = owned_key_share.ok_or(TlsError::InvalidKeyShare)?;
+
+        // === Step 3: ECDH via compute_ecdh() ===
+        let ks_entry = KeyShareEntry {
+            group: key_share.group,
+            opaque: &key_share.bytes[..key_share.len],
+        };
+        let (server_pub_key, shared_secret, group) =
+            compute_ecdh(&ks_entry, &mut crypto_provider.rng())?;
+
+        // === Step 3b: Initialize early secret ===
+        self.key_schedule.initialize_early_secret(None)?;
+
+        // === Step 4: Send ServerHello (6-arg with NamedGroup) ===
+        let mut server_random = [0u8; 32];
+        crypto_provider.rng().fill_bytes(&mut server_random);
+        {
+            let (wks, rks) = self.key_schedule.as_split();
+            let sid = &session_id_buf[..session_id_len];
+            let slice = self.record_write_buf.write_handshake_record(
+                false,
+                wks,
+                rks.transcript_hash(),
+                |buf| {
+                    encode_server_hello(
+                        buf,
+                        &server_random,
+                        sid,
+                        CipherSuite::CODE_POINT,
+                        &server_pub_key,
+                        group,
+                    )
+                },
+            )?;
+            self.delegate
+                .write_all(slice)
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.delegate
+                .flush()
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+        }
+
+        // === Step 5: Initialize handshake secret (server mode) ===
+        self.key_schedule
+            .initialize_handshake_secret_server(&shared_secret)?;
+
+        // === Step 6: Send CCS (if not already sent in HRR) ===
+        if !did_hrr {
+            let ccs = [0x14, 0x03, 0x03, 0x00, 0x01, 0x01];
+            self.delegate
+                .write_all(&ccs)
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+        }
+
+        // === Step 7: Negotiate ALPN ===
+        let selected_alpn: Option<usize> = if let Some(server_protos) = server_config.alpn_protocols
+        {
+            let mut found = None;
+            'outer: for sp in server_protos {
+                for i in 0..owned_alpn.count {
+                    let client_proto = &owned_alpn.data[i][..owned_alpn.lens[i]];
+                    if *sp == client_proto {
+                        found = Some(i);
+                        break 'outer;
+                    }
+                }
+            }
+            found
+        } else {
+            None
+        };
+
+        // === Step 8: Send EncryptedExtensions with ALPN ===
+        {
+            let alpn_slice: Option<&[u8]> = selected_alpn
+                .map(|i| &owned_alpn.data[i][..owned_alpn.lens[i]] as &[u8]);
+            let (wks, rks) = self.key_schedule.as_split();
+            let slice = self.record_write_buf.write_handshake_record(
+                true,
+                wks,
+                rks.transcript_hash(),
+                |buf| encode_encrypted_extensions(buf, alpn_slice),
+            )?;
+            self.delegate
+                .write_all(slice)
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.key_schedule.write_state().increment_counter();
+        }
+
+        // === Step 9: If client_auth, send CertificateRequest ===
+        if server_config.client_auth {
+            let (wks, rks) = self.key_schedule.as_split();
+            let slice = self.record_write_buf.write_handshake_record(
+                true,
+                wks,
+                rks.transcript_hash(),
+                encode_certificate_request,
+            )?;
+            self.delegate
+                .write_all(slice)
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.key_schedule.write_state().increment_counter();
+        }
+
+        // === Step 10: Send Certificate (encrypted) ===
+        {
+            let (wks, rks) = self.key_schedule.as_split();
+            let slice = self.record_write_buf.write_handshake_record(
+                true,
+                wks,
+                rks.transcript_hash(),
+                |buf| encode_certificate(buf, server_config.cert_chain),
+            )?;
+            self.delegate
+                .write_all(slice)
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.key_schedule.write_state().increment_counter();
+        }
+
+        // === Step 11: Send CertificateVerify (encrypted) ===
+        {
+            use crate::crypto_ops::TlsHash;
+            let transcript_hash = self.key_schedule.transcript_hash().clone().finalize();
+            let (mut signing_key, signature_scheme) = crypto_provider
+                .signer()
+                .map_err(|_| TlsError::InvalidPrivateKey)?;
+
+            let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
+            let mut msg: heapless::Vec<u8, 146> = heapless::Vec::new();
+            msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
+            msg.extend_from_slice(ctx_str)
+                .map_err(|_| TlsError::EncodeError)?;
+            msg.extend_from_slice(&transcript_hash)
+                .map_err(|_| TlsError::EncodeError)?;
+
+            let signature = signing_key.sign(&msg);
+            let sig_bytes = signature.as_ref();
+
+            let (wks, rks) = self.key_schedule.as_split();
+            let slice = self.record_write_buf.write_handshake_record(
+                true,
+                wks,
+                rks.transcript_hash(),
+                |buf| encode_certificate_verify(buf, signature_scheme.as_u16(), sig_bytes),
+            )?;
+            self.delegate
+                .write_all(slice)
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.key_schedule.write_state().increment_counter();
+        }
+
+        // === Step 12: Send Finished (encrypted) ===
+        {
+            let finished = self.key_schedule.create_client_finished()?;
+            let verify_data: heapless::Vec<u8, 64> = heapless::Vec::from_slice(&finished.verify)
+                .map_err(|_| TlsError::EncodeError)?;
+
+            let (wks, rks) = self.key_schedule.as_split();
+            let slice = self.record_write_buf.write_handshake_record(
+                true,
+                wks,
+                rks.transcript_hash(),
+                |buf| encode_finished(buf, &verify_data),
+            )?;
+            self.delegate
+                .write_all(slice)
+                .await
+                .map_err(|e| TlsError::Io(e.kind()))?;
+            self.key_schedule.write_state().increment_counter();
+        }
+
+        // === Step 13: Capture transcript for application secrets ===
+        let traffic_hash = self.key_schedule.transcript_hash().clone();
+
+        // === Step 14: Read client messages (CCS, Certificate, CertificateVerify, Finished) ===
+        loop {
+            let record = self
+                .record_reader
+                .read(&mut self.delegate, self.key_schedule.read_state())
+                .await?;
+
+            if let ServerRecord::ChangeCipherSpec(_) = &record { continue }
+
+            let mut finished_ok = false;
+            decrypt_record(
+                self.key_schedule.read_state(),
+                record,
+                |key_schedule, record| match record {
+                    ServerRecord::Handshake(ServerHandshake::Finished(finished)) => {
+                        if !key_schedule.verify_server_finished(&finished)? {
+                            warn!("Client Finished verification failed");
+                            return Err(TlsError::InvalidSignature);
+                        }
+                        finished_ok = true;
+                        Ok(())
+                    }
+                    ServerRecord::Handshake(ServerHandshake::Certificate(_)) => Ok(()),
+                    ServerRecord::Handshake(ServerHandshake::CertificateVerify(_)) => Ok(()),
+                    ServerRecord::ChangeCipherSpec(_) => Ok(()),
+                    _ => Err(TlsError::InvalidHandshake),
+                },
+            )?;
+
+            if finished_ok {
+                break;
+            }
+        }
+
+        // === Step 15: Initialize master secret ===
+        self.key_schedule.replace_transcript_hash(traffic_hash);
+        self.key_schedule.initialize_master_secret_server()?;
+
+        *self.opened.get_mut() = true;
+        self.delegate
+            .flush()
+            .await
+            .map_err(|e| TlsError::Io(e.kind()))?;
 
         Ok(())
     }
