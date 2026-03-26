@@ -156,6 +156,8 @@ where
         } = context;
 
         // === Step 1: Read ClientHello, extract session_id, ALPN, find best key share ===
+        #[cfg(feature = "defmt")]
+        defmt::info!("TLS server: step 1 — reading ClientHello");
         let mut session_id_buf = [0u8; 32];
         let session_id_len: usize;
         let mut owned_key_share: Option<OwnedKeyShare> = None;
@@ -167,6 +169,8 @@ where
                 .record_reader
                 .read(&mut self.delegate, self.key_schedule.read_state())
                 .await?;
+            #[cfg(feature = "defmt")]
+            defmt::info!("TLS server: ClientHello record read OK");
 
             match record {
                 ServerRecord::Handshake(ServerHandshake::ClientHello(ref ch)) => {
@@ -224,6 +228,8 @@ where
         }
 
         // === Step 2: HRR if no supported key share found ===
+        #[cfg(feature = "defmt")]
+        defmt::info!("TLS server: step 2 — key_share found={}", owned_key_share.is_some());
         if owned_key_share.is_none() {
             // Replace transcript with message_hash construct
             self.key_schedule.replace_transcript_with_message_hash()?;
@@ -302,6 +308,8 @@ where
         let key_share = owned_key_share.ok_or(TlsError::InvalidKeyShare)?;
 
         // === Step 3: ECDH via compute_ecdh() ===
+        #[cfg(feature = "defmt")]
+        defmt::info!("TLS server: step 3 — computing ECDH");
         let ks_entry = KeyShareEntry {
             group: key_share.group,
             opaque: &key_share.bytes[..key_share.len],
@@ -312,6 +320,8 @@ where
         // === Step 3b: Initialize early secret ===
         self.key_schedule.initialize_early_secret(None)?;
 
+        #[cfg(feature = "defmt")]
+        defmt::info!("TLS server: step 3 ECDH done, step 4 — sending ServerHello");
         // === Step 4: Send ServerHello (6-arg with NamedGroup) ===
         let mut server_random = [0u8; 32];
         crypto_provider.rng().fill_bytes(&mut server_random);
