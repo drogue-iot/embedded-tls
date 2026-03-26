@@ -194,6 +194,7 @@ where
 
 /// Parsed `ClientHello` for server-side processing.
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ParsedClientHello<'a> {
     pub session_id: &'a [u8],
     pub key_shares: Vec<KeyShareEntry<'a>, 4>,
