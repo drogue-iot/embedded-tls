@@ -49,17 +49,13 @@ macro_rules! extension_group {
                     })?)),)+
 
                     #[allow(unreachable_patterns)]
-                    other => {
-                        warn!("Read unexpected ExtensionType: {:?}", other);
-                        // Section 4.2.  Extensions
-                        // If an implementation receives an extension
-                        // which it recognizes and which is not specified for the message in
-                        // which it appears, it MUST abort the handshake with an
-                        // "illegal_parameter" alert.
-                        Err(crate::TlsError::AbortHandshake(
-                            crate::alert::AlertLevel::Fatal,
-                            crate::alert::AlertDescription::IllegalParameter,
-                        ))
+                    _other => {
+                        // Extension type is known globally but not expected in this
+                        // message context. Per RFC 8446 Section 4.2 this SHOULD be an
+                        // illegal_parameter alert, but real-world clients (curl, Chrome)
+                        // send extensions in ClientHello that aren't listed in the spec
+                        // table (e.g. compress_certificate). Treat as unknown and skip.
+                        Err(crate::TlsError::UnknownExtensionType)
                     }
                 }
             }

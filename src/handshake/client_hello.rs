@@ -228,7 +228,7 @@ impl<'a> ParsedClientHello<'a> {
             .map_err(|_| TlsError::InvalidHandshake)?;
 
         // Extensions
-        let extensions = ClientHelloExtension::parse_vector::<16>(buf)?;
+        let extensions = ClientHelloExtension::parse_vector::<24>(buf)?;
 
         let mut key_shares = Vec::new();
         let mut alpn_protocols = Vec::new();
