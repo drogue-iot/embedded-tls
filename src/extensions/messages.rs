@@ -39,7 +39,8 @@ extension_group! {
         Cookie(Unimplemented<'a>),
         CertificateAuthorities(Unimplemented<'a>),
         OidFilters(Unimplemented<'a>),
-        PostHandshakeAuth(Unimplemented<'a>)
+        PostHandshakeAuth(Unimplemented<'a>),
+        CompressCertificate(Unimplemented<'a>)
     }
 }
 
