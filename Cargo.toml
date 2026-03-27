@@ -17,7 +17,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 portable-atomic = { version = "1.6.0", default-features = false }
-p256 = { version = "0.13", default-features = false, features = [ "ecdh", "ecdsa", "sha256" ] }
+p256 = { version = "0.13", default-features = false, features = [ "ecdh", "ecdsa", "sha256", "pkcs8" ] }
 p384 = { version = "0.13", default-features = false, features = [ "ecdsa", "sha384" ], optional = true }
 ed25519-dalek = { version = "2.2", default-features = false, optional = true }
 rsa = { version = "0.9.9", default-features = false, features = ["sha2"], optional = true }

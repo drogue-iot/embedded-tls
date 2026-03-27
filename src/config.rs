@@ -262,8 +262,13 @@ impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
     ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
     {
         let key_der = self.priv_key.ok_or(TlsError::InvalidPrivateKey)?;
-        let secret_key =
-            SecretKey::from_sec1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
+        // Try SEC1 first, then PKCS#8 (OpenSSL defaults to PKCS#8 for "PRIVATE KEY")
+        let secret_key = SecretKey::from_sec1_der(key_der)
+            .or_else(|_| {
+                use p256::pkcs8::DecodePrivateKey;
+                SecretKey::from_pkcs8_der(key_der)
+            })
+            .map_err(|_| TlsError::InvalidPrivateKey)?;
 
         Ok((
             SigningKey::from(&secret_key),
