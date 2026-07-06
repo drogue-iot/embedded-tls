@@ -49,16 +49,20 @@ cat im-server-cert.pem im-cert.pem > chain-cert.pem
 # ---------- EC P-256 Server (signed directly by root) ----------
 openssl ecparam -name prime256v1 -genkey -noout -out server-key.pem
 openssl req -new -sha256 -key server-key.pem -out server.csr \
-    -subj "/CN=Test Server"
+    -subj "/CN=Test Server" \
+    -addext "basicConstraints=critical,CA:FALSE"
 openssl x509 -req -in server.csr -CA ca-cert.pem -CAkey ca-key.pem \
-    -CAcreateserial -out server-cert.pem -days "$DAYS" -sha256
+    -CAcreateserial -out server-cert.pem -days "$DAYS" -sha256 \
+    -copy_extensions copy
 
 # ---------- EC P-256 Client (signed by root) ----------
 openssl ecparam -name prime256v1 -genkey -noout -out client-key.pem
 openssl req -new -sha256 -key client-key.pem -out client.csr \
-    -subj "/CN=Test Client"
+    -subj "/CN=Test Client" \
+    -addext "basicConstraints=critical,CA:FALSE"
 openssl x509 -req -in client.csr -CA ca-cert.pem -CAkey ca-key.pem \
-    -CAcreateserial -out client-cert.pem -days "$DAYS" -sha256
+    -CAcreateserial -out client-cert.pem -days "$DAYS" -sha256 \
+    -copy_extensions copy
 
 # ---------- RSA 2048 CA (for negative / cross-format tests) ----------
 openssl req -x509 -newkey rsa:2048 -keyout rsa-ca-key.pem -nodes \
@@ -68,18 +72,20 @@ openssl req -x509 -newkey rsa:2048 -keyout rsa-ca-key.pem -nodes \
 # ---------- RSA Server ----------
 openssl req -newkey rsa:2048 -keyout rsa-server-key.pem -nodes \
     -out rsa-server-cert.csr -sha256 \
-    -subj "/CN=localhost"
+    -subj "/CN=localhost" \
+    -addext "basicConstraints=critical,CA:FALSE"
 openssl x509 -req -CA rsa-ca-cert.pem -CAkey rsa-ca-key.pem \
     -in rsa-server-cert.csr -out rsa-server-cert.pem \
-    -days "$DAYS" -CAcreateserial
+    -days "$DAYS" -CAcreateserial -copy_extensions copy
 
 # ---------- RSA Client ----------
 openssl req -newkey rsa:2048 -keyout rsa-client-key.pem -nodes \
     -out rsa-client-cert.csr -sha256 \
-    -subj "/CN=Test RSA Client"
+    -subj "/CN=Test RSA Client" \
+    -addext "basicConstraints=critical,CA:FALSE"
 openssl x509 -req -CA rsa-ca-cert.pem -CAkey rsa-ca-key.pem \
     -in rsa-client-cert.csr -out rsa-client-cert.pem \
-    -days "$DAYS" -CAcreateserial
+    -days "$DAYS" -CAcreateserial -copy_extensions copy
 
 # ---------- Cleanup CSR serial files ----------
 rm -f *.srl
