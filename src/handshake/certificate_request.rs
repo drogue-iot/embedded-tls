@@ -1,7 +1,8 @@
+use heapless::Vec;
+
 use crate::extensions::messages::CertificateRequestExtension;
 use crate::parse_buffer::ParseBuffer;
 use crate::{TlsError, unused};
-use heapless::Vec;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
