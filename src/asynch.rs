@@ -217,6 +217,20 @@ where
         } else {
             Err(TlsError::MissingHandshake)
         }
+    }    
+    
+    /// Get whether the socket is ready to receive data, i.e. whether there is some pending data in the receive buffer.
+    /// This function needs to decrypt the provided data first
+    pub async fn check_can_recv(&mut self) -> Result<bool, TlsError> {
+        if self.is_opened() {
+            if self.decrypted.is_empty() {
+                self.read_application_data().await?;
+            }
+
+            Ok(!self.decrypted.is_empty())
+        } else {
+            Err(TlsError::MissingHandshake)
+        }
     }
 
     async fn read_application_data(&mut self) -> Result<(), TlsError> {
