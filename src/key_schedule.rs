@@ -245,6 +245,7 @@ where
     /// Replace the transcript with a synthetic `message_hash` construct.
     /// Used after sending `HelloRetryRequest` per RFC 8446 Section 4.4.1.
     #[allow(clippy::unnecessary_wraps)]
+    #[cfg(feature = "server")]
     pub fn replace_transcript_with_message_hash(&mut self) -> Result<(), TlsError> {
         let hash = self.server_state.transcript_hash.clone().finalize();
         self.server_state.transcript_hash = CipherSuite::Hash::new();
@@ -369,6 +370,7 @@ where
         self.shared.derived()
     }
 
+    #[cfg(feature = "server")]
     pub fn initialize_handshake_secret_server(&mut self, ikm: &[u8]) -> Result<(), TlsError> {
         self.shared.initialize(ikm);
         // Swap labels: server writes with "s hs traffic", reads with "c hs traffic"
@@ -376,6 +378,7 @@ where
         self.shared.derived()
     }
 
+    #[cfg(feature = "server")]
     pub fn initialize_master_secret_server(&mut self) -> Result<(), TlsError> {
         self.shared.initialize(Self::zero().as_slice());
         self.calculate_traffic_secrets(b"s ap traffic", b"c ap traffic")?;

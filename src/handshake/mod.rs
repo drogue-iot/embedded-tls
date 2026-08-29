@@ -5,7 +5,9 @@ use crate::crypto_ops::TlsHash;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_request::CertificateRequestRef;
 use crate::handshake::certificate_verify::{CertificateVerify, CertificateVerifyRef};
-use crate::handshake::client_hello::{ClientHello, ParsedClientHello};
+use crate::handshake::client_hello::ClientHello;
+#[cfg(feature = "server")]
+use crate::handshake::client_hello::ParsedClientHello;
 use crate::handshake::encrypted_extensions::EncryptedExtensions;
 use crate::handshake::finished::Finished;
 use crate::handshake::new_session_ticket::NewSessionTicket;
@@ -128,6 +130,7 @@ where
 
 #[allow(clippy::large_enum_variant)]
 pub enum ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
+    #[cfg(feature = "server")]
     ClientHello(ParsedClientHello<'a>),
     ServerHello(ServerHello<'a>),
     EncryptedExtensions(EncryptedExtensions<'a>),
@@ -142,6 +145,7 @@ impl<CipherSuite: TlsCipherSuite> ServerHandshake<'_, CipherSuite> {
     #[allow(dead_code)]
     pub fn handshake_type(&self) -> HandshakeType {
         match self {
+            #[cfg(feature = "server")]
             ServerHandshake::ClientHello(_) => HandshakeType::ClientHello,
             ServerHandshake::ServerHello(_) => HandshakeType::ServerHello,
             ServerHandshake::EncryptedExtensions(_) => HandshakeType::EncryptedExtensions,
@@ -157,6 +161,7 @@ impl<CipherSuite: TlsCipherSuite> ServerHandshake<'_, CipherSuite> {
 impl<CipherSuite: TlsCipherSuite> Debug for ServerHandshake<'_, CipherSuite> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            #[cfg(feature = "server")]
             ServerHandshake::ClientHello(inner) => Debug::fmt(inner, f),
             ServerHandshake::ServerHello(inner) => Debug::fmt(inner, f),
             ServerHandshake::EncryptedExtensions(inner) => Debug::fmt(inner, f),
@@ -211,6 +216,7 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
         let content_len = buf.read_u24().map_err(|_| TlsError::InvalidHandshake)?;
 
         let handshake = match handshake_type {
+            #[cfg(feature = "server")]
             HandshakeType::ClientHello => {
                 let mut ch_buf = buf
                     .slice(content_len as usize)

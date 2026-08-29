@@ -72,7 +72,9 @@ mod parse_buffer;
 pub mod read_buffer;
 mod record;
 mod record_reader;
+#[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "server")]
 mod server_config;
 mod write_buffer;
 
@@ -84,6 +86,7 @@ pub use crypto_ops::{
 pub use extensions::extension_data::signature_algorithms::SignatureScheme;
 pub use handshake::certificate_verify::CertificateVerify;
 pub use rand_core::{CryptoRng, CryptoRngCore};
+#[cfg(feature = "server")]
 pub use server_config::{TlsServerConfig, TlsServerContext};
 
 #[cfg(feature = "webpki")]

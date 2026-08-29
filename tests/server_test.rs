@@ -1,3 +1,5 @@
+#![cfg(feature = "server")]
+
 //! TLS 1.3 server compliance tests.
 //!
 //! All compliance tests use `openssl s_client` as the client.

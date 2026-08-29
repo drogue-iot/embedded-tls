@@ -1,9 +1,10 @@
+#[cfg(feature = "server")]
+use crate::crypto_ops::TlsHash;
 use crate::{
     TlsError,
     buffer::CryptoBuffer,
     config::{TLS_RECORD_OVERHEAD, TlsCipherSuite},
     connection::encrypt,
-    crypto_ops::TlsHash,
     key_schedule::{ReadKeySchedule, WriteKeySchedule},
     record::{ClientRecord, ClientRecordHeader},
 };
@@ -109,6 +110,7 @@ impl<'a> WriteBuffer<'a> {
         )
     }
 
+    #[cfg(feature = "server")]
     pub fn write_handshake_record<CipherSuite>(
         &mut self,
         encrypted: bool,
@@ -308,6 +310,7 @@ where
     close_record(buffer, pos, current_header, write_key_schedule)
 }
 
+#[cfg(feature = "server")]
 fn write_handshake_record_inner<'a, CipherSuite>(
     buffer: &'a mut [u8],
     pos: &mut usize,

@@ -28,6 +28,9 @@ jobs:
       - name: Run `cargo ${{ matrix.subcmd }}` for library
         run: cargo ${{ matrix.subcmd }} --features webpki
 
+      - name: Run `cargo ${{ matrix.subcmd }}` for library with server
+        run: cargo ${{ matrix.subcmd }} --features webpki,server,rustpki
+
   example-ci:
     runs-on: ubuntu-latest
     strategy:

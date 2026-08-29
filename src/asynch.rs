@@ -4,12 +4,15 @@ use crate::TlsError;
 use crate::common::decrypted_buffer_info::DecryptedBufferInfo;
 use crate::common::decrypted_read_handler::DecryptedReadHandler;
 use crate::connection::{Handshake, State, decrypt_record};
+#[cfg(feature = "server")]
 use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::flush_policy::FlushPolicy;
 use crate::key_schedule::KeySchedule;
 use crate::key_schedule::{ReadKeySchedule, WriteKeySchedule};
 use crate::read_buffer::ReadBuffer;
-use crate::record::{ClientRecord, ClientRecordHeader, ServerRecord};
+#[cfg(feature = "server")]
+use crate::record::ServerRecord;
+use crate::record::{ClientRecord, ClientRecordHeader};
 use crate::record_reader::{RecordReader, RecordReaderBorrowMut};
 use crate::write_buffer::{WriteBuffer, WriteBufferBorrowMut};
 use embedded_io::Error as _;
@@ -130,6 +133,7 @@ where
     }
 
     /// Open a TLS server connection, performing the server-side handshake.
+    #[cfg(feature = "server")]
     #[allow(
         clippy::too_many_lines,
         clippy::needless_continue,

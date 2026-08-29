@@ -22,6 +22,7 @@ use crate::extensions::extension_data::supported_versions::{SupportedVersionsCli
 use crate::extensions::messages::ClientHelloExtension;
 use crate::handshake::{LEGACY_VERSION, Random};
 use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
+#[cfg(feature = "server")]
 use crate::parse_buffer::ParseBuffer;
 use crate::{CryptoProvider, buffer::CryptoBuffer};
 
@@ -195,12 +196,14 @@ where
 /// Parsed `ClientHello` for server-side processing.
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg(feature = "server")]
 pub struct ParsedClientHello<'a> {
     pub session_id: &'a [u8],
     pub key_shares: Vec<KeyShareEntry<'a>, 4>,
     pub alpn_protocols: Vec<&'a [u8], 4>,
 }
 
+#[cfg(feature = "server")]
 impl<'a> ParsedClientHello<'a> {
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<Self, TlsError> {
         let legacy_version = buf.read_u16().map_err(|_| TlsError::InvalidHandshake)?;
