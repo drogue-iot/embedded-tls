@@ -384,7 +384,12 @@ impl<'a> TlsConfig<'a> {
     ///
     /// The server will select one of the offered protocols and echo it back
     /// in `EncryptedExtensions`. This is required for endpoints that multiplex
-    /// protocols on a single port (e.g. AWS `IoT` Core MQTT over port 443).
+    /// protocols on a single port (e.g. AWS IoT Core MQTT over port 443).
+    ///
+    /// At most [`MAX_ALPN_PROTOCOLS`](crate::extensions::extension_data::alpn::MAX_ALPN_PROTOCOLS)
+    /// protocols may be offered; more returns `TlsError::OutOfMemory` when the
+    /// ClientHello is encoded.
+    #[allow(clippy::doc_markdown)]
     pub fn with_alpn(mut self, protocols: &'a [&'a [u8]]) -> Self {
         self.alpn_protocols = Some(protocols);
         self
