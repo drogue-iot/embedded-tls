@@ -1,13 +1,12 @@
+use crate::crypto_ops::{TlsHash, TlsHkdf, TlsHmac};
 use crate::handshake::binder::PskBinder;
 use crate::handshake::finished::Finished;
-use crate::crypto_ops::{TlsHash, TlsHkdf, TlsHmac};
 use crate::{TlsError, config::TlsCipherSuite};
 use digest::generic_array::ArrayLength;
 use digest::generic_array::{GenericArray, typenum::Unsigned};
 
 pub type HashOutputSize<CipherSuite> =
     <<CipherSuite as TlsCipherSuite>::Hash as TlsHash>::OutputSize;
-pub type LabelBufferSize<CipherSuite> = <CipherSuite as TlsCipherSuite>::LabelBufferSize;
 
 pub type IvArray<CipherSuite> = GenericArray<u8, <CipherSuite as TlsCipherSuite>::IvLen>;
 pub type KeyArray<CipherSuite> = GenericArray<u8, <CipherSuite as TlsCipherSuite>::KeyLen>;
@@ -42,21 +41,22 @@ where
         context_type: ContextType<CipherSuite>,
     ) -> Result<GenericArray<u8, N>, TlsError> {
         //info!("make label {:?} {}", label, len);
-        let mut hkdf_label = heapless_typenum::Vec::<u8, LabelBufferSize<CipherSuite>>::new();
+        // Max label buffer: hash_output (up to 48 for SHA-384) + 12 (longest label) + 10 (overhead) = 70
+        let mut hkdf_label = heapless::Vec::<u8, 70>::new();
         hkdf_label
             .extend_from_slice(&N::to_u16().to_be_bytes())
-            .map_err(|()| TlsError::InternalError)?;
+            .map_err(|_| TlsError::InternalError)?;
 
         let label_len = 6 + label.len() as u8;
         hkdf_label
             .extend_from_slice(&label_len.to_be_bytes())
-            .map_err(|()| TlsError::InternalError)?;
+            .map_err(|_| TlsError::InternalError)?;
         hkdf_label
             .extend_from_slice(b"tls13 ")
-            .map_err(|()| TlsError::InternalError)?;
+            .map_err(|_| TlsError::InternalError)?;
         hkdf_label
             .extend_from_slice(label)
-            .map_err(|()| TlsError::InternalError)?;
+            .map_err(|_| TlsError::InternalError)?;
 
         match context_type {
             ContextType::None => {
@@ -65,10 +65,10 @@ where
             ContextType::Hash(context) => {
                 hkdf_label
                     .extend_from_slice(&(context.len() as u8).to_be_bytes())
-                    .map_err(|()| TlsError::InternalError)?;
+                    .map_err(|_| TlsError::InternalError)?;
                 hkdf_label
                     .extend_from_slice(&context)
-                    .map_err(|()| TlsError::InternalError)?;
+                    .map_err(|_| TlsError::InternalError)?;
             }
         }
 
@@ -203,11 +203,7 @@ where
     }
 
     fn empty_hash() -> Self {
-        Self::Hash(
-            CipherSuite::Hash::new()
-                .chain_update(&[])
-                .finalize(),
-        )
+        Self::Hash(CipherSuite::Hash::new().chain_update(&[]).finalize())
     }
 }
 
@@ -256,7 +252,9 @@ where
         // Synthetic message_hash: 0xFE + u24(hash_len) + hash_bytes
         let len = hash.len() as u32;
         self.server_state.transcript_hash.update(&[0xFE]);
-        self.server_state.transcript_hash.update(&len.to_be_bytes()[1..]);
+        self.server_state
+            .transcript_hash
+            .update(&len.to_be_bytes()[1..]);
         self.server_state.transcript_hash.update(&hash);
         Ok(())
     }
@@ -499,12 +497,10 @@ where
             )?;
         // info!("hmac sign key {:x?}", key);
         let mut hmac = CipherSuite::Hmac::new_from_slice(&key)?;
-        hmac.update(
-            finished.hash.as_ref().ok_or_else(|| {
-                warn!("No hash in Finished");
-                TlsError::InternalError
-            })?,
-        );
+        hmac.update(finished.hash.as_ref().ok_or_else(|| {
+            warn!("No hash in Finished");
+            TlsError::InternalError
+        })?);
         //let code = hmac.clone().finalize().into_bytes();
         Ok(hmac.verify(&finished.verify).is_ok())
         //info!("verified {:?}", verified);

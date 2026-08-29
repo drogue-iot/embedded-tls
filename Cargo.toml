@@ -11,6 +11,10 @@ license = "Apache-2.0"
 keywords = ["embedded", "async", "tls", "no_std", "network"]
 exclude = [".github"]
 
+[package.metadata.docs.rs]
+features = ["webpki", "rustpki", "rsa", "ed25519", "p384"]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 portable-atomic = { version = "1.6.0", default-features = false }
 p256 = { version = "0.13", default-features = false, features = [ "ecdh", "ecdsa", "sha256", "pkcs8" ] }
@@ -26,14 +30,13 @@ aes-gcm = { version = "0.10.1", default-features = false, features = ["aes"] }
 digest = { version = "0.10.3", default-features = false, features = [ "core-api" ] }
 typenum = { version = "1.15.0", default-features = false }
 heapless = { version = "0.9", default-features = false }
-heapless_typenum = { package = "heapless", version = "0.6", default-features = false }
 embedded-io = "0.7"
 embedded-io-async = "0.7"
 embedded-io-adapters = { version = "0.7", optional = true }
 generic-array = { version = "0.14", default-features = false }
 webpki = { package = "rustls-webpki", version = "0.101.7", default-features = false, optional = true }
 const-oid = { version = "0.10.1", optional = true }
-der = { version = "0.8.0-rc.2", features = ["derive", "oid", "time", "heapless"], optional = true }
+der = { version = "0.8.0-rc.2", features = ["derive", "oid", "heapless"], optional = true }
 signature = { version = "2.2", default-features = false }
 ecdsa = { version = "0.16.9", default-features = false }
 

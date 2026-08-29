@@ -7,6 +7,7 @@
     clippy::cast_sign_loss,
     clippy::missing_errors_doc // TODO
 )]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 /*!
 # Example

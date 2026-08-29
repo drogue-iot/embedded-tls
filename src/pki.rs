@@ -20,6 +20,8 @@ use crate::handshake::{
 use crate::parse_buffer::ParseError;
 use crate::crypto_ops::TlsHash;
 use core::marker::PhantomData;
+#[cfg(feature = "defmt")]
+use defmt::Debug2Format;
 use der::Decode;
 use heapless::Vec;
 
@@ -393,6 +395,9 @@ fn verify_certificate(
 
                 let verifying_key =
                     VerifyingKey::<Sha256>::from_pkcs1_der(ca_public_key).map_err(|e| {
+                        #[cfg(feature = "defmt")]
+                        error!("VerifyingKey: {:?}", Debug2Format(&e));
+                        #[cfg(not(feature = "defmt"))]
                         error!("VerifyingKey: {}", e);
                         TlsError::DecodeError
                     })?;
@@ -404,6 +409,9 @@ fn verify_certificate(
                         .ok_or(TlsError::ParseError(ParseError::InvalidData))?,
                 )
                 .map_err(|e| {
+                    #[cfg(feature = "defmt")]
+                    error!("Signature: {:?}", Debug2Format(&e));
+                    #[cfg(not(feature = "defmt"))]
                     error!("Signature: {}", e);
                     TlsError::ParseError(ParseError::InvalidData)
                 })?;
