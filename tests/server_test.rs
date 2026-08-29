@@ -740,3 +740,88 @@ fn test_alert_sent_when_client_hello_is_unacceptable() {
     );
     s.join().ok();
 }
+
+/// Transport that holds writes until `flush()`, modelling an embassy socket or
+/// any `BufWriter`-style delegate. A server that does not flush its handshake
+/// flight before awaiting the client's Finished will deadlock against this.
+struct BufferingTransport<T> {
+    inner: T,
+    pending: Vec<u8>,
+}
+
+impl<T: embedded_io::ErrorType> embedded_io::ErrorType for BufferingTransport<T> {
+    type Error = T::Error;
+}
+
+impl<T: embedded_io::Read> embedded_io::Read for BufferingTransport<T> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        self.inner.read(buf)
+    }
+}
+
+impl<T: embedded_io::Write> embedded_io::Write for BufferingTransport<T> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        self.pending.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        self.inner.write_all(&self.pending)?;
+        self.pending.clear();
+        self.inner.flush()
+    }
+}
+
+#[test]
+fn test_handshake_completes_over_a_buffering_transport() {
+    init_log();
+    let (listener, addr) = listen_random();
+    let (certs, key) = provider();
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+
+    std::thread::spawn(move || {
+        use embedded_io::Read as ER;
+        use embedded_io::Write as EW;
+        use embedded_io_adapters::std::FromStd;
+        let (stream, _) = listener.accept().unwrap();
+        let refs: Vec<&[u8]> = certs.iter().map(|c| c.as_slice()).collect();
+        let cfg = TlsServerConfig::new(&refs);
+        let ctx = TlsServerContext::new(
+            &cfg,
+            EcProvider {
+                rng: OsRng,
+                priv_key: key,
+            },
+        );
+        let mut rb = [0u8; 16384];
+        let mut wb = [0u8; 16384];
+        let transport = BufferingTransport {
+            inner: FromStd::new(stream),
+            pending: Vec::new(),
+        };
+        let mut tls: blocking::TlsConnection<_, Aes128GcmSha256> =
+            blocking::TlsConnection::new(transport, &mut rb, &mut wb);
+        let handshake_ok = tls.open_server(ctx).is_ok();
+        let _ = done_tx.send(handshake_ok);
+        if handshake_ok {
+            let mut rx = [0u8; 4096];
+            if let Ok(n) = ER::read(&mut tls, &mut rx) {
+                let _ = EW::write(&mut tls, &rx[..n]);
+                let _ = EW::flush(&mut tls);
+            }
+            let _ = tls.close();
+        }
+    });
+
+    std::thread::spawn(move || {
+        let _ = openssl_echo(addr, &[], b"buffered\n");
+    });
+
+    const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+    let handshake_ok = done_rx
+        .recv_timeout(HANDSHAKE_TIMEOUT)
+        .expect("handshake deadlocked on a buffering transport");
+
+    const EXPECTED_HANDSHAKE_OK: bool = true;
+    assert_eq!(handshake_ok, EXPECTED_HANDSHAKE_OK);
+}
