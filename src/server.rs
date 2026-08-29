@@ -18,9 +18,17 @@ pub(crate) struct OwnedKeyShare {
     pub len: usize,
 }
 
+/// Longest legal ALPN protocol name: the wire encoding length-prefixes each
+/// name with a single byte.
+pub(crate) const MAX_ALPN_NAME: usize = 255;
+
 /// Owned copy of ALPN protocols extracted from `ParsedClientHello`.
+///
+/// Names are stored whole. Truncating them would let a configured protocol
+/// compare equal to a longer offered one that merely shares a prefix, so the
+/// server would echo a protocol the client never offered.
 pub(crate) struct OwnedAlpn {
-    pub data: [[u8; 32]; 4],
+    pub data: [[u8; MAX_ALPN_NAME]; 4],
     pub lens: [usize; 4],
     pub count: usize,
 }
@@ -28,7 +36,7 @@ pub(crate) struct OwnedAlpn {
 impl OwnedAlpn {
     pub fn new() -> Self {
         Self {
-            data: [[0u8; 32]; 4],
+            data: [[0u8; MAX_ALPN_NAME]; 4],
             lens: [0; 4],
             count: 0,
         }

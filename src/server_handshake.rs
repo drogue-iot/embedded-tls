@@ -23,9 +23,9 @@ use crate::handshake::certificate::{
 use crate::key_schedule::KeySchedule;
 use crate::record::ServerRecord;
 use crate::server::{
-    OwnedAlpn, OwnedKeyShare, compute_ecdh, encode_certificate, encode_certificate_request,
-    encode_certificate_verify, encode_encrypted_extensions, encode_finished,
-    encode_hello_retry_request, encode_server_hello,
+    MAX_ALPN_NAME, OwnedAlpn, OwnedKeyShare, compute_ecdh, encode_certificate,
+    encode_certificate_request, encode_certificate_verify, encode_encrypted_extensions,
+    encode_finished, encode_hello_retry_request, encode_server_hello,
 };
 use crate::server_config::TlsServerConfig;
 #[cfg(feature = "rustpki")]
@@ -177,12 +177,18 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
             .copy_from_slice(&ch.session_id[..self.session_id_len]);
 
         for proto in &ch.alpn_protocols {
-            if self.alpn.count < 4 {
-                let plen = proto.len().min(32);
-                self.alpn.data[self.alpn.count][..plen].copy_from_slice(&proto[..plen]);
-                self.alpn.lens[self.alpn.count] = plen;
-                self.alpn.count += 1;
+            if self.alpn.count >= 4 {
+                break;
             }
+            if proto.len() > MAX_ALPN_NAME {
+                // Not a legal ALPN name; skip it rather than store a prefix
+                // that could half-match one of ours.
+                continue;
+            }
+            let len = proto.len();
+            self.alpn.data[self.alpn.count][..len].copy_from_slice(proto);
+            self.alpn.lens[self.alpn.count] = len;
+            self.alpn.count += 1;
         }
 
         // Prefer X25519, then P-256.

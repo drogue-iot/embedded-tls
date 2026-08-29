@@ -933,3 +933,22 @@ fn test_hrr_is_not_sent_for_an_unoffered_group() {
         },
     );
 }
+
+#[test]
+fn test_alpn_does_not_match_on_a_truncated_prefix() {
+    init_log();
+    // The client's 40-byte protocol shares its first 32 bytes with the
+    // server's. Comparing truncated copies calls that a match, so the server
+    // echoes a protocol the client never offered and the client aborts.
+    // Correctly, there is no match, and a no-match handshake still succeeds.
+    const SERVER_PROTO: &[u8] = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let client_proto = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbb";
+    test_both(
+        |c| c.with_alpn(&[SERVER_PROTO]),
+        move |addr| {
+            let (ok, resp, se) = openssl_echo(addr, &["-alpn", client_proto], b"prefix\n");
+            assert!(ok, "server matched a truncated ALPN prefix: {se}");
+            assert!(String::from_utf8_lossy(&resp).contains("prefix"));
+        },
+    );
+}
