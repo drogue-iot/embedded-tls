@@ -16,6 +16,10 @@ use crate::crypto_ops::TlsHash;
 use crate::extensions::extension_data::key_share::KeyShareEntry;
 use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::handshake::ServerHandshake as ServerHandshakeMessage;
+#[cfg(feature = "rustpki")]
+use crate::handshake::certificate::{
+    Certificate as OwnedCertificate, CertificateRef as ClientCertificate,
+};
 use crate::key_schedule::KeySchedule;
 use crate::record::ServerRecord;
 use crate::server::{
@@ -24,6 +28,8 @@ use crate::server::{
     encode_hello_retry_request, encode_server_hello,
 };
 use crate::server_config::TlsServerConfig;
+#[cfg(feature = "rustpki")]
+use crate::server_verify::{verify_client_certificate, verify_client_signature};
 use crate::write_buffer::WriteBuffer;
 use p256::elliptic_curve::rand_core::RngCore;
 use signature::SignerMut;
@@ -31,6 +37,12 @@ use signature::SignerMut;
 /// A bare ChangeCipherSpec record, sent for middlebox compatibility
 /// (RFC 8446 appendix D.4).
 pub(crate) const CHANGE_CIPHER_SPEC: [u8; 6] = [0x14, 0x03, 0x03, 0x00, 0x01, 0x01];
+
+/// Capacity for the client's certificate chain. Two kilobytes holds a typical
+/// P-256 leaf plus one intermediate; a larger chain is rejected with
+/// `OutOfMemory` rather than silently truncated.
+#[cfg(feature = "rustpki")]
+const CLIENT_CERT_SIZE: usize = 2048;
 
 /// One record of the server flight, in the order they are sent.
 #[derive(Clone, Copy)]
@@ -80,6 +92,15 @@ pub(crate) struct ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
     group: NamedGroup,
     selected_alpn: Option<usize>,
     traffic_hash: Option<CipherSuite::Hash>,
+    /// Owned copy of the client's certificate. The record buffer is reused
+    /// between reads, so it cannot be borrowed until the CertificateVerify.
+    #[cfg(feature = "rustpki")]
+    client_certificate: Option<OwnedCertificate<CLIENT_CERT_SIZE>>,
+    /// Transcript captured when the client's Certificate arrived; the
+    /// CertificateVerify signature is computed over exactly this.
+    #[cfg(feature = "rustpki")]
+    client_cert_transcript: Option<CipherSuite::Hash>,
+    client_cert_verified: bool,
 }
 
 impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
@@ -96,6 +117,11 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
             group: NamedGroup::Secp256r1,
             selected_alpn: None,
             traffic_hash: None,
+            #[cfg(feature = "rustpki")]
+            client_certificate: None,
+            #[cfg(feature = "rustpki")]
+            client_cert_transcript: None,
+            client_cert_verified: false,
         }
     }
 
@@ -108,7 +134,7 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
     }
 
     pub(crate) fn flight(&self) -> &'static [FlightRecord] {
-        if self.config.client_auth {
+        if self.config.client_auth_ca.is_some() {
             &FLIGHT_WITH_CLIENT_AUTH
         } else {
             &FLIGHT
@@ -378,6 +404,13 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
 
     /// Process one record of the client's response. Returns true once the
     /// client's Finished has been verified.
+    /// Process one record of the client's response. Returns true once the
+    /// client's Finished has been verified.
+    ///
+    /// When mutual TLS is required, the client's Certificate must chain to the
+    /// configured trust anchor and its CertificateVerify must prove possession
+    /// of the matching private key. A client that sends neither, or only one of
+    /// the two, is rejected.
     pub(crate) fn process_client_record(
         &mut self,
         key_schedule: &mut KeySchedule<CipherSuite>,
@@ -388,6 +421,16 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
         }
 
         let mut finished_ok = false;
+        let requires_client_auth = self.config.client_auth_ca.is_some();
+        #[cfg(feature = "rustpki")]
+        let trust_anchor = self.config.client_auth_ca;
+        #[cfg(feature = "rustpki")]
+        let client_certificate = &mut self.client_certificate;
+        #[cfg(feature = "rustpki")]
+        let client_cert_transcript = &mut self.client_cert_transcript;
+        #[cfg(feature = "rustpki")]
+        let client_cert_verified = &mut self.client_cert_verified;
+
         decrypt_record(
             key_schedule.read_state(),
             record,
@@ -400,12 +443,63 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
                     finished_ok = true;
                     Ok(())
                 }
+                #[cfg(feature = "rustpki")]
+                ServerRecord::Handshake(ServerHandshakeMessage::Certificate(certificate)) => {
+                    let Some(trust_anchor) = trust_anchor else {
+                        // Client auth was not requested, so nothing to check.
+                        return Ok(());
+                    };
+                    verify_client_certificate::<crate::config::NoClock>(
+                        trust_anchor,
+                        &certificate,
+                    )?;
+                    // The record buffer is reused, so the certificate has to be
+                    // copied out before the CertificateVerify is processed.
+                    *client_certificate = Some(certificate.try_into()?);
+                    // The CertificateVerify signature covers the transcript up
+                    // to and including this Certificate message.
+                    *client_cert_transcript = Some(key_schedule.transcript_hash().clone());
+                    Ok(())
+                }
+                #[cfg(feature = "rustpki")]
+                ServerRecord::Handshake(ServerHandshakeMessage::CertificateVerify(verify)) => {
+                    if trust_anchor.is_none() {
+                        return Ok(());
+                    }
+                    let transcript =
+                        client_cert_transcript
+                            .as_ref()
+                            .ok_or(TlsError::AbortHandshake(
+                                AlertLevel::Fatal,
+                                AlertDescription::UnexpectedMessage,
+                            ))?;
+                    let stored = client_certificate.as_ref().ok_or(TlsError::AbortHandshake(
+                        AlertLevel::Fatal,
+                        AlertDescription::UnexpectedMessage,
+                    ))?;
+                    let certificate: ClientCertificate<'_> = stored.try_into()?;
+                    verify_client_signature::<CipherSuite>(transcript, &certificate, &verify)?;
+                    *client_cert_verified = true;
+                    Ok(())
+                }
+                #[cfg(not(feature = "rustpki"))]
                 ServerRecord::Handshake(ServerHandshakeMessage::Certificate(_)) => Ok(()),
+                #[cfg(not(feature = "rustpki"))]
                 ServerRecord::Handshake(ServerHandshakeMessage::CertificateVerify(_)) => Ok(()),
                 ServerRecord::ChangeCipherSpec(_) => Ok(()),
                 _ => Err(TlsError::InvalidHandshake),
             },
         )?;
+
+        if finished_ok && requires_client_auth && !self.client_cert_verified {
+            // Client auth was required, but the client never presented a
+            // certificate it could prove possession of.
+            warn!("Client did not complete certificate authentication");
+            return Err(TlsError::AbortHandshake(
+                AlertLevel::Fatal,
+                AlertDescription::CertificateRequired,
+            ));
+        }
 
         Ok(finished_ok)
     }

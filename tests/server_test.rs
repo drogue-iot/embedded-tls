@@ -302,6 +302,28 @@ fn test_both(
     test_both_inner(config_fn, client_fn, true);
 }
 
+/// Run a test against both servers, asserting the server rejects the client.
+/// The server threads `.expect()` on handshake failure, so a panicked join
+/// means the server refused the connection.
+fn test_both_server_must_fail(
+    config_fn: impl FnOnce(TlsServerConfig<'_>) -> TlsServerConfig<'_> + Send + Clone + 'static,
+    client_fn: impl Fn(SocketAddr),
+) {
+    for mode in ["blocking", "async"] {
+        let (l, a) = listen_random();
+        let s = if mode == "blocking" {
+            run_blocking_server(l, config_fn.clone())
+        } else {
+            run_async_server(l, config_fn.clone())
+        };
+        client_fn(a);
+        assert!(
+            s.join().is_err(),
+            "{mode} server accepted a client it must reject"
+        );
+    }
+}
+
 /// Run a test against both servers, server may fail (negative tests).
 fn test_both_server_may_fail(
     config_fn: impl FnOnce(TlsServerConfig<'_>) -> TlsServerConfig<'_> + Send + Clone + 'static,
@@ -532,8 +554,14 @@ fn test_client_cert_auth() {
         .to_str()
         .unwrap()
         .to_string();
+    // Leaked so the config closure can hand out a 'static borrow.
+    let ca: &'static [u8] = Box::leak(
+        load_certs_der(&data_dir().join("ca-cert.pem"))
+            .remove(0)
+            .into_boxed_slice(),
+    );
     test_both(
-        |c| c.with_client_auth(),
+        move |c| c.with_client_auth(ca),
         move |addr| {
             let (ok, resp, se) = openssl_echo(addr, &["-cert", &cert, "-key", &key], b"mtls\n");
             assert!(ok, "mTLS failed.\nstderr: {se}");
@@ -543,14 +571,21 @@ fn test_client_cert_auth() {
 }
 
 #[test]
-fn test_client_no_cert() {
+fn test_client_no_cert_is_rejected() {
     init_log();
-    test_both_server_may_fail(
-        |c| c.with_client_auth(),
+    // Leaked so the config closure can hand out a 'static borrow.
+    let ca: &'static [u8] = Box::leak(
+        load_certs_der(&data_dir().join("ca-cert.pem"))
+            .remove(0)
+            .into_boxed_slice(),
+    );
+    test_both_server_must_fail(
+        move |c| c.with_client_auth(ca),
         |addr| {
-            // No -cert → empty cert message
-            let (ok, _resp, se) = openssl_echo(addr, &[], b"no cert\n");
-            log::info!("no-cert: ok={ok}, stderr={se}");
+            // No -cert → empty Certificate message
+            let (ok, _resp, _se) = openssl_echo(addr, &[], b"no cert\n");
+            const EXPECTED_CLIENT_OK: bool = false;
+            assert_eq!(ok, EXPECTED_CLIENT_OK);
         },
     );
 }
@@ -824,4 +859,36 @@ fn test_handshake_completes_over_a_buffering_transport() {
 
     const EXPECTED_HANDSHAKE_OK: bool = true;
     assert_eq!(handshake_ok, EXPECTED_HANDSHAKE_OK);
+}
+
+#[test]
+fn test_client_cert_from_untrusted_ca_is_rejected() {
+    init_log();
+    // Trust anchor is the RSA CA, but the client presents a certificate issued
+    // by the EC CA, so the chain cannot be built.
+    let untrusted_ca: &'static [u8] = Box::leak(
+        load_certs_der(&data_dir().join("rsa-ca-cert.pem"))
+            .remove(0)
+            .into_boxed_slice(),
+    );
+    let cert = data_dir()
+        .join("client-cert.pem")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let key = data_dir()
+        .join("client-key.pem")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    test_both_server_must_fail(
+        move |c| c.with_client_auth(untrusted_ca),
+        move |addr| {
+            let (ok, _resp, _se) =
+                openssl_echo(addr, &["-cert", &cert, "-key", &key], b"untrusted\n");
+            const EXPECTED_CLIENT_OK: bool = false;
+            assert_eq!(ok, EXPECTED_CLIENT_OK);
+        },
+    );
 }

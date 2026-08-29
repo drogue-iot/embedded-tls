@@ -8,8 +8,9 @@ pub struct TlsServerConfig<'a> {
     pub(crate) cert_chain: &'a [&'a [u8]],
     /// Server name (optional)
     pub(crate) server_name: Option<&'a str>,
-    /// Whether to request client certificate authentication
-    pub(crate) client_auth: bool,
+    /// Trust anchor that client certificates must chain to, when mutual TLS
+    /// is required. `None` disables client certificate authentication.
+    pub(crate) client_auth_ca: Option<&'a [u8]>,
     /// ALPN protocols supported by the server, in preference order
     pub(crate) alpn_protocols: Option<&'a [&'a [u8]]>,
 }
@@ -23,7 +24,7 @@ impl<'a> TlsServerConfig<'a> {
         Self {
             cert_chain,
             server_name: None,
-            client_auth: false,
+            client_auth_ca: None,
             alpn_protocols: None,
         }
     }
@@ -35,10 +36,23 @@ impl<'a> TlsServerConfig<'a> {
         self
     }
 
-    /// Request client certificate authentication (mTLS).
+    /// Require client certificate authentication (mTLS).
+    ///
+    /// `trust_anchor` is the DER-encoded CA certificate that a presented client
+    /// certificate must chain to. The handshake is aborted if the client sends
+    /// no certificate, sends one that does not chain to `trust_anchor`, or
+    /// fails to prove possession of the corresponding private key.
+    ///
+    /// The trust anchor is required rather than optional so that mutual TLS
+    /// cannot be requested without saying who is trusted.
+    ///
+    /// No hostname matching or revocation checking is performed: a client
+    /// certificate carries no hostname the server can meaningfully check, and
+    /// revocation needs infrastructure an embedded server does not have.
+    #[cfg(feature = "rustpki")]
     #[must_use]
-    pub fn with_client_auth(mut self) -> Self {
-        self.client_auth = true;
+    pub fn with_client_auth(mut self, trust_anchor: &'a [u8]) -> Self {
+        self.client_auth_ca = Some(trust_anchor);
         self
     }
 
