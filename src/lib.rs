@@ -76,6 +76,8 @@ mod record_reader;
 pub mod server;
 #[cfg(feature = "server")]
 mod server_config;
+#[cfg(feature = "server")]
+mod server_handshake;
 mod write_buffer;
 
 pub use config::UnsecureProvider;
