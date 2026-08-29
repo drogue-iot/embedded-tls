@@ -97,7 +97,9 @@ impl<const N: usize> SupportedGroups<N> {
         // Skip unknown named groups per RFC 8446 Section 9.3
         while !data.is_empty() {
             match NamedGroup::parse(&mut data) {
-                Ok(group) => { let _ = supported_groups.push(group); }
+                Ok(group) => {
+                    let _ = supported_groups.push(group);
+                }
                 Err(ParseError::InvalidData) => {} // unknown group, skip
                 Err(e) => return Err(e),
             }

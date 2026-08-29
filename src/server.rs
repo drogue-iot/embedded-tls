@@ -2,11 +2,11 @@
 
 use crate::TlsError;
 use crate::buffer::CryptoBuffer;
+use crate::extensions::ExtensionType;
 use crate::extensions::extension_data::key_share::{KeyShareEntry, KeyShareServerHello};
 use crate::extensions::extension_data::supported_groups::NamedGroup;
-use crate::extensions::extension_data::supported_versions::{TLS13, SupportedVersionsServerHello};
+use crate::extensions::extension_data::supported_versions::{SupportedVersionsServerHello, TLS13};
 use crate::extensions::messages::ServerHelloExtension;
-use crate::extensions::ExtensionType;
 use crate::handshake::HandshakeType;
 use crate::handshake::LEGACY_VERSION;
 
@@ -55,7 +55,8 @@ pub fn encode_server_hello(
         buf.extend_from_slice(random)?;
 
         // Session ID (echo client's)
-        buf.push(session_id.len() as u8).map_err(|_| TlsError::EncodeError)?;
+        buf.push(session_id.len() as u8)
+            .map_err(|_| TlsError::EncodeError)?;
         buf.extend_from_slice(session_id)?;
 
         // Cipher suite
@@ -107,7 +108,8 @@ pub fn encode_hello_retry_request(
         buf.extend_from_slice(&hrr_random)?;
 
         // Session ID (echo client's)
-        buf.push(session_id.len() as u8).map_err(|_| TlsError::EncodeError)?;
+        buf.push(session_id.len() as u8)
+            .map_err(|_| TlsError::EncodeError)?;
         buf.extend_from_slice(session_id)?;
 
         // Cipher suite
@@ -127,9 +129,7 @@ pub fn encode_hello_retry_request(
             // Key Share extension — HRR uses KeyShareHelloRetryRequest format:
             // just the selected group (2 bytes), NOT a full KeyShareEntry.
             ExtensionType::KeyShare.encode(buf)?;
-            buf.with_u16_length(|buf| {
-                buf.push_u16(selected_group.as_u16())
-            })?;
+            buf.with_u16_length(|buf| buf.push_u16(selected_group.as_u16()))?;
 
             Ok(())
         })
@@ -239,10 +239,7 @@ pub fn encode_certificate_verify(
 }
 
 /// Encode a Finished handshake message.
-pub fn encode_finished(
-    buf: &mut CryptoBuffer<'_>,
-    verify_data: &[u8],
-) -> Result<(), TlsError> {
+pub fn encode_finished(buf: &mut CryptoBuffer<'_>, verify_data: &[u8]) -> Result<(), TlsError> {
     buf.push(HandshakeType::Finished as u8)
         .map_err(|_| TlsError::EncodeError)?;
 

@@ -12,7 +12,9 @@ pub trait TlsBuffer {
     fn as_slice(&self) -> &[u8];
     fn as_mut_slice(&mut self) -> &mut [u8];
     fn len(&self) -> usize;
-    fn is_empty(&self) -> bool { self.len() == 0 }
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), TlsError>;
     fn truncate(&mut self, len: usize);
     fn capacity(&self) -> usize;
@@ -25,10 +27,22 @@ pub trait TlsCipher: Sized {
     type TagSize: ArrayLength<u8> + Unsigned;
 
     fn new(key: &GenericArray<u8, Self::KeySize>) -> Self;
-    fn encrypt_in_place<B: TlsBuffer>(&self, nonce: &GenericArray<u8, Self::NonceSize>, aad: &[u8], buffer: &mut B) -> Result<(), TlsError>;
-    fn decrypt_in_place<B: TlsBuffer>(&self, nonce: &GenericArray<u8, Self::NonceSize>, aad: &[u8], buffer: &mut B) -> Result<(), TlsError>;
+    fn encrypt_in_place<B: TlsBuffer>(
+        &self,
+        nonce: &GenericArray<u8, Self::NonceSize>,
+        aad: &[u8],
+        buffer: &mut B,
+    ) -> Result<(), TlsError>;
+    fn decrypt_in_place<B: TlsBuffer>(
+        &self,
+        nonce: &GenericArray<u8, Self::NonceSize>,
+        aad: &[u8],
+        buffer: &mut B,
+    ) -> Result<(), TlsError>;
     #[must_use]
-    fn tag_size() -> usize { Self::TagSize::to_usize() }
+    fn tag_size() -> usize {
+        Self::TagSize::to_usize()
+    }
 }
 
 /// Hash abstraction for TLS transcript hashing.
@@ -38,7 +52,10 @@ pub trait TlsHash: Clone + Sized {
     fn update(&mut self, data: &[u8]);
     fn finalize(self) -> GenericArray<u8, Self::OutputSize>;
     #[must_use]
-    fn chain_update(mut self, data: &[u8]) -> Self { self.update(data); self }
+    fn chain_update(mut self, data: &[u8]) -> Self {
+        self.update(data);
+        self
+    }
 }
 
 /// HMAC abstraction for TLS key schedule operations.
@@ -130,7 +147,9 @@ where
     }
 
     fn expand(&self, info: &[u8], output: &mut [u8]) -> Result<(), TlsError> {
-        self.0.expand(info, output).map_err(|_| TlsError::CryptoError)
+        self.0
+            .expand(info, output)
+            .map_err(|_| TlsError::CryptoError)
     }
 }
 
@@ -176,13 +195,23 @@ where
         SoftwareCipher(C::new(key))
     }
 
-    fn encrypt_in_place<B: TlsBuffer>(&self, nonce: &GenericArray<u8, Self::NonceSize>, aad: &[u8], buffer: &mut B) -> Result<(), TlsError> {
+    fn encrypt_in_place<B: TlsBuffer>(
+        &self,
+        nonce: &GenericArray<u8, Self::NonceSize>,
+        aad: &[u8],
+        buffer: &mut B,
+    ) -> Result<(), TlsError> {
         self.0
             .encrypt_in_place(nonce, aad, &mut BufferAdapter(buffer))
             .map_err(|_| TlsError::InvalidApplicationData)
     }
 
-    fn decrypt_in_place<B: TlsBuffer>(&self, nonce: &GenericArray<u8, Self::NonceSize>, aad: &[u8], buffer: &mut B) -> Result<(), TlsError> {
+    fn decrypt_in_place<B: TlsBuffer>(
+        &self,
+        nonce: &GenericArray<u8, Self::NonceSize>,
+        aad: &[u8],
+        buffer: &mut B,
+    ) -> Result<(), TlsError> {
         self.0
             .decrypt_in_place(nonce, aad, &mut BufferAdapter(buffer))
             .map_err(|_| TlsError::CryptoError)

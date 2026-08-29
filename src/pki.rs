@@ -1,5 +1,6 @@
 use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
+use crate::crypto_ops::TlsHash;
 #[cfg(feature = "p384")]
 use crate::der_certificate::ECDSA_SHA384;
 #[cfg(feature = "ed25519")]
@@ -18,7 +19,6 @@ use crate::handshake::{
     certificate_verify::CertificateVerifyRef,
 };
 use crate::parse_buffer::ParseError;
-use crate::crypto_ops::TlsHash;
 use core::marker::PhantomData;
 #[cfg(feature = "defmt")]
 use defmt::Debug2Format;

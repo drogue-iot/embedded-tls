@@ -61,9 +61,9 @@ mod cipher_suites;
 mod common;
 mod config;
 mod connection;
-mod crypto_ops;
 mod content_types;
 mod crypto_engine;
+mod crypto_ops;
 mod extensions;
 pub mod flush_policy;
 mod handshake;
@@ -77,7 +77,10 @@ mod server_config;
 mod write_buffer;
 
 pub use config::UnsecureProvider;
-pub use crypto_ops::{SoftwareCipher, SoftwareHash, SoftwareHkdf, SoftwareHmac, TlsBuffer, TlsCipher, TlsHash, TlsHkdf, TlsHmac};
+pub use crypto_ops::{
+    SoftwareCipher, SoftwareHash, SoftwareHkdf, SoftwareHmac, TlsBuffer, TlsCipher, TlsHash,
+    TlsHkdf, TlsHmac,
+};
 pub use extensions::extension_data::signature_algorithms::SignatureScheme;
 pub use handshake::certificate_verify::CertificateVerify;
 pub use rand_core::{CryptoRng, CryptoRngCore};

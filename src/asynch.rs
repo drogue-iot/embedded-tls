@@ -130,7 +130,11 @@ where
     }
 
     /// Open a TLS server connection, performing the server-side handshake.
-    #[allow(clippy::too_many_lines, clippy::needless_continue, clippy::match_same_arms)]
+    #[allow(
+        clippy::too_many_lines,
+        clippy::needless_continue,
+        clippy::match_same_arms
+    )]
     pub async fn open_server<Provider>(
         &mut self,
         context: crate::server_config::TlsServerContext<'_, Provider>,
@@ -139,14 +143,13 @@ where
         Provider: CryptoProvider<CipherSuite = CipherSuite>,
     {
         use crate::connection::decrypt_record;
+        use crate::extensions::extension_data::key_share::KeyShareEntry;
         use crate::handshake::ServerHandshake;
         use crate::server::{
-            compute_ecdh, encode_certificate, encode_certificate_verify,
-            encode_certificate_request, encode_encrypted_extensions,
-            encode_finished, encode_hello_retry_request, encode_server_hello,
-            OwnedAlpn, OwnedKeyShare,
+            OwnedAlpn, OwnedKeyShare, compute_ecdh, encode_certificate, encode_certificate_request,
+            encode_certificate_verify, encode_encrypted_extensions, encode_finished,
+            encode_hello_retry_request, encode_server_hello,
         };
-        use crate::extensions::extension_data::key_share::KeyShareEntry;
         use p256::elliptic_curve::rand_core::RngCore;
         use signature::SignerMut;
 
@@ -200,8 +203,7 @@ where
                                     bytes: [0u8; 65],
                                     len: share.opaque.len().min(65),
                                 };
-                                ks.bytes[..ks.len]
-                                    .copy_from_slice(&share.opaque[..ks.len]);
+                                ks.bytes[..ks.len].copy_from_slice(&share.opaque[..ks.len]);
                                 owned_key_share = Some(ks);
                                 break;
                             }
@@ -215,8 +217,7 @@ where
                                     bytes: [0u8; 65],
                                     len: share.opaque.len().min(65),
                                 };
-                                ks.bytes[..ks.len]
-                                    .copy_from_slice(&share.opaque[..ks.len]);
+                                ks.bytes[..ks.len].copy_from_slice(&share.opaque[..ks.len]);
                                 owned_key_share = Some(ks);
                                 break;
                             }
@@ -229,7 +230,10 @@ where
 
         // === Step 2: HRR if no supported key share found ===
         #[cfg(feature = "defmt")]
-        defmt::info!("TLS server: step 2 — key_share found={}", owned_key_share.is_some());
+        defmt::info!(
+            "TLS server: step 2 — key_share found={}",
+            owned_key_share.is_some()
+        );
         if owned_key_share.is_none() {
             // Replace transcript with message_hash construct
             self.key_schedule.replace_transcript_with_message_hash()?;
@@ -289,8 +293,7 @@ where
                                     bytes: [0u8; 65],
                                     len: share.opaque.len().min(65),
                                 };
-                                ks.bytes[..ks.len]
-                                    .copy_from_slice(&share.opaque[..ks.len]);
+                                ks.bytes[..ks.len].copy_from_slice(&share.opaque[..ks.len]);
                                 owned_key_share = Some(ks);
                                 break;
                             }
@@ -386,8 +389,8 @@ where
 
         // === Step 8: Send EncryptedExtensions with ALPN ===
         {
-            let alpn_slice: Option<&[u8]> = selected_alpn
-                .map(|i| &owned_alpn.data[i][..owned_alpn.lens[i]] as &[u8]);
+            let alpn_slice: Option<&[u8]> =
+                selected_alpn.map(|i| &owned_alpn.data[i][..owned_alpn.lens[i]] as &[u8]);
             let (wks, rks) = self.key_schedule.as_split();
             let slice = self.record_write_buf.write_handshake_record(
                 true,
@@ -470,8 +473,8 @@ where
         // === Step 12: Send Finished (encrypted) ===
         {
             let finished = self.key_schedule.create_client_finished()?;
-            let verify_data: heapless::Vec<u8, 64> = heapless::Vec::from_slice(&finished.verify)
-                .map_err(|_| TlsError::EncodeError)?;
+            let verify_data: heapless::Vec<u8, 64> =
+                heapless::Vec::from_slice(&finished.verify).map_err(|_| TlsError::EncodeError)?;
 
             let (wks, rks) = self.key_schedule.as_split();
             let slice = self.record_write_buf.write_handshake_record(
@@ -497,7 +500,9 @@ where
                 .read(&mut self.delegate, self.key_schedule.read_state())
                 .await?;
 
-            if let ServerRecord::ChangeCipherSpec(_) = &record { continue }
+            if let ServerRecord::ChangeCipherSpec(_) = &record {
+                continue;
+            }
 
             let mut finished_ok = false;
             decrypt_record(

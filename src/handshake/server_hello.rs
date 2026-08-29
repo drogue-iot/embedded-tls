@@ -29,7 +29,7 @@ impl<'a> ServerHello<'a> {
         let session_id = buf
             .slice(session_id_length as usize)
             .map_err(|_| TlsError::InvalidSessionIdLength)?;
-        
+
         let cipher_suite = CipherSuite::parse(buf).map_err(|_| TlsError::InvalidCipherSuite)?;
 
         // skip compression method, it's 0.

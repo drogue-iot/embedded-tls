@@ -1,6 +1,7 @@
 //use p256::elliptic_curve::AffinePoint;
 use crate::TlsError;
 use crate::config::TlsCipherSuite;
+use crate::crypto_ops::TlsHash;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_request::CertificateRequestRef;
 use crate::handshake::certificate_verify::{CertificateVerify, CertificateVerifyRef};
@@ -13,7 +14,6 @@ use crate::key_schedule::HashOutputSize;
 use crate::parse_buffer::{ParseBuffer, ParseError};
 use crate::{buffer::CryptoBuffer, key_schedule::WriteKeySchedule};
 use core::fmt::{Debug, Formatter};
-use crate::crypto_ops::TlsHash;
 
 pub mod binder;
 pub mod certificate;
@@ -212,7 +212,9 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
 
         let handshake = match handshake_type {
             HandshakeType::ClientHello => {
-                let mut ch_buf = buf.slice(content_len as usize).map_err(|_| TlsError::InvalidHandshake)?;
+                let mut ch_buf = buf
+                    .slice(content_len as usize)
+                    .map_err(|_| TlsError::InvalidHandshake)?;
                 ServerHandshake::ClientHello(ParsedClientHello::parse(&mut ch_buf)?)
             }
             HandshakeType::ServerHello => ServerHandshake::ServerHello(ServerHello::parse(buf)?),

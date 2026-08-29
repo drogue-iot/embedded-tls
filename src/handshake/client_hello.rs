@@ -22,8 +22,8 @@ use crate::extensions::extension_data::supported_versions::{SupportedVersionsCli
 use crate::extensions::messages::ClientHelloExtension;
 use crate::handshake::{LEGACY_VERSION, Random};
 use crate::key_schedule::{HashOutputSize, WriteKeySchedule};
-use crate::{CryptoProvider, buffer::CryptoBuffer};
 use crate::parse_buffer::ParseBuffer;
+use crate::{CryptoProvider, buffer::CryptoBuffer};
 
 pub struct ClientHello<'config, CipherSuite>
 where
@@ -212,7 +212,9 @@ impl<'a> ParsedClientHello<'a> {
         buf.slice(32).map_err(|_| TlsError::InvalidHandshake)?;
 
         // Session ID
-        let session_id_len = buf.read_u8().map_err(|_| TlsError::InvalidSessionIdLength)?;
+        let session_id_len = buf
+            .read_u8()
+            .map_err(|_| TlsError::InvalidSessionIdLength)?;
         let session_id = buf
             .slice(session_id_len as usize)
             .map_err(|_| TlsError::InvalidSessionIdLength)?
@@ -220,7 +222,8 @@ impl<'a> ParsedClientHello<'a> {
 
         // Cipher suites (skip over, we use the compile-time CipherSuite)
         let cipher_suites_len = buf.read_u16().map_err(|_| TlsError::InvalidHandshake)? as usize;
-        buf.slice(cipher_suites_len).map_err(|_| TlsError::InvalidHandshake)?;
+        buf.slice(cipher_suites_len)
+            .map_err(|_| TlsError::InvalidHandshake)?;
 
         // Compression methods
         let compression_len = buf.read_u8().map_err(|_| TlsError::InvalidHandshake)?;
@@ -267,5 +270,4 @@ impl<'a> ParsedClientHello<'a> {
             alpn_protocols,
         })
     }
-
 }

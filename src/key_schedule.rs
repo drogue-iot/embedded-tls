@@ -1,6 +1,6 @@
+use crate::crypto_ops::{TlsHash, TlsHkdf, TlsHmac};
 use crate::handshake::binder::PskBinder;
 use crate::handshake::finished::Finished;
-use crate::crypto_ops::{TlsHash, TlsHkdf, TlsHmac};
 use crate::{TlsError, config::TlsCipherSuite};
 use digest::generic_array::ArrayLength;
 use digest::generic_array::{GenericArray, typenum::Unsigned};
@@ -203,11 +203,7 @@ where
     }
 
     fn empty_hash() -> Self {
-        Self::Hash(
-            CipherSuite::Hash::new()
-                .chain_update(&[])
-                .finalize(),
-        )
+        Self::Hash(CipherSuite::Hash::new().chain_update(&[]).finalize())
     }
 }
 
@@ -256,7 +252,9 @@ where
         // Synthetic message_hash: 0xFE + u24(hash_len) + hash_bytes
         let len = hash.len() as u32;
         self.server_state.transcript_hash.update(&[0xFE]);
-        self.server_state.transcript_hash.update(&len.to_be_bytes()[1..]);
+        self.server_state
+            .transcript_hash
+            .update(&len.to_be_bytes()[1..]);
         self.server_state.transcript_hash.update(&hash);
         Ok(())
     }
@@ -499,12 +497,10 @@ where
             )?;
         // info!("hmac sign key {:x?}", key);
         let mut hmac = CipherSuite::Hmac::new_from_slice(&key)?;
-        hmac.update(
-            finished.hash.as_ref().ok_or_else(|| {
-                warn!("No hash in Finished");
-                TlsError::InternalError
-            })?,
-        );
+        hmac.update(finished.hash.as_ref().ok_or_else(|| {
+            warn!("No hash in Finished");
+            TlsError::InternalError
+        })?);
         //let code = hmac.clone().finalize().into_bytes();
         Ok(hmac.verify(&finished.verify).is_ok())
         //info!("verified {:?}", verified);

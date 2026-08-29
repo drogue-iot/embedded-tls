@@ -18,7 +18,7 @@ impl<'a> TlsServerConfig<'a> {
     /// Create a new server configuration with the given certificate chain.
     ///
     /// The cert chain should be DER-encoded X.509 certificates, leaf first.
-    #[must_use] 
+    #[must_use]
     pub fn new(cert_chain: &'a [&'a [u8]]) -> Self {
         Self {
             cert_chain,

@@ -1,5 +1,6 @@
 use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
+use crate::crypto_ops::TlsHash;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
     certificate::{
@@ -7,7 +8,6 @@ use crate::handshake::{
     },
     certificate_verify::CertificateVerifyRef,
 };
-use crate::crypto_ops::TlsHash;
 use core::marker::PhantomData;
 use heapless::Vec;
 #[cfg(all(not(feature = "alloc"), feature = "webpki"))]
