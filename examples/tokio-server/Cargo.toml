@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-embedded-tls = { path = "../..", features = ["log", "tokio", "x25519"] }
+embedded-tls = { path = "../..", features = ["log", "tokio", "server"] }
 embedded-io-adapters = { version = "0.7", features = ["tokio-1"] }
 embedded-io-async = "0.7"
 env_logger = "0.10"

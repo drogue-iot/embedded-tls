@@ -5,7 +5,7 @@
 //!
 //! Generate test certs first:  bash tests/data/gen_test_certs.sh
 //!
-//! Run:    cargo run -p tls-server-blocking
+//! Run:    cargo run --manifest-path examples/blocking-server/Cargo.toml
 //! Test:   echo "hello" | openssl s_client -connect 127.0.0.1:12345 \
 //!             -CAfile tests/data/ca-cert.pem -tls1_3 -quiet
 
@@ -17,6 +17,14 @@ use rand::rngs::OsRng;
 use rand_core::CryptoRngCore;
 use std::error::Error;
 use std::net::TcpListener;
+
+/// Resolve a test data file relative to this example's manifest, so the
+/// example runs from any working directory.
+fn data_file(name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data")
+        .join(name)
+}
 
 struct ServerProvider {
     rng: OsRng,
@@ -42,12 +50,12 @@ impl CryptoProvider for ServerProvider {
     }
 }
 
-fn load_certs(path: &str) -> Vec<Vec<u8>> {
+fn load_certs(path: &std::path::Path) -> Vec<Vec<u8>> {
     let f = std::fs::File::open(path).expect("cannot open cert file");
     rustls_pemfile::certs(&mut std::io::BufReader::new(f)).expect("cannot parse certs")
 }
 
-fn load_key(path: &str) -> Vec<u8> {
+fn load_key(path: &std::path::Path) -> Vec<u8> {
     let f = std::fs::File::open(path).expect("cannot open key file");
     let mut r = std::io::BufReader::new(f);
     loop {
@@ -63,8 +71,8 @@ fn load_key(path: &str) -> Vec<u8> {
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    let certs = load_certs("tests/data/chain-cert.pem");
-    let key = load_key("tests/data/im-server-key.pem");
+    let certs = load_certs(&data_file("chain-cert.pem"));
+    let key = load_key(&data_file("im-server-key.pem"));
 
     let listener = TcpListener::bind("127.0.0.1:12345")?;
     log::info!("Listening on 127.0.0.1:12345");
