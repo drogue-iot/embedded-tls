@@ -178,6 +178,7 @@ impl<CipherSuite: TlsCipherSuite> Debug for ServerHandshake<'_, CipherSuite> {
 impl<'a, CipherSuite: TlsCipherSuite> defmt::Format for ServerHandshake<'a, CipherSuite> {
     fn format(&self, f: defmt::Formatter<'_>) {
         match self {
+            #[cfg(feature = "server")]
             ServerHandshake::ClientHello(inner) => defmt::write!(f, "ClientHello({:?})", inner),
             ServerHandshake::ServerHello(inner) => defmt::write!(f, "{}", inner),
             ServerHandshake::EncryptedExtensions(inner) => defmt::write!(f, "{}", inner),
