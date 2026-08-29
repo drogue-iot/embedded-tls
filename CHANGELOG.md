@@ -17,9 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `TlsCipherSuite` now requires `Hmac` and `Hkdf` associated types, and
   `Cipher`/`Hash` take the `SoftwareCipher`/`SoftwareHash` wrappers. Existing
   `TlsCipherSuite` implementations must be updated.
+- **Breaking:** `TlsCipherSuite::LabelBufferSize` is removed. It became dead when the
+  heapless 0.6 removal replaced the typenum-sized HKDF label buffer with a const-generic
+  one, but remained a required associated type on the public trait.
 - **Breaking:** `AlpnProtocolNameList::protocols` is a `heapless::Vec<&[u8], 8>` rather
   than a slice. Offering more than 8 ALPN protocols now returns `TlsError::OutOfMemory`
   when the ClientHello is encoded, instead of silently truncating the list.
+- Fix: `defmt` builds combining `webpki` failed to compile: the signature log used the
+  `core::fmt` `{:x?}` hint, which defmt rejects.
 - Fix: unencrypted alerts were sent with the `ChangeCipherSpec` content type instead of
   `Alert`, so an alert raised before handshake keys existed was never seen as one.
 - Fix: ignore unknown `NamedGroup`s in supported_groups (RFC 8446 section 9.3). Fixes #163.

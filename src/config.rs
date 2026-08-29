@@ -16,19 +16,11 @@ use heapless::Vec;
 use p256::ecdsa::SigningKey;
 use rand_core::CryptoRngCore;
 pub use sha2::{Sha256, Sha384};
-use typenum::{Sum, U10, U12, U16, U32};
+use typenum::{U12, U16, U32};
 
 pub use crate::extensions::extension_data::max_fragment_length::MaxFragmentLength;
 
 pub const TLS_RECORD_OVERHEAD: usize = 128;
-
-// longest label is 12b -> buf <= 2 + 1 + 6 + longest + 1 + hash_out = hash_out + 22
-type LongestLabel = U12;
-type LabelOverhead = U10;
-type LabelBuffer<CipherSuite> = Sum<
-    <<CipherSuite as TlsCipherSuite>::Hash as TlsHash>::OutputSize,
-    Sum<LongestLabel, LabelOverhead>,
->;
 
 /// Represents a TLS 1.3 cipher suite
 pub trait TlsCipherSuite {
@@ -38,7 +30,6 @@ pub trait TlsCipherSuite {
     type IvLen: ArrayLength<u8>;
 
     type Hash: TlsHash;
-    type LabelBufferSize: ArrayLength<u8>;
 
     /// HMAC implementation for key schedule operations.
     type Hmac: TlsHmac<OutputSize = <Self::Hash as TlsHash>::OutputSize>;
@@ -54,7 +45,6 @@ impl TlsCipherSuite for Aes128GcmSha256 {
     type IvLen = U12;
 
     type Hash = SoftwareHash<Sha256>;
-    type LabelBufferSize = LabelBuffer<Self>;
 
     type Hmac = SoftwareHmac<Sha256>;
     type Hkdf = SoftwareHkdf<Sha256>;
@@ -68,7 +58,6 @@ impl TlsCipherSuite for Aes256GcmSha384 {
     type IvLen = U12;
 
     type Hash = SoftwareHash<Sha384>;
-    type LabelBufferSize = LabelBuffer<Self>;
 
     type Hmac = SoftwareHmac<Sha384>;
     type Hkdf = SoftwareHkdf<Sha384>;
