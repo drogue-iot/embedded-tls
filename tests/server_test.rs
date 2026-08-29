@@ -689,3 +689,54 @@ fn test_verify_depth() {
         },
     );
 }
+
+/// Run openssl s_client without forcing TLS 1.3, so the ClientHello can be
+/// made deliberately unacceptable to the server.
+fn openssl_connect_no_tls13(addr: SocketAddr, extra_args: &[&str]) -> (bool, String) {
+    let ca = data_dir().join("ca-cert.pem").to_str().unwrap().to_string();
+    let conn = format!("127.0.0.1:{}", addr.port());
+    let mut args: Vec<String> = vec![
+        "s_client".into(),
+        "-connect".into(),
+        conn,
+        "-CAfile".into(),
+        ca,
+        "-quiet".into(),
+    ];
+    for a in extra_args {
+        args.push(a.to_string());
+    }
+    let mut child = Command::new("openssl")
+        .args(&args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("openssl failed to start");
+    let mut stdin = child.stdin.take().unwrap();
+    let _ = stdin.write_all(b"\n");
+    let _ = stdin.flush();
+    drop(stdin);
+    let out = child.wait_with_output().unwrap();
+    let se = String::from_utf8_lossy(&out.stderr).to_string();
+    (out.status.success(), se)
+}
+
+#[test]
+fn test_alert_sent_when_client_hello_is_unacceptable() {
+    init_log();
+    let (l, a) = listen_random();
+    let s = run_blocking_server(l, |c| c);
+
+    // TLS 1.2-only client: the server cannot proceed and must say so with an
+    // alert rather than dropping the connection.
+    let (ok, stderr) = openssl_connect_no_tls13(a, &["-tls1_2"]);
+
+    const EXPECTED_HANDSHAKE_OK: bool = false;
+    assert_eq!(ok, EXPECTED_HANDSHAKE_OK);
+    assert!(
+        stderr.contains("alert"),
+        "expected a TLS alert from the server, got: {stderr}"
+    );
+    s.join().ok();
+}

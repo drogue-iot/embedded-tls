@@ -9,6 +9,7 @@
 //! dispatch over shared logic (see `connection::State::process`).
 
 use crate::TlsError;
+use crate::alert::{AlertDescription, AlertLevel};
 use crate::config::{CryptoProvider, TlsCipherSuite};
 use crate::connection::decrypt_record;
 use crate::crypto_ops::TlsHash;
@@ -437,4 +438,29 @@ fn take_key_share(
         }
     }
     None
+}
+
+/// Map a handshake failure onto the alert the peer should be told about.
+///
+/// Returns `None` for transport failures: the connection is already gone, so
+/// there is nothing left to send an alert down.
+pub(crate) fn alert_for(error: &TlsError) -> Option<(AlertLevel, AlertDescription)> {
+    match error {
+        TlsError::Io(_) | TlsError::ConnectionClosed => None,
+        TlsError::AbortHandshake(level, description) => Some((*level, *description)),
+        TlsError::InvalidSupportedVersions => {
+            Some((AlertLevel::Fatal, AlertDescription::ProtocolVersion))
+        }
+        TlsError::InvalidCertificate | TlsError::InvalidCertificateEntry => {
+            Some((AlertLevel::Fatal, AlertDescription::BadCertificate))
+        }
+        TlsError::InvalidSignature => Some((AlertLevel::Fatal, AlertDescription::DecryptError)),
+        TlsError::DecodeError | TlsError::ParseError(_) => {
+            Some((AlertLevel::Fatal, AlertDescription::DecodeError))
+        }
+        TlsError::InvalidKeyShare | TlsError::InvalidHandshake => {
+            Some((AlertLevel::Fatal, AlertDescription::IllegalParameter))
+        }
+        _ => Some((AlertLevel::Fatal, AlertDescription::HandshakeFailure)),
+    }
 }

@@ -132,8 +132,56 @@ where
     ///
     /// The handshake logic lives in [`crate::server_handshake`]; this method is
     /// the async I/O driver over it.
+    ///
+    /// On failure the peer is told why with a TLS alert before the error is
+    /// returned, so interop problems are diagnosable from the client side.
     #[cfg(feature = "server")]
     pub async fn open_server<Provider>(
+        &mut self,
+        context: crate::server_config::TlsServerContext<'_, Provider>,
+    ) -> Result<(), TlsError>
+    where
+        Provider: CryptoProvider<CipherSuite = CipherSuite>,
+    {
+        let result = self.open_server_handshake(context).await;
+
+        if let Err(error) = &result
+            && let Some((level, description)) = crate::server_handshake::alert_for(error)
+        {
+            // Best effort: the peer may already have gone away.
+            let _ = self.send_handshake_alert(level, description).await;
+        }
+
+        result
+    }
+
+    /// Encode and send a fatal alert. Failures here are not reported: the
+    /// handshake error that triggered the alert is what the caller needs.
+    #[cfg(feature = "server")]
+    async fn send_handshake_alert(
+        &mut self,
+        level: crate::alert::AlertLevel,
+        description: crate::alert::AlertDescription,
+    ) -> Result<(), TlsError> {
+        let (write_key_schedule, read_key_schedule) = self.key_schedule.as_split();
+        let tx = self.record_write_buf.write_record(
+            &ClientRecord::Alert(crate::alert::Alert { level, description }, false),
+            write_key_schedule,
+            Some(read_key_schedule),
+        )?;
+        self.delegate
+            .write_all(tx)
+            .await
+            .map_err(|e| TlsError::Io(e.kind()))?;
+        self.delegate
+            .flush()
+            .await
+            .map_err(|e| TlsError::Io(e.kind()))?;
+        Ok(())
+    }
+
+    #[cfg(feature = "server")]
+    async fn open_server_handshake<Provider>(
         &mut self,
         context: crate::server_config::TlsServerContext<'_, Provider>,
     ) -> Result<(), TlsError>
