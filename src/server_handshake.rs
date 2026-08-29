@@ -154,6 +154,14 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
             return Err(TlsError::InvalidHandshake);
         };
 
+        if !ch.cipher_suites.contains(&CipherSuite::CODE_POINT) {
+            warn!("Client did not offer the server's cipher suite");
+            return Err(TlsError::AbortHandshake(
+                AlertLevel::Fatal,
+                AlertDescription::HandshakeFailure,
+            ));
+        }
+
         self.session_id_len = ch.session_id.len().min(32);
         self.session_id[..self.session_id_len]
             .copy_from_slice(&ch.session_id[..self.session_id_len]);

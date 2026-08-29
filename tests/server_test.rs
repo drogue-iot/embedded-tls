@@ -892,3 +892,23 @@ fn test_client_cert_from_untrusted_ca_is_rejected() {
         },
     );
 }
+
+#[test]
+fn test_unoffered_cipher_suite_is_rejected() {
+    init_log();
+    // The server is Aes128GcmSha256; this client offers only AES-256.
+    test_both_server_must_fail(
+        |c| c,
+        |addr| {
+            let ca = data_dir().join("ca-cert.pem").to_str().unwrap().to_string();
+            let (ok, se) = openssl_connect(addr, &ca, &["-ciphersuites", "TLS_AES_256_GCM_SHA384"]);
+            log::info!("unoffered-suite stderr: {se}");
+            const EXPECTED_CLIENT_OK: bool = false;
+            assert_eq!(ok, EXPECTED_CLIENT_OK);
+            assert!(
+                se.contains("handshake failure"),
+                "expected handshake_failure, got: {se}"
+            );
+        },
+    );
+}

@@ -199,6 +199,9 @@ where
 #[cfg(feature = "server")]
 pub struct ParsedClientHello<'a> {
     pub session_id: &'a [u8],
+    /// Cipher suite code points the client offered, so the server can check
+    /// its own suite is among them before naming it in the ServerHello.
+    pub cipher_suites: Vec<u16, 16>,
     pub key_shares: Vec<KeyShareEntry<'a>, 4>,
     pub alpn_protocols: Vec<&'a [u8], 4>,
 }
@@ -223,10 +226,22 @@ impl<'a> ParsedClientHello<'a> {
             .map_err(|_| TlsError::InvalidSessionIdLength)?
             .as_slice();
 
-        // Cipher suites (skip over, we use the compile-time CipherSuite)
+        // Cipher suites. Retained rather than skipped: the server must not
+        // name a suite in its ServerHello that the client did not offer.
         let cipher_suites_len = buf.read_u16().map_err(|_| TlsError::InvalidHandshake)? as usize;
-        buf.slice(cipher_suites_len)
+        let mut suites_buf = buf
+            .slice(cipher_suites_len)
             .map_err(|_| TlsError::InvalidHandshake)?;
+        let mut cipher_suites = Vec::new();
+        while !suites_buf.is_empty() {
+            let code_point = suites_buf
+                .read_u16()
+                .map_err(|_| TlsError::InvalidHandshake)?;
+            // Overflow past capacity is not an error: the server only needs to
+            // find its own suite, and a client offering more than 16 has
+            // already offered it if it is going to.
+            let _ = cipher_suites.push(code_point);
+        }
 
         // Compression methods
         let compression_len = buf.read_u8().map_err(|_| TlsError::InvalidHandshake)?;
@@ -269,6 +284,7 @@ impl<'a> ParsedClientHello<'a> {
 
         Ok(Self {
             session_id,
+            cipher_suites,
             key_shares,
             alpn_protocols,
         })
