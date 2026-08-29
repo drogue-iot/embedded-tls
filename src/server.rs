@@ -10,11 +10,15 @@ use crate::extensions::messages::ServerHelloExtension;
 use crate::handshake::HandshakeType;
 use crate::handshake::LEGACY_VERSION;
 
+/// Largest key share this server accepts: 65 bytes for an uncompressed P-256
+/// point, 32 for X25519.
+pub(crate) const MAX_KEY_SHARE: usize = 65;
+
 /// Owned copy of a key share extracted from `ParsedClientHello`.
 /// Needed because the record buffer is reused between reads (e.g. HRR flow).
 pub(crate) struct OwnedKeyShare {
     pub group: NamedGroup,
-    pub bytes: [u8; 65], // 65 for P-256 uncompressed, 32 for X25519
+    pub bytes: [u8; MAX_KEY_SHARE],
     pub len: usize,
 }
 

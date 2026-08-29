@@ -23,7 +23,7 @@ use crate::handshake::certificate::{
 use crate::key_schedule::KeySchedule;
 use crate::record::ServerRecord;
 use crate::server::{
-    MAX_ALPN_NAME, OwnedAlpn, OwnedKeyShare, compute_ecdh, encode_certificate,
+    MAX_ALPN_NAME, MAX_KEY_SHARE, OwnedAlpn, OwnedKeyShare, compute_ecdh, encode_certificate,
     encode_certificate_request, encode_certificate_verify, encode_encrypted_extensions,
     encode_finished, encode_hello_retry_request, encode_server_hello,
 };
@@ -553,13 +553,19 @@ fn take_key_share(
 ) -> Option<OwnedKeyShare> {
     for share in &client_hello.key_shares {
         if share.group == group {
-            let len = share.opaque.len().min(65);
+            // Reject rather than truncate: a truncated 65-byte prefix of a
+            // longer opaque can still parse as a valid uncompressed point, so
+            // truncating would accept a malformed key_share.
+            if share.opaque.len() > MAX_KEY_SHARE {
+                return None;
+            }
+            let len = share.opaque.len();
             let mut key_share = OwnedKeyShare {
                 group,
-                bytes: [0u8; 65],
+                bytes: [0u8; MAX_KEY_SHARE],
                 len,
             };
-            key_share.bytes[..len].copy_from_slice(&share.opaque[..len]);
+            key_share.bytes[..len].copy_from_slice(share.opaque);
             return Some(key_share);
         }
     }
