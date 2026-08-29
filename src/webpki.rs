@@ -205,7 +205,7 @@ fn verify_signature(
                 "Verifying with signature scheme {:?}",
                 verify.signature_scheme
             );
-            info!("Signature: {:x?}", verify.signature);
+            info!("Signature: {:?}", verify.signature);
             let pkisig = verify.signature_scheme.try_into()?;
             match cert.verify_signature(pkisig, message, verify.signature) {
                 Ok(()) => {
