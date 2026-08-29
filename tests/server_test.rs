@@ -912,3 +912,24 @@ fn test_unoffered_cipher_suite_is_rejected() {
         },
     );
 }
+
+#[test]
+fn test_hrr_is_not_sent_for_an_unoffered_group() {
+    init_log();
+    // This client supports only P-384, which the server cannot do. It must get
+    // handshake_failure, not a HelloRetryRequest naming a group it never
+    // offered (RFC 8446 section 4.1.4).
+    test_both_server_must_fail(
+        |c| c,
+        |addr| {
+            let ca = data_dir().join("ca-cert.pem").to_str().unwrap().to_string();
+            let (ok, se) = openssl_connect(addr, &ca, &["-groups", "P-384"]);
+            const EXPECTED_CLIENT_OK: bool = false;
+            assert_eq!(ok, EXPECTED_CLIENT_OK);
+            assert!(
+                se.contains("handshake failure"),
+                "expected handshake_failure, got: {se}"
+            );
+        },
+    );
+}

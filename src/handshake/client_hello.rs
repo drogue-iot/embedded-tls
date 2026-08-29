@@ -202,6 +202,9 @@ pub struct ParsedClientHello<'a> {
     /// Cipher suite code points the client offered, so the server can check
     /// its own suite is among them before naming it in the ServerHello.
     pub cipher_suites: Vec<u16, 16>,
+    /// Groups the client says it supports, so a HelloRetryRequest can name one
+    /// of them rather than a group the client never offered.
+    pub supported_groups: Vec<NamedGroup, 16>,
     pub key_shares: Vec<KeyShareEntry<'a>, 4>,
     pub alpn_protocols: Vec<&'a [u8], 4>,
 }
@@ -252,6 +255,7 @@ impl<'a> ParsedClientHello<'a> {
         let extensions = ClientHelloExtension::parse_vector::<24>(buf)?;
 
         let mut key_shares = Vec::new();
+        let mut supported_groups = Vec::new();
         let mut alpn_protocols = Vec::new();
         let mut has_tls13 = false;
 
@@ -260,6 +264,11 @@ impl<'a> ParsedClientHello<'a> {
                 ClientHelloExtension::KeyShare(ks) => {
                     for share in &ks.client_shares {
                         let _ = key_shares.push(share.clone());
+                    }
+                }
+                ClientHelloExtension::SupportedGroups(sg) => {
+                    for group in &sg.supported_groups {
+                        let _ = supported_groups.push(*group);
                     }
                 }
                 ClientHelloExtension::SupportedVersions(sv) => {
@@ -285,6 +294,7 @@ impl<'a> ParsedClientHello<'a> {
         Ok(Self {
             session_id,
             cipher_suites,
+            supported_groups,
             key_shares,
             alpn_protocols,
         })

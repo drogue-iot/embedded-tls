@@ -38,6 +38,13 @@ use signature::SignerMut;
 /// (RFC 8446 appendix D.4).
 pub(crate) const CHANGE_CIPHER_SPEC: [u8; 6] = [0x14, 0x03, 0x03, 0x00, 0x01, 0x01];
 
+/// Key exchange groups this build can compute, in preference order.
+const SERVER_GROUPS: &[NamedGroup] = &[
+    #[cfg(feature = "x25519")]
+    NamedGroup::X25519,
+    NamedGroup::Secp256r1,
+];
+
 /// Capacity for the client's certificate chain. Two kilobytes holds a typical
 /// P-256 leaf plus one intermediate; a larger chain is rejected with
 /// `OutOfMemory` rather than silently truncated.
@@ -87,6 +94,8 @@ pub(crate) struct ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
     key_share: Option<OwnedKeyShare>,
     alpn: OwnedAlpn,
     did_hrr: bool,
+    /// Group to name in a HelloRetryRequest: always one the client offered.
+    retry_group: Option<NamedGroup>,
     server_public_key: heapless::Vec<u8, 65>,
     shared_secret: heapless::Vec<u8, 32>,
     group: NamedGroup,
@@ -112,6 +121,7 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
             key_share: None,
             alpn: OwnedAlpn::new(),
             did_hrr: false,
+            retry_group: None,
             server_public_key: heapless::Vec::new(),
             shared_secret: heapless::Vec::new(),
             group: NamedGroup::Secp256r1,
@@ -184,6 +194,13 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
             self.key_share = take_key_share(ch, NamedGroup::Secp256r1);
         }
 
+        // RFC 8446 4.1.4: a HelloRetryRequest must name a group the client
+        // actually offered, so pick from the intersection now.
+        self.retry_group = SERVER_GROUPS
+            .iter()
+            .find(|group| ch.supported_groups.contains(group))
+            .copied();
+
         #[cfg(feature = "defmt")]
         defmt::info!(
             "TLS server: step 2 — key_share found={}",
@@ -199,18 +216,18 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
         key_schedule: &mut KeySchedule<CipherSuite>,
         tx_buf: &'b mut WriteBuffer<'_>,
     ) -> Result<Outgoing<'b>, TlsError> {
+        let retry_group = self.retry_group.ok_or(TlsError::AbortHandshake(
+            AlertLevel::Fatal,
+            AlertDescription::HandshakeFailure,
+        ))?;
+
         key_schedule.replace_transcript_with_message_hash()?;
         self.did_hrr = true;
 
         let session_id = &self.session_id[..self.session_id_len];
         let (wks, rks) = key_schedule.as_split();
         let bytes = tx_buf.write_handshake_record(false, wks, rks.transcript_hash(), |buf| {
-            encode_hello_retry_request(
-                buf,
-                session_id,
-                CipherSuite::CODE_POINT,
-                NamedGroup::Secp256r1,
-            )
+            encode_hello_retry_request(buf, session_id, CipherSuite::CODE_POINT, retry_group)
         })?;
 
         Ok(Outgoing {
@@ -228,7 +245,8 @@ impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
         match record {
             ServerRecord::ChangeCipherSpec(_) => Ok(false),
             ServerRecord::Handshake(ServerHandshakeMessage::ClientHello(ch)) => {
-                self.key_share = take_key_share(ch, NamedGroup::Secp256r1);
+                let retry_group = self.retry_group.ok_or(TlsError::InvalidKeyShare)?;
+                self.key_share = take_key_share(ch, retry_group);
                 if self.key_share.is_none() {
                     return Err(TlsError::InvalidKeyShare);
                 }
