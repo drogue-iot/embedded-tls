@@ -292,6 +292,13 @@ pub fn compute_ecdh(
             let server_pk = x25519_dalek::PublicKey::from(&server_secret);
             let shared = server_secret.diffie_hellman(&client_pk);
 
+            // RFC 8446 7.4.2: abort if the computed shared secret is all zero,
+            // which is what the low-order points of RFC 7748 section 6 produce.
+            // x25519-dalek does not reject them for you.
+            if !shared.was_contributory() {
+                return Err(TlsError::InvalidKeyShare);
+            }
+
             let mut pk_bytes = heapless::Vec::new();
             pk_bytes
                 .extend_from_slice(server_pk.as_bytes())
@@ -304,5 +311,40 @@ pub fn compute_ecdh(
             Ok((pk_bytes, secret_bytes, NamedGroup::X25519))
         }
         _ => Err(TlsError::InvalidKeyShare),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn then_over_long_p256_key_share_is_rejected() {
+        // 100 bytes whose first 65 form a plausible uncompressed point.
+        let opaque = [0x04u8; 100];
+        let entry = KeyShareEntry {
+            group: NamedGroup::Secp256r1,
+            opaque: &opaque,
+        };
+
+        let result = compute_ecdh(&entry, &mut rand::rngs::OsRng);
+
+        assert!(matches!(result, Err(TlsError::InvalidKeyShare)));
+    }
+
+    #[test]
+    #[cfg(feature = "x25519")]
+    fn then_low_order_x25519_point_is_rejected() {
+        // The all-zero point has order 1: every shared secret it produces is
+        // all zeros (RFC 7748 section 6).
+        let low_order = [0u8; 32];
+        let entry = KeyShareEntry {
+            group: NamedGroup::X25519,
+            opaque: &low_order,
+        };
+
+        let result = compute_ecdh(&entry, &mut rand::rngs::OsRng);
+
+        assert!(matches!(result, Err(TlsError::InvalidKeyShare)));
     }
 }
