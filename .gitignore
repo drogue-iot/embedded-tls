@@ -2,8 +2,6 @@ target
 Cargo.lock
 .idea
 .DS_Store
-.env
-.aider*
 tests/data/*.pem
 tests/data/*.csr
 tests/data/*.srl
