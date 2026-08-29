@@ -263,7 +263,16 @@ impl<'a> ParsedClientHello<'a> {
             match ext {
                 ClientHelloExtension::KeyShare(ks) => {
                     for share in &ks.client_shares {
-                        let _ = key_shares.push(share.clone());
+                        // Only retain groups this build can actually compute.
+                        // A client leading with post-quantum hybrids would
+                        // otherwise fill every slot with unusable groups and
+                        // crowd out the usable share behind them, forcing a
+                        // needless HelloRetryRequest.
+                        let usable = share.group == NamedGroup::Secp256r1
+                            || (cfg!(feature = "x25519") && share.group == NamedGroup::X25519);
+                        if usable {
+                            let _ = key_shares.push(share.clone());
+                        }
                     }
                 }
                 ClientHelloExtension::SupportedGroups(sg) => {
