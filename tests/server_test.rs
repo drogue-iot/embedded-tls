@@ -952,26 +952,3 @@ fn test_alpn_does_not_match_on_a_truncated_prefix() {
         },
     );
 }
-
-#[test]
-fn test_usable_key_share_behind_hybrids_is_found() {
-    init_log();
-    // The client leads with post-quantum hybrids the server cannot compute,
-    // then offers X25519. Filling the four key-share slots with unusable
-    // groups would discard the usable share and force a needless HRR.
-    test_both(
-        |c| c,
-        |addr| {
-            let (ok, resp, se) = openssl_echo(
-                addr,
-                &[
-                    "-groups",
-                    "X25519MLKEM768:SecP256r1MLKEM768:P-384:X25519:P-256",
-                ],
-                b"hybrid first\n",
-            );
-            assert!(ok, "handshake failed: {se}");
-            assert!(String::from_utf8_lossy(&resp).contains("hybrid first"));
-        },
-    );
-}

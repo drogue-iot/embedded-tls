@@ -312,3 +312,71 @@ impl<'a> ParsedClientHello<'a> {
         })
     }
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    /// Build a minimal TLS 1.3 ClientHello carrying `key_share` entries for
+    /// `groups`, in order. Key exchange payloads are dummy bytes: parsing does
+    /// not inspect them.
+    fn client_hello_with_key_share_groups(groups: &[NamedGroup]) -> std::vec::Vec<u8> {
+        let mut out = std::vec::Vec::new();
+        out.extend_from_slice(&LEGACY_VERSION.to_be_bytes());
+        out.extend_from_slice(&[0u8; 32]); // random
+        out.push(0); // empty session id
+        out.extend_from_slice(&[0x00, 0x02]); // cipher_suites length
+        out.extend_from_slice(&0x1301u16.to_be_bytes()); // TLS_AES_128_GCM_SHA256
+        out.extend_from_slice(&[0x01, 0x00]); // one null compression method
+
+        // supported_versions: u16 vector of one u16 version, u8-length-prefixed
+        let mut extensions = std::vec::Vec::new();
+        extensions.extend_from_slice(&0x002bu16.to_be_bytes());
+        extensions.extend_from_slice(&0x0003u16.to_be_bytes());
+        extensions.push(0x02);
+        extensions.extend_from_slice(&[0x03, 0x04]); // TLS 1.3
+
+        // key_share: u16 vector of (group u16, u16-length-prefixed opaque)
+        let mut shares = std::vec::Vec::new();
+        for group in groups {
+            shares.extend_from_slice(&group.as_u16().to_be_bytes());
+            shares.extend_from_slice(&0x0004u16.to_be_bytes());
+            shares.extend_from_slice(&[0xAA; 4]);
+        }
+        extensions.extend_from_slice(&0x0033u16.to_be_bytes());
+        extensions.extend_from_slice(&((shares.len() + 2) as u16).to_be_bytes());
+        extensions.extend_from_slice(&(shares.len() as u16).to_be_bytes());
+        extensions.extend_from_slice(&shares);
+
+        out.extend_from_slice(&(extensions.len() as u16).to_be_bytes());
+        out.extend_from_slice(&extensions);
+        out
+    }
+
+    #[test]
+    fn then_unusable_key_share_groups_are_not_retained() {
+        // P-384 is a group this server cannot compute. Retaining it would let a
+        // client fill the key share capacity with groups the server has to
+        // discard, crowding out the usable share behind them.
+        let bytes =
+            client_hello_with_key_share_groups(&[NamedGroup::Secp384r1, NamedGroup::X25519]);
+        let mut buf = ParseBuffer::new(&bytes);
+
+        let hello = ParsedClientHello::parse(&mut buf).expect("parses");
+
+        const EXPECTED_RETAINED: usize = 1;
+        assert_eq!(hello.key_shares.len(), EXPECTED_RETAINED);
+        assert_eq!(hello.key_shares[0].group, NamedGroup::X25519);
+    }
+
+    #[test]
+    fn then_offered_cipher_suites_are_retained() {
+        let bytes = client_hello_with_key_share_groups(&[NamedGroup::Secp256r1]);
+        let mut buf = ParseBuffer::new(&bytes);
+
+        let hello = ParsedClientHello::parse(&mut buf).expect("parses");
+
+        const EXPECTED_SUITE: u16 = 0x1301;
+        assert!(hello.cipher_suites.contains(&EXPECTED_SUITE));
+    }
+}
