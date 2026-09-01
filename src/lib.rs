@@ -73,7 +73,7 @@ pub mod read_buffer;
 mod record;
 mod record_reader;
 #[cfg(feature = "server")]
-pub mod server;
+pub(crate) mod server;
 #[cfg(feature = "server")]
 mod server_config;
 #[cfg(feature = "server")]
