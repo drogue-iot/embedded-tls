@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Fix a record-stream desync when an async record read is cancelled and resumed (e.g. under a read/write `select`): persist the partial record header on the reader, and read only the still-missing body bytes in `advance` instead of a fixed `amount`.
+
 ## 0.19.0 - 2026-06-01
 
 - Added post-quantum hybrid named groups.
