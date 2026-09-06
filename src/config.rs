@@ -9,12 +9,12 @@ pub use crate::handshake::certificate::{CertificateEntryRef, CertificateRef};
 pub use crate::handshake::certificate_verify::CertificateVerifyRef;
 use aes_gcm::{Aes128Gcm, Aes256Gcm};
 
+use crate::CryptoRngCore;
 use digest::{Digest, FixedOutputReset, KeyInit, Mac, OutputSizeUser};
 use ecdsa::elliptic_curve::SecretKey;
 use heapless::Vec;
 use hmac::Hmac;
 use p256::ecdsa::SigningKey;
-use crate::CryptoRngCore;
 use rand_core::Rng;
 pub use sha2::{Sha256, Sha384};
 

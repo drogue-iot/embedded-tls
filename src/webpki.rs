@@ -79,9 +79,15 @@ impl TryInto<&'static dyn SignatureVerificationAlgorithm> for SignatureScheme {
             SignatureScheme::EcdsaSecp521r1Sha512 => Err(TlsError::InvalidSignatureScheme),
 
             /* RSASSA-PSS algorithms with public key OID rsaEncryption */
-            SignatureScheme::RsaPssRsaeSha256 => Ok(webpki::ring::RSA_PSS_2048_8192_SHA256_LEGACY_KEY),
-            SignatureScheme::RsaPssRsaeSha384 => Ok(webpki::ring::RSA_PSS_2048_8192_SHA384_LEGACY_KEY),
-            SignatureScheme::RsaPssRsaeSha512 => Ok(webpki::ring::RSA_PSS_2048_8192_SHA512_LEGACY_KEY),
+            SignatureScheme::RsaPssRsaeSha256 => {
+                Ok(webpki::ring::RSA_PSS_2048_8192_SHA256_LEGACY_KEY)
+            }
+            SignatureScheme::RsaPssRsaeSha384 => {
+                Ok(webpki::ring::RSA_PSS_2048_8192_SHA384_LEGACY_KEY)
+            }
+            SignatureScheme::RsaPssRsaeSha512 => {
+                Ok(webpki::ring::RSA_PSS_2048_8192_SHA512_LEGACY_KEY)
+            }
 
             /* EdDSA algorithms */
             SignatureScheme::Ed25519 => Ok(webpki::ring::ED25519),
@@ -209,15 +215,15 @@ fn verify_signature(
                 warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
                 #[cfg(not(feature = "defmt"))]
                 #[cfg(feature = "defmt")]
-#[cfg(feature = "defmt")]
-warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error loading cert: {:?}", e);
-#[cfg(not(feature = "defmt"))]
-#[cfg(feature = "defmt")]
-warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error loading cert: {:?}", e);
+                #[cfg(feature = "defmt")]
+                warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
+                #[cfg(not(feature = "defmt"))]
+                warn!("Error loading cert: {:?}", e);
+                #[cfg(not(feature = "defmt"))]
+                #[cfg(feature = "defmt")]
+                warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
+                #[cfg(not(feature = "defmt"))]
+                warn!("Error loading cert: {:?}", e);
                 TlsError::DecodeError
             })?;
 
@@ -233,15 +239,15 @@ warn!("Error loading cert: {:?}", e);
                 }
                 Err(e) => {
                     #[cfg(feature = "defmt")]
-#[cfg(feature = "defmt")]
-info!("Error verifying signature: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-info!("Error verifying signature: {:?}", e);
-#[cfg(not(feature = "defmt"))]
-#[cfg(feature = "defmt")]
-info!("Error verifying signature: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-info!("Error verifying signature: {:?}", e);
+                    #[cfg(feature = "defmt")]
+                    info!("Error verifying signature: {:?}", defmt::Debug2Format(&e));
+                    #[cfg(not(feature = "defmt"))]
+                    info!("Error verifying signature: {:?}", e);
+                    #[cfg(not(feature = "defmt"))]
+                    #[cfg(feature = "defmt")]
+                    info!("Error verifying signature: {:?}", defmt::Debug2Format(&e));
+                    #[cfg(not(feature = "defmt"))]
+                    info!("Error verifying signature: {:?}", e);
                 }
             }
         }
@@ -264,18 +270,18 @@ fn verify_certificate(
         let ca_der = pki_types::CertificateDer::from(*ca);
         let trust = webpki::anchor_from_trusted_cert(&ca_der).map_err(|e| {
             #[cfg(feature = "defmt")]
-        warn!("Error loading CA: {:?}", defmt::Debug2Format(&e));
-        #[cfg(not(feature = "defmt"))]
-        #[cfg(feature = "defmt")]
-#[cfg(feature = "defmt")]
-warn!("Error loading CA: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error loading CA: {:?}", e);
-#[cfg(not(feature = "defmt"))]
-#[cfg(feature = "defmt")]
-warn!("Error loading CA: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error loading CA: {:?}", e);
+            warn!("Error loading CA: {:?}", defmt::Debug2Format(&e));
+            #[cfg(not(feature = "defmt"))]
+            #[cfg(feature = "defmt")]
+            #[cfg(feature = "defmt")]
+            warn!("Error loading CA: {:?}", defmt::Debug2Format(&e));
+            #[cfg(not(feature = "defmt"))]
+            warn!("Error loading CA: {:?}", e);
+            #[cfg(not(feature = "defmt"))]
+            #[cfg(feature = "defmt")]
+            warn!("Error loading CA: {:?}", defmt::Debug2Format(&e));
+            #[cfg(not(feature = "defmt"))]
+            warn!("Error loading CA: {:?}", e);
             TlsError::DecodeError
         })?;
 
@@ -285,26 +291,25 @@ warn!("Error loading CA: {:?}", e);
             // TODO: Support intermediates...
             if let CertificateEntryRef::X509(certificate) = certificate.entries[0] {
                 let cert_der = pki_types::CertificateDer::from(certificate);
-            let cert = webpki::EndEntityCert::try_from(&cert_der).map_err(|e| {
+                let cert = webpki::EndEntityCert::try_from(&cert_der).map_err(|e| {
                     #[cfg(feature = "defmt")]
-                warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
-                #[cfg(not(feature = "defmt"))]
-                #[cfg(feature = "defmt")]
-#[cfg(feature = "defmt")]
-warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error loading cert: {:?}", e);
-#[cfg(not(feature = "defmt"))]
-#[cfg(feature = "defmt")]
-warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error loading cert: {:?}", e);
+                    warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
+                    #[cfg(not(feature = "defmt"))]
+                    #[cfg(feature = "defmt")]
+                    #[cfg(feature = "defmt")]
+                    warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
+                    #[cfg(not(feature = "defmt"))]
+                    warn!("Error loading cert: {:?}", e);
+                    #[cfg(not(feature = "defmt"))]
+                    #[cfg(feature = "defmt")]
+                    warn!("Error loading cert: {:?}", defmt::Debug2Format(&e));
+                    #[cfg(not(feature = "defmt"))]
+                    warn!("Error loading cert: {:?}", e);
                     TlsError::DecodeError
                 })?;
 
                 // If no clock is provided, the validity check will fail
-                let time =
-                    UnixTime::since_unix_epoch(Duration::from_secs(now.unwrap_or(0)));
+                let time = UnixTime::since_unix_epoch(Duration::from_secs(now.unwrap_or(0)));
                 info!("Certificate is loaded!");
                 match cert.verify_for_usage(
                     ALL_SIGALGS,
@@ -321,15 +326,15 @@ warn!("Error loading cert: {:?}", e);
                         warn!("Error verifying certificate: {:?}", defmt::Debug2Format(&e));
                         #[cfg(not(feature = "defmt"))]
                         #[cfg(feature = "defmt")]
-#[cfg(feature = "defmt")]
-warn!("Error verifying certificate: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error verifying certificate: {:?}", e);
-#[cfg(not(feature = "defmt"))]
-#[cfg(feature = "defmt")]
-warn!("Error verifying certificate: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error verifying certificate: {:?}", e);
+                        #[cfg(feature = "defmt")]
+                        warn!("Error verifying certificate: {:?}", defmt::Debug2Format(&e));
+                        #[cfg(not(feature = "defmt"))]
+                        warn!("Error verifying certificate: {:?}", e);
+                        #[cfg(not(feature = "defmt"))]
+                        #[cfg(feature = "defmt")]
+                        warn!("Error verifying certificate: {:?}", defmt::Debug2Format(&e));
+                        #[cfg(not(feature = "defmt"))]
+                        warn!("Error verifying certificate: {:?}", e);
                     }
                 }
 
@@ -342,15 +347,15 @@ warn!("Error verifying certificate: {:?}", e);
                                 warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
                                 #[cfg(not(feature = "defmt"))]
                                 #[cfg(feature = "defmt")]
-#[cfg(feature = "defmt")]
-warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error verifying host: {:?}", e);
-#[cfg(not(feature = "defmt"))]
-#[cfg(feature = "defmt")]
-warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error verifying host: {:?}", e);
+                                #[cfg(feature = "defmt")]
+                                warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
+                                #[cfg(not(feature = "defmt"))]
+                                warn!("Error verifying host: {:?}", e);
+                                #[cfg(not(feature = "defmt"))]
+                                #[cfg(feature = "defmt")]
+                                warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
+                                #[cfg(not(feature = "defmt"))]
+                                warn!("Error verifying host: {:?}", e);
                             }
                         },
                         Err(e) => {
@@ -358,15 +363,15 @@ warn!("Error verifying host: {:?}", e);
                             warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
                             #[cfg(not(feature = "defmt"))]
                             #[cfg(feature = "defmt")]
-#[cfg(feature = "defmt")]
-warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error verifying host: {:?}", e);
-#[cfg(not(feature = "defmt"))]
-#[cfg(feature = "defmt")]
-warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
-#[cfg(not(feature = "defmt"))]
-warn!("Error verifying host: {:?}", e);
+                            #[cfg(feature = "defmt")]
+                            warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
+                            #[cfg(not(feature = "defmt"))]
+                            warn!("Error verifying host: {:?}", e);
+                            #[cfg(not(feature = "defmt"))]
+                            #[cfg(feature = "defmt")]
+                            warn!("Error verifying host: {:?}", defmt::Debug2Format(&e));
+                            #[cfg(not(feature = "defmt"))]
+                            warn!("Error verifying host: {:?}", e);
                         }
                     }
                 }

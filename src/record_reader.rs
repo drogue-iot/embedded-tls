@@ -337,7 +337,8 @@ mod tests {
         let mut buf = [0; 32];
         let mut reader = RecordReader::new(&mut buf);
         let _provider = UnsecureProvider::new::<Aes128GcmSha256>(rand::rng());
-        let mut key_schedule = KeySchedule::<UnsecureProvider<Aes128GcmSha256, rand::rngs::ThreadRng>>::new();
+        let mut key_schedule =
+            KeySchedule::<UnsecureProvider<Aes128GcmSha256, rand::rngs::ThreadRng>>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
@@ -397,7 +398,8 @@ mod tests {
         let mut buf = [0; 4]; // cannot contain both data portions
         let mut reader = RecordReader::new(&mut buf);
         let _provider = UnsecureProvider::new::<Aes128GcmSha256>(rand::rng());
-        let mut key_schedule = KeySchedule::<UnsecureProvider<Aes128GcmSha256, rand::rngs::ThreadRng>>::new();
+        let mut key_schedule =
+            KeySchedule::<UnsecureProvider<Aes128GcmSha256, rand::rngs::ThreadRng>>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
@@ -449,7 +451,8 @@ mod tests {
         let mut buf = [0; 32];
         let mut reader = RecordReader::new(&mut buf);
         let _provider = UnsecureProvider::new::<Aes128GcmSha256>(rand::rng());
-        let mut key_schedule = KeySchedule::<UnsecureProvider<Aes128GcmSha256, rand::rngs::ThreadRng>>::new();
+        let mut key_schedule =
+            KeySchedule::<UnsecureProvider<Aes128GcmSha256, rand::rngs::ThreadRng>>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader

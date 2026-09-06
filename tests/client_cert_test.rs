@@ -1,14 +1,14 @@
 use aes_gcm::Aes128Gcm;
 use ecdsa::elliptic_curve::SecretKey;
 use embedded_io_adapters::tokio_1::FromTokio;
+use embedded_tls::CryptoRngCore;
 use embedded_tls::{Certificate, CryptoProvider, SignatureScheme, crypto_traits::AesGcmAead};
 use hmac::Hmac;
 use p256::ecdsa::SigningKey;
-use embedded_tls::CryptoRngCore;
 use rustls::server::WebPkiClientVerifier;
-use std::sync::Arc;
 use sha2::Sha256;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::sync::Once;
 
 mod tlsserver;
@@ -48,10 +48,9 @@ fn setup() -> SocketAddr {
                 client_auth_roots.add(root.clone()).unwrap()
             }
 
-            let client_cert_verifier =
-                WebPkiClientVerifier::builder(Arc::new(client_auth_roots))
-                    .build()
-                    .unwrap();
+            let client_cert_verifier = WebPkiClientVerifier::builder(Arc::new(client_auth_roots))
+                .build()
+                .unwrap();
 
             let config = rustls::ServerConfig::builder()
                 .with_client_cert_verifier(client_cert_verifier)

@@ -73,6 +73,8 @@ mod write_buffer;
 
 // Hardware-abstraction traits for crypto offloading
 pub mod crypto_traits;
+#[cfg(feature = "embassy-crypto")]
+pub mod embassy_crypto;
 mod hkdf;
 
 pub use config::{

@@ -1,11 +1,13 @@
 use clap::Parser;
+use embassy_crypto as _;
 use embassy_executor::{Executor, Spawner};
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{Config, Ipv4Address, Ipv4Cidr, Runner, StackResources};
 use embassy_net_tuntap::TunTapDevice;
 use embassy_time::Duration;
 use embedded_io_async::Write;
-use embedded_tls::{Aes128GcmSha256, TlsConfig, TlsConnection, TlsContext, UnsecureProvider};
+use embedded_tls::embassy_crypto::EmbassyCryptoProvider;
+use embedded_tls::{Aes128GcmSha256, TlsConfig, TlsConnection, TlsContext};
 use heapless::Vec;
 use log::*;
 use rand::Rng;
@@ -79,9 +81,12 @@ async fn main_task(spawner: Spawner) {
     let config = TlsConfig::new().with_server_name("example.com");
     let mut tls = TlsConnection::new(socket, &mut read_record_buffer, &mut write_record_buffer);
 
+    // Crypto is served by the `embassy-crypto` drivers (feature `embassy-crypto`):
+    // AES-128-GCM record protection plus P-256 key agreement through the
+    // high-level `embassy_crypto::asymmetric` API.
     tls.open(TlsContext::new(
         &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(rand::rng()),
+        EmbassyCryptoProvider::new::<Aes128GcmSha256>(rand::rng()),
     ))
     .await
     .expect("error establishing TLS connection");

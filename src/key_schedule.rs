@@ -190,13 +190,13 @@ where
             .make_expanded_hkdf_label(b"iv", ContextType::None, iv.as_mut())?;
         self.iv = iv;
 
-        eprintln!(
+        error!(
             "[DIAG] calculate_traffic_secret: key_len={}, iv_len={}",
             self.key.as_ref().len(),
             self.iv.as_ref().len()
         );
         self.aead = Some(provider.aead(self.key.as_ref()).map_err(|e| {
-            eprintln!(
+            error!(
                 "[DIAG] provider.aead() failed: key_len={}, err={:?}",
                 self.key.as_ref().len(),
                 e
@@ -300,9 +300,9 @@ where
             .traffic_secret
             .make_expanded_hkdf_label(b"finished", ContextType::None, key.as_mut())?;
 
-        eprintln!("[DIAG] create_client_finished: key_len={}", key.len());
+        error!("[DIAG] create_client_finished: key_len={}", key.len());
         let mut hmac = Provider::Hmac::new_from_slice(&key).map_err(|e| {
-            eprintln!("[DIAG] Hmac::new_from_slice failed in create_client_finished: key_len={}, err={:?}", key.len(), e);
+            error!("[DIAG] Hmac::new_from_slice failed in create_client_finished: key_len={}, err={:?}", key.len(), e);
             TlsError::CryptoError
         })?;
         let mut transcript: ProviderHashArray<Provider> = Default::default();
@@ -436,9 +436,9 @@ where
         self.binder_key
             .make_expanded_hkdf_label(b"finished", ContextType::None, key.as_mut())?;
 
-        eprintln!("[DIAG] create_client_finished: key_len={}", key.len());
+        error!("[DIAG] create_client_finished: key_len={}", key.len());
         let mut hmac = Provider::Hmac::new_from_slice(&key).map_err(|e| {
-            eprintln!("[DIAG] Hmac::new_from_slice failed in create_client_finished: key_len={}, err={:?}", key.len(), e);
+            error!("[DIAG] Hmac::new_from_slice failed in create_client_finished: key_len={}, err={:?}", key.len(), e);
             TlsError::CryptoError
         })?;
         let mut transcript: ProviderHashArray<Provider> = Default::default();

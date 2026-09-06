@@ -5,7 +5,7 @@ edition = "2021"
 resolver = "2"
 
 [dependencies]
-embedded-tls = { path = "../..", features = ["alloc", "std", "log"], default-features = false }
+embedded-tls = { path = "../..", features = ["alloc", "std", "log", "embassy-crypto"], default-features = false }
 env_logger = "0.11.11"
 rand = "0.10.2"
 log = "0.4"
@@ -15,6 +15,7 @@ embassy-time = { version = "0.5.1", default-features = false, features = ["std"]
 smoltcp = { version = "0.14.0", features = ["dns-max-server-count-4"] }
 embassy-net = { version = "0.9.1", features=[ "std", "log", "medium-ethernet", "medium-ip", "tcp", "udp", "dns", "dhcpv4", "proto-ipv6"] }
 embassy-net-tuntap = { version = "0.1.1" }
+embassy-crypto = { git = "https://github.com/embassy-rs/embassy", rev = "c0fdd08e94138105fba8be3133c4ced91afc30fc", features = ["driver-rustcrypto"] }
 
 async-io = "2.6.0"
 futures = { version = "0.3.34" }

@@ -2,13 +2,12 @@
 use aes_gcm::Aes128Gcm;
 use digest::FixedOutputReset;
 use embedded_io_adapters::tokio_1::FromTokio;
+use embedded_tls::CryptoRngCore;
 use embedded_tls::pki::CertVerifier;
 use embedded_tls::{
-    Aes128GcmSha256, CryptoProvider, SignatureScheme, TlsError,
-    crypto_traits::AesGcmAead,
+    Aes128GcmSha256, CryptoProvider, SignatureScheme, TlsError, crypto_traits::AesGcmAead,
 };
 use hmac::Hmac;
-use embedded_tls::CryptoRngCore;
 use rsa::pkcs8::DecodePrivateKey;
 use sha2::{Digest, Sha256};
 use signature::RandomizedSigner;
