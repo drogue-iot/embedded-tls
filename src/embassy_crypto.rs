@@ -11,7 +11,7 @@ use crate::config::{Aes128GcmSha256, Aes256GcmSha384, CryptoProvider, TlsCipherS
 use crate::crypto_traits::AesGcmAead;
 use crate::{CryptoRngCore, NamedGroup, TlsError};
 
-use embassy_crypto::asymmetric::Signature;
+use embassy_crypto::asymmetric::p256::Signature;
 use embassy_crypto::{HmacSha256, HmacSha384, Sha256, Sha384, asymmetric};
 
 /// `CryptoProvider` backed by `embassy-crypto` drivers.
@@ -42,12 +42,12 @@ fn ecdh_p256(
             let d: &[u8; 32] = secret_key
                 .try_into()
                 .map_err(|_| TlsError::InvalidKeyShare)?;
-            let ours =
-                asymmetric::SecretKey::from_bytes(d).map_err(|_| TlsError::InvalidKeyShare)?;
+            let ours = asymmetric::p256::SecretKey::from_bytes(d)
+                .map_err(|_| TlsError::InvalidKeyShare)?;
             let peer_xy: &[u8; 64] = peer_public
                 .try_into()
                 .map_err(|_| TlsError::InvalidKeyShare)?;
-            let peer = asymmetric::PublicKey::from_xy(
+            let peer = asymmetric::p256::PublicKey::from_xy(
                 peer_xy[..32].try_into().unwrap(),
                 peer_xy[32..].try_into().unwrap(),
             );
@@ -70,7 +70,8 @@ fn keygen_p256<RNG: CryptoRngCore>(
 ) -> Result<(), TlsError> {
     match group {
         NamedGroup::Secp256r1 => {
-            let secret = asymmetric::SecretKey::generate(rng).map_err(|_| TlsError::CryptoError)?;
+            let secret =
+                asymmetric::p256::SecretKey::generate(rng).map_err(|_| TlsError::CryptoError)?;
             secret_key[..32].copy_from_slice(&secret.to_bytes());
             let public = secret.public_key().map_err(|_| TlsError::CryptoError)?;
             let (x, y) = public.to_xy();

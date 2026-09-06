@@ -38,7 +38,7 @@ pki-types = { package = "rustls-pki-types", version = "1.15", default-features =
 const-oid = { version = "0.10.2", optional = true }
 der = { version = "0.8.2", features = ["derive", "oid", "heapless"], optional = true }
 signature = { version = "3.0", default-features = false }
-embassy-crypto = { git = "https://github.com/embassy-rs/embassy", rev = "c0fdd08e94138105fba8be3133c4ced91afc30fc", default-features = false, optional = true }
+embassy-crypto = { git = "https://github.com/embassy-rs/embassy", rev = "a568760", default-features = false, optional = true }
 ecdsa = { version = "0.17", default-features = false }
 
 # Logging alternatives
