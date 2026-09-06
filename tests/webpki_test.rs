@@ -15,7 +15,7 @@ mod tlsserver;
 static LOG_INIT: OnceLock<()> = OnceLock::new();
 
 struct WebPkiProvider<'a> {
-    rng: rand::rngs::OsRng,
+    rng: rand::rngs::ThreadRng,
     verifier: CertVerifier<'a, Sha256, SystemTime, 4096>,
 }
 
@@ -95,7 +95,7 @@ async fn test_server_certificate_validation() {
     let open_fut = tls.open(TlsContext::new(
         &config,
         WebPkiProvider {
-            rng: rand::rngs::OsRng,
+            rng: rand::rng(),
             verifier: CertVerifier::new(Certificate::X509(&der[..])),
         },
     ));

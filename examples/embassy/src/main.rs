@@ -8,7 +8,7 @@ use embedded_io_async::Write;
 use embedded_tls::{Aes128GcmSha256, TlsConfig, TlsConnection, TlsContext, UnsecureProvider};
 use heapless::Vec;
 use log::*;
-use rand::{rngs::OsRng, RngCore};
+use rand::Rng;
 use static_cell::StaticCell;
 
 #[derive(Parser)]
@@ -47,7 +47,7 @@ async fn main_task(spawner: Spawner) {
 
     // Generate random seed
     let mut seed = [0; 8];
-    OsRng.fill_bytes(&mut seed);
+    rand::rng().fill_bytes(&mut seed);
     let seed = u64::from_le_bytes(seed);
 
     // Init network stack
@@ -56,7 +56,7 @@ async fn main_task(spawner: Spawner) {
         embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
 
     // Launch network task
-    spawner.must_spawn(net_task(runner));
+    spawner.spawn(net_task(runner).expect("spawn net_task"));
 
     // Then we can use it!
     let mut rx_buffer = [0; 4096];
@@ -81,7 +81,7 @@ async fn main_task(spawner: Spawner) {
 
     tls.open(TlsContext::new(
         &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(rand::rng()),
     ))
     .await
     .expect("error establishing TLS connection");
@@ -106,6 +106,6 @@ fn main() {
 
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
-        spawner.must_spawn(main_task(spawner));
+        spawner.spawn(main_task(spawner).expect("spawn main_task"));
     });
 }

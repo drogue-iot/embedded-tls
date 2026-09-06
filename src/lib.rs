@@ -15,7 +15,6 @@
 ```
 use embedded_tls::*;
 use embedded_io_adapters::tokio_1::FromTokio;
-use rand::rngs::OsRng;
 use tokio::net::TcpStream;
 
 #[tokio::main]
@@ -38,7 +37,7 @@ async fn main() {
     // otherwise, use embedded_tls::webpki::CertVerifier, which only works on std for now.
     tls.open(TlsContext::new(
         &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(rand::rng()),
     ))
     .await
     .expect("error establishing TLS connection");
@@ -83,7 +82,12 @@ pub use crypto_traits::TlsAead;
 pub use extensions::extension_data::signature_algorithms::SignatureScheme;
 pub use extensions::extension_data::supported_groups::NamedGroup;
 pub use handshake::certificate_verify::CertificateVerify;
-pub use rand_core::{CryptoRng, CryptoRngCore};
+pub use rand_core::{CryptoRng, Rng};
+
+/// Compatibility alias for the `rand_core` 0.6 `CryptoRngCore` trait
+/// (equivalent to `CryptoRng + Rng` in `rand_core` 0.10).
+pub trait CryptoRngCore: CryptoRng + Rng {}
+impl<T: CryptoRng + Rng> CryptoRngCore for T {}
 
 #[cfg(feature = "webpki")]
 pub mod webpki;

@@ -14,7 +14,8 @@ use ecdsa::elliptic_curve::SecretKey;
 use heapless::Vec;
 use hmac::Hmac;
 use p256::ecdsa::SigningKey;
-use rand_core::{CryptoRngCore, RngCore};
+use crate::CryptoRngCore;
+use rand_core::Rng;
 pub use sha2::{Sha256, Sha384};
 
 pub use crate::extensions::extension_data::max_fragment_length::MaxFragmentLength;

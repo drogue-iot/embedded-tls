@@ -3,7 +3,6 @@ use crate::parse_buffer::ParseBuffer;
 use digest::{Output, OutputSizeUser};
 
 #[derive(Clone)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Finished<Hash: OutputSizeUser> {
     pub verify: Output<Hash>,
     pub hash: Option<Output<Hash>>,
@@ -14,14 +13,13 @@ impl<Hash: OutputSizeUser> defmt::Format for Finished<Hash> {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
             fmt,
-            "Finished {{ verify: {:x?}, hash: {:?} }}",
+            "Finished {{ verify: {:?}, hash: {:?} }}",
             self.verify.as_slice(),
             self.hash.as_ref().map(|h| h.as_slice())
         )
     }
 }
 
-#[cfg(not(feature = "defmt"))]
 impl<Hash: OutputSizeUser> core::fmt::Debug for Finished<Hash> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Finished")

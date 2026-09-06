@@ -5,13 +5,12 @@ use embedded_tls::blocking::*;
 use embedded_tls::crypto_traits::AesGcmAead;
 use embedded_tls::webpki::CertVerifier;
 use hmac::Hmac;
-use rand::rngs::OsRng;
 use sha2::Sha256;
 use std::net::TcpStream;
 use std::time::SystemTime;
 
 struct Provider<'a> {
-    rng: OsRng,
+    rng: rand::rngs::ThreadRng,
     verifier: CertVerifier<'a, Sha256, SystemTime, 4096>,
 }
 
@@ -67,7 +66,7 @@ fn main() {
     tls.open(TlsContext::new(
         &config,
         Provider {
-            rng: OsRng,
+            rng: rand::rng(),
             verifier: CertVerifier::new(Certificate::X509(&der)),
         },
     ))

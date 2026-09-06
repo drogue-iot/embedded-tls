@@ -4,9 +4,9 @@ use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_tls::{Certificate, CryptoProvider, SignatureScheme, crypto_traits::AesGcmAead};
 use hmac::Hmac;
 use p256::ecdsa::SigningKey;
-use rand::rngs::OsRng;
-use rand_core::CryptoRngCore;
-use rustls::server::AllowAnyAuthenticatedClient;
+use embedded_tls::CryptoRngCore;
+use rustls::server::WebPkiClientVerifier;
+use std::sync::Arc;
 use sha2::Sha256;
 use std::net::SocketAddr;
 use std::sync::Once;
@@ -37,8 +37,6 @@ fn setup() -> SocketAddr {
         std::thread::spawn(move || {
             use tlsserver::*;
 
-            let versions = &[&rustls::version::TLS13];
-
             let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
 
             let ca = load_certs(&test_dir.join("data").join("ca-cert.pem"));
@@ -47,17 +45,16 @@ fn setup() -> SocketAddr {
 
             let mut client_auth_roots = rustls::RootCertStore::empty();
             for root in ca.iter() {
-                client_auth_roots.add(root).unwrap()
+                client_auth_roots.add(root.clone()).unwrap()
             }
 
-            let client_cert_verifier = AllowAnyAuthenticatedClient::new(client_auth_roots);
+            let client_cert_verifier =
+                WebPkiClientVerifier::builder(Arc::new(client_auth_roots))
+                    .build()
+                    .unwrap();
 
             let config = rustls::ServerConfig::builder()
-                .with_cipher_suites(rustls::ALL_CIPHER_SUITES)
-                .with_kx_groups(&rustls::ALL_KX_GROUPS)
-                .with_protocol_versions(versions)
-                .unwrap()
-                .with_client_cert_verifier(client_cert_verifier.boxed())
+                .with_client_cert_verifier(client_cert_verifier)
                 .with_single_cert(certs, privkey)
                 .unwrap();
 
@@ -72,7 +69,7 @@ fn setup() -> SocketAddr {
 }
 
 struct Provider<'a> {
-    rng: OsRng,
+    rng: rand::rngs::ThreadRng,
     priv_key: &'a [u8],
     client_cert: Option<Certificate<&'a [u8]>>,
 }
@@ -140,7 +137,7 @@ async fn test_client_certificate_auth() {
     log::info!("SIZE of connection is {}", core::mem::size_of_val(&tls));
 
     let mut provider = Provider {
-        rng: OsRng,
+        rng: rand::rng(),
         priv_key: &private_key_der,
         client_cert: Some(Certificate::X509(&client_cert_der)),
     };

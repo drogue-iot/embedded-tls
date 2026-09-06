@@ -1,6 +1,5 @@
 use embedded_io::{Read, Write};
 use embedded_io_adapters::std::FromStd;
-use rand_core::OsRng;
 use std::net::{SocketAddr, TcpStream};
 use std::sync::Once;
 
@@ -83,7 +82,7 @@ fn test_blocking_borrowed() {
 
     tls.open(TlsContext::new(
         &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(rand::rng()),
     ))
     .expect("error establishing TLS connection");
 

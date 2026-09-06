@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use rand_core::RngCore;
+use rand_core::Rng;
 
 use digest::OutputSizeUser;
 use heapless::Vec;

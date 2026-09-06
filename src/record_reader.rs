@@ -270,7 +270,6 @@ mod tests {
     use super::*;
     use crate::config::UnsecureProvider;
     use crate::{Aes128GcmSha256, content_types::ContentType, key_schedule::KeySchedule};
-    use rand_core::OsRng;
 
     struct ChunkRead<'a>(&'a [u8], usize);
 
@@ -337,8 +336,8 @@ mod tests {
 
         let mut buf = [0; 32];
         let mut reader = RecordReader::new(&mut buf);
-        let _provider = UnsecureProvider::new::<Aes128GcmSha256>(OsRng);
-        let mut key_schedule = KeySchedule::<UnsecureProvider<Aes128GcmSha256, OsRng>>::new();
+        let _provider = UnsecureProvider::new::<Aes128GcmSha256>(rand::rng());
+        let mut key_schedule = KeySchedule::<UnsecureProvider<Aes128GcmSha256, rand::rngs::ThreadRng>>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
@@ -397,8 +396,8 @@ mod tests {
 
         let mut buf = [0; 4]; // cannot contain both data portions
         let mut reader = RecordReader::new(&mut buf);
-        let _provider = UnsecureProvider::new::<Aes128GcmSha256>(OsRng);
-        let mut key_schedule = KeySchedule::<UnsecureProvider<Aes128GcmSha256, OsRng>>::new();
+        let _provider = UnsecureProvider::new::<Aes128GcmSha256>(rand::rng());
+        let mut key_schedule = KeySchedule::<UnsecureProvider<Aes128GcmSha256, rand::rngs::ThreadRng>>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
@@ -449,8 +448,8 @@ mod tests {
 
         let mut buf = [0; 32];
         let mut reader = RecordReader::new(&mut buf);
-        let _provider = UnsecureProvider::new::<Aes128GcmSha256>(OsRng);
-        let mut key_schedule = KeySchedule::<UnsecureProvider<Aes128GcmSha256, OsRng>>::new();
+        let _provider = UnsecureProvider::new::<Aes128GcmSha256>(rand::rng());
+        let mut key_schedule = KeySchedule::<UnsecureProvider<Aes128GcmSha256, rand::rngs::ThreadRng>>::new();
 
         {
             if let ServerRecord::ApplicationData(data) = reader
