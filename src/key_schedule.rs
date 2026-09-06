@@ -190,19 +190,11 @@ where
             .make_expanded_hkdf_label(b"iv", ContextType::None, iv.as_mut())?;
         self.iv = iv;
 
-        error!(
-            "[DIAG] calculate_traffic_secret: key_len={}, iv_len={}",
-            self.key.as_ref().len(),
-            self.iv.as_ref().len()
+        self.aead = Some(
+            provider
+                .aead(self.key.as_ref())
+                .map_err(|_| TlsError::CryptoError)?,
         );
-        self.aead = Some(provider.aead(self.key.as_ref()).map_err(|e| {
-            error!(
-                "[DIAG] provider.aead() failed: key_len={}, err={:?}",
-                self.key.as_ref().len(),
-                e
-            );
-            TlsError::CryptoError
-        })?);
         self.counter = 0;
         Ok(())
     }
@@ -300,11 +292,7 @@ where
             .traffic_secret
             .make_expanded_hkdf_label(b"finished", ContextType::None, key.as_mut())?;
 
-        error!("[DIAG] create_client_finished: key_len={}", key.len());
-        let mut hmac = Provider::Hmac::new_from_slice(&key).map_err(|e| {
-            error!("[DIAG] Hmac::new_from_slice failed in create_client_finished: key_len={}, err={:?}", key.len(), e);
-            TlsError::CryptoError
-        })?;
+        let mut hmac = Provider::Hmac::new_from_slice(&key).map_err(|_| TlsError::CryptoError)?;
         let mut transcript: ProviderHashArray<Provider> = Default::default();
         let cloned = self.server_state.transcript_hash.clone();
         Digest::finalize_into(cloned, transcript.as_mut());
@@ -436,11 +424,7 @@ where
         self.binder_key
             .make_expanded_hkdf_label(b"finished", ContextType::None, key.as_mut())?;
 
-        error!("[DIAG] create_client_finished: key_len={}", key.len());
-        let mut hmac = Provider::Hmac::new_from_slice(&key).map_err(|e| {
-            error!("[DIAG] Hmac::new_from_slice failed in create_client_finished: key_len={}, err={:?}", key.len(), e);
-            TlsError::CryptoError
-        })?;
+        let mut hmac = Provider::Hmac::new_from_slice(&key).map_err(|_| TlsError::CryptoError)?;
         let mut transcript: ProviderHashArray<Provider> = Default::default();
         let cloned = transcript_hash.clone();
         Digest::finalize_into(cloned, transcript.as_mut());

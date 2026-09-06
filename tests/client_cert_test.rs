@@ -145,7 +145,6 @@ async fn test_client_certificate_auth() {
     match open_fut.await {
         Ok(()) => {}
         Err(e) => {
-            eprintln!("[DIAG] TLS open failed with error: {:?}", e);
             panic!("error establishing TLS connection: {:?}", e);
         }
     }
