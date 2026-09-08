@@ -1,5 +1,6 @@
 use crate::TlsError;
-use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
+use crate::config::{Certificate, TlsClock, TlsVerifier};
+use crate::crypto_traits::TlsHash;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
     certificate::{
@@ -8,7 +9,6 @@ use crate::handshake::{
     certificate_verify::CertificateVerifyRef,
 };
 use core::marker::PhantomData;
-use digest::Digest;
 use heapless::Vec;
 #[cfg(all(not(feature = "alloc"), feature = "webpki"))]
 impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
@@ -118,22 +118,22 @@ static ALL_SIGALGS: &[&webpki::SignatureAlgorithm] = &[
     &webpki::ED25519,
 ];
 
-pub struct CertVerifier<'a, CipherSuite, Clock, const CERT_SIZE: usize>
+pub struct CertVerifier<'a, Hash, Clock, const CERT_SIZE: usize>
 where
     Clock: TlsClock,
-    CipherSuite: TlsCipherSuite,
+    Hash: TlsHash,
 {
     ca: Certificate<&'a [u8]>,
     host: Option<heapless::String<64>>,
-    certificate_transcript: Option<CipherSuite::Hash>,
+    certificate_transcript: Option<Hash>,
     certificate: Option<OwnedCertificate<CERT_SIZE>>,
     _clock: PhantomData<Clock>,
 }
 
-impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
+impl<'a, Hash, Clock, const CERT_SIZE: usize> CertVerifier<'a, Hash, Clock, CERT_SIZE>
 where
     Clock: TlsClock,
-    CipherSuite: TlsCipherSuite,
+    Hash: TlsHash,
 {
     #[must_use]
     pub fn new(ca: Certificate<&'a [u8]>) -> Self {
@@ -147,10 +147,10 @@ where
     }
 }
 
-impl<CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<CipherSuite>
-    for CertVerifier<'_, CipherSuite, Clock, CERT_SIZE>
+impl<Hash, Clock, const CERT_SIZE: usize> TlsVerifier<Hash>
+    for CertVerifier<'_, Hash, Clock, CERT_SIZE>
 where
-    CipherSuite: TlsCipherSuite,
+    Hash: TlsHash,
     Clock: TlsClock,
 {
     fn set_hostname_verification(&mut self, hostname: &str) -> Result<(), TlsError> {
@@ -162,7 +162,7 @@ where
 
     fn verify_certificate(
         &mut self,
-        transcript: &CipherSuite::Hash,
+        transcript: &Hash,
         cert: ServerCertificate,
     ) -> Result<(), TlsError> {
         verify_certificate(self.host.as_deref(), &self.ca, &cert, Clock::now())?;
@@ -175,10 +175,14 @@ where
         let handshake_hash = unwrap!(self.certificate_transcript.take());
         let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
         let mut msg: Vec<u8, 130> = Vec::new();
+        // 64 (pad) + 34 (ctx) + 48 (SHA-384) = 146 bytes required
         msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
         msg.extend_from_slice(ctx_str)
             .map_err(|_| TlsError::EncodeError)?;
-        msg.extend_from_slice(&handshake_hash.finalize())
+        let mut hash_out = generic_array::GenericArray::default();
+        let cloned = handshake_hash.clone();
+        cloned.finalize_into(&mut hash_out);
+        msg.extend_from_slice(&hash_out)
             .map_err(|_| TlsError::EncodeError)?;
 
         let certificate = unwrap!(self.certificate.as_ref()).try_into()?;

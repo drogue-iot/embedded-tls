@@ -1,10 +1,13 @@
+use aes_gcm::Aes128Gcm;
 use ecdsa::elliptic_curve::SecretKey;
 use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_tls::{Certificate, CryptoProvider, SignatureScheme};
+use hmac::Hmac;
 use p256::ecdsa::SigningKey;
 use rand::rngs::OsRng;
 use rand_core::CryptoRngCore;
 use rustls::server::AllowAnyAuthenticatedClient;
+use sha2::Sha256;
 use std::net::SocketAddr;
 use std::sync::Once;
 
@@ -77,9 +80,17 @@ struct Provider<'a> {
 impl CryptoProvider for Provider<'_> {
     type CipherSuite = embedded_tls::Aes128GcmSha256;
     type Signature = p256::ecdsa::DerSignature;
+    type Hash = Sha256;
+    type Hmac = Hmac<Sha256>;
+    type Aead = Aes128Gcm;
 
     fn rng(&mut self) -> impl CryptoRngCore {
         &mut self.rng
+    }
+
+    fn aead(&mut self, key: &[u8]) -> Result<Self::Aead, embedded_tls::TlsError> {
+        use aes_gcm::aead::KeyInit;
+        Self::Aead::new_from_slice(key).map_err(|_| embedded_tls::TlsError::CryptoError)
     }
 
     fn signer(

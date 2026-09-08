@@ -1,13 +1,11 @@
 use heapless::Vec;
 
 use crate::cipher_suites::CipherSuite;
-use crate::crypto_engine::CryptoEngine;
 use crate::extensions::extension_data::key_share::KeyShareEntry;
+use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::extensions::messages::ServerHelloExtension;
 use crate::parse_buffer::ParseBuffer;
 use crate::{TlsError, unused};
-use p256::PublicKey;
-use p256::ecdh::{EphemeralSecret, SharedSecret};
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -39,6 +37,7 @@ impl<'a> ServerHello<'a> {
         let cipher_suite = CipherSuite::parse(buf).map_err(|_| TlsError::InvalidCipherSuite)?;
 
         ////info!("sh 3");
+
         // skip compression method, it's 0.
         buf.read_u8()?;
 
@@ -63,21 +62,11 @@ impl<'a> ServerHello<'a> {
         })
     }
 
-    pub fn calculate_shared_secret(&self, secret: &EphemeralSecret) -> Option<SharedSecret> {
+    /// Extract the server public key bytes from the key share extension.
+    /// Returns `(group, public_key_bytes)` where public_key_bytes is the SEC1
+    /// encoded point (including the 0x04 prefix for uncompressed points).
+    pub fn server_public_key(&self) -> Option<(NamedGroup, &[u8])> {
         let server_key_share = self.key_share()?;
-        let server_public_key = PublicKey::from_sec1_bytes(server_key_share.opaque).ok()?;
-        Some(secret.diffie_hellman(&server_public_key))
-    }
-
-    #[allow(dead_code)]
-    pub fn initialize_crypto_engine(&self, secret: &EphemeralSecret) -> Option<CryptoEngine> {
-        let server_key_share = self.key_share()?;
-
-        let group = server_key_share.group;
-
-        let server_public_key = PublicKey::from_sec1_bytes(server_key_share.opaque).ok()?;
-        let shared = secret.diffie_hellman(&server_public_key);
-
-        Some(CryptoEngine::new(group, shared))
+        Some((server_key_share.group, server_key_share.opaque))
     }
 }

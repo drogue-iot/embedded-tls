@@ -12,8 +12,9 @@ use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
 use ecdsa::elliptic_curve::SecretKey;
 use generic_array::ArrayLength;
 use heapless::Vec;
+use hmac::Hmac;
 use p256::ecdsa::SigningKey;
-use rand_core::CryptoRngCore;
+use rand_core::{CryptoRngCore, RngCore};
 pub use sha2::{Sha256, Sha384};
 use typenum::{Sum, U10, U12, U16, U32};
 
@@ -67,9 +68,9 @@ impl TlsCipherSuite for Aes256GcmSha384 {
 /// The verifier is responsible for verifying certificates and signatures. Since certificate verification is
 /// an expensive process, this trait allows clients to choose how much verification should take place,
 /// and also to skip the verification if the server is verified through other means (I.e. a pre-shared key).
-pub trait TlsVerifier<CipherSuite>
+pub trait TlsVerifier<Hash>
 where
-    CipherSuite: TlsCipherSuite,
+    Hash: crate::crypto_traits::TlsHash,
 {
     /// Host verification is enabled by passing a server hostname.
     fn set_hostname_verification(&mut self, hostname: &str) -> Result<(), crate::TlsError>;
@@ -81,7 +82,7 @@ where
     /// certificate internally.
     fn verify_certificate(
         &mut self,
-        transcript: &CipherSuite::Hash,
+        transcript: &Hash,
         cert: CertificateRef,
     ) -> Result<(), TlsError>;
 
@@ -93,9 +94,9 @@ where
 
 pub struct NoVerify;
 
-impl<CipherSuite> TlsVerifier<CipherSuite> for NoVerify
+impl<Hash> TlsVerifier<Hash> for NoVerify
 where
-    CipherSuite: TlsCipherSuite,
+    Hash: crate::crypto_traits::TlsHash,
 {
     fn set_hostname_verification(&mut self, _hostname: &str) -> Result<(), crate::TlsError> {
         Ok(())
@@ -103,7 +104,7 @@ where
 
     fn verify_certificate(
         &mut self,
-        _transcript: &CipherSuite::Hash,
+        _transcript: &Hash,
         _cert: CertificateRef,
     ) -> Result<(), TlsError> {
         Ok(())
@@ -138,13 +139,139 @@ impl TlsClock for NoClock {
     }
 }
 
+/// Hardware-abstracted crypto provider.
+///
+/// Default implementations delegate to the RustCrypto stack via
+/// `TlsCipherSuite::Hash` / `TlsCipherSuite::Cipher`.  Override
+/// `hash()`, `hmac()`, `aead()`, `ecdh()`, and `keygen()` to plug
+/// in hardware acceleration.
 pub trait CryptoProvider {
     type CipherSuite: TlsCipherSuite;
     type Signature: AsRef<[u8]>;
 
+    /// Hardware-abstracted hash for transcript and key schedule.
+    type Hash: crate::crypto_traits::TlsHash;
+    /// Hardware-abstracted HMAC for HKDF.
+    type Hmac: crate::crypto_traits::TlsHmac<
+            OutputSize = <Self::Hash as crate::crypto_traits::TlsHash>::OutputSize,
+        >;
+    /// Hardware-abstracted AEAD for record encryption.
+    type Aead: crate::crypto_traits::TlsAead;
+
     fn rng(&mut self) -> impl CryptoRngCore;
 
-    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, crate::TlsError> {
+    /// Factory: create an AEAD instance with the given key.
+    fn aead(&mut self, key: &[u8]) -> Result<Self::Aead, crate::TlsError>;
+
+    /// Perform ECDH key exchange for the given named group.
+    fn ecdh(
+        &mut self,
+        group: NamedGroup,
+        secret_key: &[u8],
+        peer_public: &[u8],
+        shared_secret: &mut [u8],
+    ) -> Result<(), crate::TlsError> {
+        match group {
+            NamedGroup::Secp256r1 => {
+                let secret = p256::SecretKey::from_slice(secret_key)
+                    .map_err(|_| crate::TlsError::InvalidKeyShare)?;
+                let mut sec1 = [0u8; 65];
+                sec1[0] = 0x04;
+                sec1[1..].copy_from_slice(peer_public);
+                let public = p256::PublicKey::from_sec1_bytes(&sec1)
+                    .map_err(|_| crate::TlsError::InvalidKeyShare)?;
+                let shared =
+                    p256::ecdh::diffie_hellman(secret.to_nonzero_scalar(), public.as_affine());
+                shared_secret.copy_from_slice(shared.raw_secret_bytes().as_slice());
+                Ok(())
+            }
+            NamedGroup::Secp384r1 => {
+                #[cfg(feature = "p384")]
+                {
+                    let secret = p384::SecretKey::from_slice(secret_key)
+                        .map_err(|_| crate::TlsError::InvalidKeyShare)?;
+                    let mut sec1 = [0u8; 97];
+                    sec1[0] = 0x04;
+                    sec1[1..].copy_from_slice(peer_public);
+                    let public = p384::PublicKey::from_sec1_bytes(&sec1)
+                        .map_err(|_| crate::TlsError::InvalidKeyShare)?;
+                    let shared =
+                        p384::ecdh::diffie_hellman(secret.to_nonzero_scalar(), public.as_affine());
+                    shared_secret.copy_from_slice(shared.raw_secret_bytes().as_slice());
+                    Ok(())
+                }
+                #[cfg(not(feature = "p384"))]
+                Err(crate::TlsError::InvalidKeyShare)
+            }
+            _ => Err(crate::TlsError::InvalidKeyShare),
+        }
+    }
+
+    /// Generate a key pair for the given named group.
+    fn keygen(
+        &mut self,
+        group: NamedGroup,
+        secret_key: &mut [u8],
+        public_key: &mut [u8],
+    ) -> Result<(), crate::TlsError> {
+        match group {
+            NamedGroup::Secp256r1 => {
+                use p256::elliptic_curve::sec1::ToEncodedPoint;
+                loop {
+                    self.rng().fill_bytes(secret_key);
+                    if let Ok(secret) = p256::SecretKey::from_slice(secret_key) {
+                        let pk = p256::PublicKey::from_secret_scalar(&secret.to_nonzero_scalar());
+                        let point = pk.to_encoded_point(false);
+                        public_key[..32].copy_from_slice(
+                            point
+                                .x()
+                                .ok_or(crate::TlsError::InvalidKeyShare)?
+                                .as_slice(),
+                        );
+                        public_key[32..].copy_from_slice(
+                            point
+                                .y()
+                                .ok_or(crate::TlsError::InvalidKeyShare)?
+                                .as_slice(),
+                        );
+                        return Ok(());
+                    }
+                }
+            }
+            NamedGroup::Secp384r1 => {
+                #[cfg(feature = "p384")]
+                {
+                    use p384::elliptic_curve::sec1::ToEncodedPoint;
+                    loop {
+                        self.rng().fill_bytes(secret_key);
+                        if let Ok(secret) = p384::SecretKey::from_slice(secret_key) {
+                            let pk =
+                                p384::PublicKey::from_secret_scalar(&secret.to_nonzero_scalar());
+                            let point = pk.to_encoded_point(false);
+                            public_key[..48].copy_from_slice(
+                                point
+                                    .x()
+                                    .ok_or(crate::TlsError::InvalidKeyShare)?
+                                    .as_slice(),
+                            );
+                            public_key[48..].copy_from_slice(
+                                point
+                                    .y()
+                                    .ok_or(crate::TlsError::InvalidKeyShare)?
+                                    .as_slice(),
+                            );
+                            return Ok(());
+                        }
+                    }
+                }
+                #[cfg(not(feature = "p384"))]
+                Err(crate::TlsError::InvalidKeyShare)
+            }
+            _ => Err(crate::TlsError::InvalidKeyShare),
+        }
+    }
+
+    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::Hash>, crate::TlsError> {
         Err::<&mut NoVerify, _>(crate::TlsError::Unimplemented)
     }
 
@@ -172,14 +299,39 @@ pub trait CryptoProvider {
 
 impl<T: CryptoProvider> CryptoProvider for &mut T {
     type CipherSuite = T::CipherSuite;
-
     type Signature = T::Signature;
+    type Hash = T::Hash;
+    type Hmac = T::Hmac;
+    type Aead = T::Aead;
 
     fn rng(&mut self) -> impl CryptoRngCore {
         T::rng(self)
     }
 
-    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, crate::TlsError> {
+    fn aead(&mut self, key: &[u8]) -> Result<Self::Aead, crate::TlsError> {
+        T::aead(self, key)
+    }
+
+    fn ecdh(
+        &mut self,
+        group: NamedGroup,
+        secret_key: &[u8],
+        peer_public: &[u8],
+        shared_secret: &mut [u8],
+    ) -> Result<(), crate::TlsError> {
+        T::ecdh(self, group, secret_key, peer_public, shared_secret)
+    }
+
+    fn keygen(
+        &mut self,
+        group: NamedGroup,
+        secret_key: &mut [u8],
+        public_key: &mut [u8],
+    ) -> Result<(), crate::TlsError> {
+        T::keygen(self, group, secret_key, public_key)
+    }
+
+    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Self::Hash>, crate::TlsError> {
         T::verifier(self)
     }
 
@@ -235,14 +387,53 @@ impl<'a, CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> UnsecureProvider<'a, C
     }
 }
 
-impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
-    for UnsecureProvider<'_, CipherSuite, RNG>
-{
-    type CipherSuite = CipherSuite;
+impl<RNG: CryptoRngCore> CryptoProvider for UnsecureProvider<'_, Aes128GcmSha256, RNG> {
+    type CipherSuite = Aes128GcmSha256;
     type Signature = p256::ecdsa::DerSignature;
+    type Hash = Sha256;
+    type Hmac = Hmac<Sha256>;
+    type Aead = Aes128Gcm;
 
     fn rng(&mut self) -> impl CryptoRngCore {
         &mut self.rng
+    }
+
+    fn aead(&mut self, key: &[u8]) -> Result<Self::Aead, crate::TlsError> {
+        KeyInit::new_from_slice(key).map_err(|_| crate::TlsError::CryptoError)
+    }
+
+    fn signer(
+        &mut self,
+    ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
+    {
+        let key_der = self.priv_key.ok_or(TlsError::InvalidPrivateKey)?;
+        let secret_key =
+            SecretKey::from_sec1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
+
+        Ok((
+            SigningKey::from(&secret_key),
+            SignatureScheme::EcdsaSecp256r1Sha256,
+        ))
+    }
+
+    fn client_cert(&mut self) -> Option<Certificate<impl AsRef<[u8]>>> {
+        self.client_cert.clone()
+    }
+}
+
+impl<RNG: CryptoRngCore> CryptoProvider for UnsecureProvider<'_, Aes256GcmSha384, RNG> {
+    type CipherSuite = Aes256GcmSha384;
+    type Signature = p256::ecdsa::DerSignature;
+    type Hash = Sha384;
+    type Hmac = Hmac<Sha384>;
+    type Aead = Aes256Gcm;
+
+    fn rng(&mut self) -> impl CryptoRngCore {
+        &mut self.rng
+    }
+
+    fn aead(&mut self, key: &[u8]) -> Result<Self::Aead, crate::TlsError> {
+        KeyInit::new_from_slice(key).map_err(|_| crate::TlsError::CryptoError)
     }
 
     fn signer(
@@ -378,7 +569,7 @@ impl<'a> TlsConfig<'a> {
     /// writes. Note that the buffers need to include some overhead over the configured fragment
     /// length.
     ///
-    /// From [RFC 6066, Section 4.  Maximum Fragment Length Negotiation](https://www.rfc-editor.org/rfc/rfc6066#page-8):
+    /// From [RFC 6066, Section 4.  Maximum Fragment Length Negotiation](https://www.rfc-editor.org/rfc/rfc6066#page=8):
     ///
     /// > Without this extension, TLS specifies a fixed maximum plaintext
     /// > fragment length of 2^14 bytes.  It may be desirable for constrained
@@ -404,6 +595,22 @@ impl<'a> TlsConfig<'a> {
         // TODO: Remove potential panic
         self.psk = Some((psk, unwrap!(Vec::from_slice(identities).ok())));
         self
+    }
+}
+
+impl<D: AsRef<[u8]>> Certificate<D> {
+    pub fn encode(&self, buf: &mut crate::buffer::CryptoBuffer) -> Result<(), TlsError> {
+        match self {
+            Certificate::X509(data) => {
+                buf.with_u24_length(|buf| buf.extend_from_slice(data.as_ref()))?;
+            }
+            Certificate::RawPublicKey(data) => {
+                buf.with_u24_length(|buf| buf.extend_from_slice(data.as_ref()))?;
+            }
+        }
+        // Zero extensions
+        buf.push_u16(0).map_err(|_| TlsError::EncodeError)?;
+        Ok(())
     }
 }
 

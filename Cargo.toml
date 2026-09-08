@@ -22,11 +22,11 @@ p384 = { version = "0.13", default-features = false, features = [ "ecdsa", "sha3
 ed25519-dalek = { version = "2.2", default-features = false, optional = true }
 rsa = { version = "0.9.9", default-features = false, features = ["sha2"], optional = true }
 rand_core = { version = "0.6.3", default-features = false }
-hkdf = "0.12.3"
 hmac = "0.12.1"
 sha2 = { version = "0.10.2", default-features = false }
 aes-gcm = { version = "0.10.1", default-features = false, features = ["aes"] }
 digest = { version = "0.10.3", default-features = false, features = [ "core-api" ] }
+subtle = { version = "2.6", default-features = false }
 typenum = { version = "1.15.0", default-features = false }
 heapless = { version = "0.9", default-features = false }
 embedded-io = "0.7"

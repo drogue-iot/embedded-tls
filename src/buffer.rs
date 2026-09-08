@@ -18,6 +18,7 @@ impl<'b> CryptoBuffer<'b> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn wrap(buf: &'b mut [u8]) -> Self {
         Self {
             buf,

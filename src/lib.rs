@@ -62,7 +62,6 @@ mod common;
 mod config;
 mod connection;
 mod content_types;
-mod crypto_engine;
 mod extensions;
 pub mod flush_policy;
 mod handshake;
@@ -73,8 +72,16 @@ mod record;
 mod record_reader;
 mod write_buffer;
 
-pub use config::UnsecureProvider;
+// Hardware-abstraction traits for crypto offloading
+pub mod crypto_traits;
+mod hkdf;
+
+pub use config::{
+    Aes128GcmSha256, Aes256GcmSha384, CryptoProvider, TlsCipherSuite, UnsecureProvider,
+};
+pub use crypto_traits::{TlsAead, TlsHash, TlsHmac};
 pub use extensions::extension_data::signature_algorithms::SignatureScheme;
+pub use extensions::extension_data::supported_groups::NamedGroup;
 pub use handshake::certificate_verify::CertificateVerify;
 pub use rand_core::{CryptoRng, CryptoRngCore};
 

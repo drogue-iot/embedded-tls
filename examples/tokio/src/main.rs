@@ -1,5 +1,3 @@
-#![macro_use]
-
 use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_io_async::Write as _;
 use embedded_tls::*;

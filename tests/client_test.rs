@@ -1,4 +1,3 @@
-#![macro_use]
 use embedded_io::BufRead as _;
 use embedded_io_adapters::{std::FromStd, tokio_1::FromTokio};
 use embedded_io_async::BufRead as _;
@@ -277,7 +276,7 @@ fn test_blocking_ping() {
     let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new().with_server_name("localhost");
 
-    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         FromStd::new(stream),
         &mut read_record_buffer,
         &mut write_record_buffer,
@@ -326,7 +325,7 @@ fn test_blocking_ping_nocopy() {
     let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new().with_server_name("localhost");
 
-    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         FromStd::new(stream),
         &mut read_record_buffer,
         &mut write_record_buffer,
@@ -369,7 +368,7 @@ fn test_blocking_ping_nocopy_bufread() {
     let mut write_record_buffer = [0; 16384];
     let config = TlsConfig::new().with_server_name("localhost");
 
-    let mut tls: TlsConnection<FromStd<TcpStream>, Aes128GcmSha256> = TlsConnection::new(
+    let mut tls = TlsConnection::new(
         FromStd::new(stream),
         &mut read_record_buffer,
         &mut write_record_buffer,
