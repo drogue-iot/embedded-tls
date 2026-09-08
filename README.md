@@ -8,8 +8,7 @@
 This project was originally developed under the `drogue-iot` organization. It has since been
 transferred to [embassy-rs](https://github.com/embassy-rs), which now maintains it.
 
-Embedded-TLS is a Rust-native TLS 1.3 implementation that works in a no-std environment. The Rust crate was formerly known as `drogue-tls`. The
-implementation is work in progress, but the [example clients](https://github.com/embassy-rs/embedded-tls/tree/main/examples) should work against the [rustls](https://github.com/ctz/rustls) echo server.
+Embedded-TLS is a Rust-native TLS 1.3 implementation that works in a no-std environment. The Rust crate was formerly known as `drogue-tls`.
 
 The client supports both async and blocking modes. By default, the `std` feature is enabled, but can be disabled for bare metal usage.
 
