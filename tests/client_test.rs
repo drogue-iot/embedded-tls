@@ -23,7 +23,7 @@ fn setup() -> SocketAddr {
     use mio::net::TcpListener;
     init_log();
     INIT.call_once(|| {
-        let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
 
         let listener = TcpListener::bind(addr).expect("cannot listen on port");
         let addr = listener

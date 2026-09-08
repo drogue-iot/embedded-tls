@@ -1,5 +1,6 @@
 use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
+use crate::crypto_ops::TlsHash;
 #[cfg(feature = "p384")]
 use crate::der_certificate::ECDSA_SHA384;
 #[cfg(feature = "ed25519")]
@@ -22,7 +23,6 @@ use core::marker::PhantomData;
 #[cfg(feature = "defmt")]
 use defmt::Debug2Format;
 use der::Decode;
-use digest::Digest;
 use heapless::Vec;
 
 pub struct CertificateNames {
@@ -149,7 +149,7 @@ where
     }
 }
 
-fn verify_signature(
+pub(crate) fn verify_signature(
     message: &[u8],
     certificate: &ServerCertificate,
     verify: &CertificateVerifyRef,
@@ -289,7 +289,7 @@ fn get_cert_time(time: Time) -> u64 {
     }
 }
 
-fn verify_certificate(
+pub(crate) fn verify_certificate(
     verifier: &CertificateEntryRef,
     certificate: &CertificateEntryRef,
     now: Option<u64>,

@@ -1,5 +1,6 @@
 use crate::TlsError;
 use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
+use crate::crypto_ops::TlsHash;
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::handshake::{
     certificate::{
@@ -8,7 +9,6 @@ use crate::handshake::{
     certificate_verify::CertificateVerifyRef,
 };
 use core::marker::PhantomData;
-use digest::Digest;
 use heapless::Vec;
 #[cfg(all(not(feature = "alloc"), feature = "webpki"))]
 impl TryInto<&'static webpki::SignatureAlgorithm> for SignatureScheme {
@@ -205,7 +205,7 @@ fn verify_signature(
                 "Verifying with signature scheme {:?}",
                 verify.signature_scheme
             );
-            info!("Signature: {:x?}", verify.signature);
+            info!("Signature: {:?}", verify.signature);
             let pkisig = verify.signature_scheme.try_into()?;
             match cert.verify_signature(pkisig, message, verify.signature) {
                 Ok(()) => {

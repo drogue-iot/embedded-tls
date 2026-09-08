@@ -1,41 +1,34 @@
+use crate::crypto_ops::{TlsHash, TlsHkdf, TlsHmac};
 use crate::handshake::binder::PskBinder;
 use crate::handshake::finished::Finished;
 use crate::{TlsError, config::TlsCipherSuite};
-use digest::OutputSizeUser;
 use digest::generic_array::ArrayLength;
-use hmac::{Mac, SimpleHmac};
-use sha2::Digest;
-use sha2::digest::generic_array::{GenericArray, typenum::Unsigned};
+use digest::generic_array::{GenericArray, typenum::Unsigned};
 
 pub type HashOutputSize<CipherSuite> =
-    <<CipherSuite as TlsCipherSuite>::Hash as OutputSizeUser>::OutputSize;
+    <<CipherSuite as TlsCipherSuite>::Hash as TlsHash>::OutputSize;
 
 pub type IvArray<CipherSuite> = GenericArray<u8, <CipherSuite as TlsCipherSuite>::IvLen>;
 pub type KeyArray<CipherSuite> = GenericArray<u8, <CipherSuite as TlsCipherSuite>::KeyLen>;
 pub type HashArray<CipherSuite> = GenericArray<u8, HashOutputSize<CipherSuite>>;
-
-type Hkdf<CipherSuite> = hkdf::Hkdf<
-    <CipherSuite as TlsCipherSuite>::Hash,
-    SimpleHmac<<CipherSuite as TlsCipherSuite>::Hash>,
->;
 
 enum Secret<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
     Uninitialized,
-    Initialized(Hkdf<CipherSuite>),
+    Initialized(CipherSuite::Hkdf),
 }
 
 impl<CipherSuite> Secret<CipherSuite>
 where
     CipherSuite: TlsCipherSuite,
 {
-    fn replace(&mut self, secret: Hkdf<CipherSuite>) {
+    fn replace(&mut self, secret: CipherSuite::Hkdf) {
         *self = Self::Initialized(secret);
     }
 
-    fn as_ref(&self) -> Result<&Hkdf<CipherSuite>, TlsError> {
+    fn as_ref(&self) -> Result<&CipherSuite::Hkdf, TlsError> {
         match self {
             Secret::Initialized(secret) => Ok(secret),
             Secret::Uninitialized => Err(TlsError::InternalError),
@@ -81,9 +74,7 @@ where
 
         let mut okm = GenericArray::default();
         //info!("label {:x?}", label);
-        self.as_ref()?
-            .expand(&hkdf_label, &mut okm)
-            .map_err(|_| TlsError::CryptoError)?;
+        self.as_ref()?.expand(&hkdf_label, &mut okm)?;
         //info!("expand {:x?}", okm);
         Ok(okm)
     }
@@ -109,7 +100,7 @@ where
     }
 
     fn initialize(&mut self, ikm: &[u8]) {
-        let (secret, hkdf) = Hkdf::<CipherSuite>::extract(Some(self.secret.as_ref()), ikm);
+        let (secret, hkdf) = CipherSuite::Hkdf::extract(Some(self.secret.as_ref()), ikm);
         self.hkdf.replace(hkdf);
         self.secret = secret;
     }
@@ -153,11 +144,13 @@ where
     }
 
     #[inline]
+    #[allow(clippy::unnecessary_wraps)]
     pub fn get_key(&self) -> Result<&KeyArray<CipherSuite>, TlsError> {
         Ok(&self.key)
     }
 
     #[inline]
+    #[allow(clippy::unnecessary_wraps)]
     pub fn get_iv(&self) -> Result<&IvArray<CipherSuite>, TlsError> {
         Ok(&self.iv)
     }
@@ -175,7 +168,7 @@ where
     ) -> Result<(), TlsError> {
         let secret = shared.derive_secret(label, ContextType::transcript_hash(transcript_hash))?;
         let traffic_secret =
-            Hkdf::<CipherSuite>::from_prk(&secret).map_err(|_| TlsError::InternalError)?;
+            CipherSuite::Hkdf::from_prk(&secret).map_err(|_| TlsError::InternalError)?;
 
         self.traffic_secret.replace(traffic_secret);
         self.key = self
@@ -210,11 +203,7 @@ where
     }
 
     fn empty_hash() -> Self {
-        Self::Hash(
-            <CipherSuite::Hash as Digest>::new()
-                .chain_update([])
-                .finalize(),
-        )
+        Self::Hash(CipherSuite::Hash::new().chain_update(&[]).finalize())
     }
 }
 
@@ -240,7 +229,7 @@ where
             },
             server_state: ReadKeySchedule {
                 state: KeyScheduleState::new(),
-                transcript_hash: <CipherSuite::Hash as Digest>::new(),
+                transcript_hash: CipherSuite::Hash::new(),
             },
         }
     }
@@ -251,6 +240,24 @@ where
 
     pub(crate) fn replace_transcript_hash(&mut self, hash: CipherSuite::Hash) {
         self.server_state.transcript_hash = hash;
+    }
+
+    /// Replace the transcript with a synthetic `message_hash` construct.
+    /// Used after sending `HelloRetryRequest` per RFC 8446 Section 4.4.1.
+    #[allow(clippy::unnecessary_wraps)]
+    #[cfg(feature = "server")]
+    pub fn replace_transcript_with_message_hash(&mut self) -> Result<(), TlsError> {
+        let hash = self.server_state.transcript_hash.clone().finalize();
+        self.server_state.transcript_hash = CipherSuite::Hash::new();
+
+        // Synthetic message_hash: 0xFE + u24(hash_len) + hash_bytes
+        let len = hash.len() as u32;
+        self.server_state.transcript_hash.update(&[0xFE]);
+        self.server_state
+            .transcript_hash
+            .update(&len.to_be_bytes()[1..]);
+        self.server_state.transcript_hash.update(&hash);
+        Ok(())
     }
 
     pub fn as_split(
@@ -282,13 +289,9 @@ where
                 ContextType::None,
             )?;
 
-        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
-            .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(
-            &mut hmac,
-            &self.server_state.transcript_hash.clone().finalize(),
-        );
-        let verify = hmac.finalize().into_bytes();
+        let mut hmac = CipherSuite::Hmac::new_from_slice(&key)?;
+        hmac.update(&self.server_state.transcript_hash.clone().finalize());
+        let verify = hmac.finalize();
 
         Ok(Finished { verify, hash: None })
     }
@@ -345,7 +348,7 @@ where
             .shared
             .derive_secret(b"ext binder", ContextType::empty_hash())?;
         self.client_state.binder_key.replace(
-            Hkdf::<CipherSuite>::from_prk(&binder_key).map_err(|_| TlsError::InternalError)?,
+            CipherSuite::Hkdf::from_prk(&binder_key).map_err(|_| TlsError::InternalError)?,
         );
         self.shared.derived()
     }
@@ -364,6 +367,21 @@ where
         //info!("Derive keys, hash: {:x?}", context);
 
         self.calculate_traffic_secrets(b"c ap traffic", b"s ap traffic")?;
+        self.shared.derived()
+    }
+
+    #[cfg(feature = "server")]
+    pub fn initialize_handshake_secret_server(&mut self, ikm: &[u8]) -> Result<(), TlsError> {
+        self.shared.initialize(ikm);
+        // Swap labels: server writes with "s hs traffic", reads with "c hs traffic"
+        self.calculate_traffic_secrets(b"s hs traffic", b"c hs traffic")?;
+        self.shared.derived()
+    }
+
+    #[cfg(feature = "server")]
+    pub fn initialize_master_secret_server(&mut self) -> Result<(), TlsError> {
+        self.shared.initialize(Self::zero().as_slice());
+        self.calculate_traffic_secrets(b"s ap traffic", b"c ap traffic")?;
         self.shared.derived()
     }
 
@@ -431,10 +449,9 @@ where
                 ContextType::None,
             )?;
 
-        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
-            .map_err(|_| TlsError::CryptoError)?;
-        Mac::update(&mut hmac, &transcript_hash.clone().finalize());
-        let verify = hmac.finalize().into_bytes();
+        let mut hmac = CipherSuite::Hmac::new_from_slice(&key)?;
+        hmac.update(&transcript_hash.clone().finalize());
+        let verify = hmac.finalize();
         Ok(PskBinder { verify })
     }
 }
@@ -482,15 +499,11 @@ where
                 ContextType::None,
             )?;
         // info!("hmac sign key {:x?}", key);
-        let mut hmac = SimpleHmac::<CipherSuite::Hash>::new_from_slice(&key)
-            .map_err(|_| TlsError::InternalError)?;
-        Mac::update(
-            &mut hmac,
-            finished.hash.as_ref().ok_or_else(|| {
-                warn!("No hash in Finished");
-                TlsError::InternalError
-            })?,
-        );
+        let mut hmac = CipherSuite::Hmac::new_from_slice(&key)?;
+        hmac.update(finished.hash.as_ref().ok_or_else(|| {
+            warn!("No hash in Finished");
+            TlsError::InternalError
+        })?);
         //let code = hmac.clone().finalize().into_bytes();
         Ok(hmac.verify(&finished.verify).is_ok())
         //info!("verified {:?}", verified);

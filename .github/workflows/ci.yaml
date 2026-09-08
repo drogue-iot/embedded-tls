@@ -22,14 +22,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Generate test certificates
+        run: bash tests/data/gen_test_certs.sh
+
       - name: Run `cargo ${{ matrix.subcmd }}` for library
         run: cargo ${{ matrix.subcmd }} --features webpki
+
+      - name: Run `cargo ${{ matrix.subcmd }}` for library with server
+        run: cargo ${{ matrix.subcmd }} --features webpki,server,rustpki
 
   example-ci:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        example: [blocking, tokio, tokio-psk, embassy]
+        example: [blocking, tokio, tokio-psk, embassy, blocking-server, tokio-server]
 
     steps:
       - uses: actions/checkout@v4

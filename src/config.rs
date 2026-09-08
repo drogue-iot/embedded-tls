@@ -2,64 +2,65 @@ use core::marker::PhantomData;
 
 use crate::TlsError;
 use crate::cipher_suites::CipherSuite;
+use crate::crypto_ops::{
+    SoftwareCipher, SoftwareHash, SoftwareHkdf, SoftwareHmac, TlsCipher, TlsHash, TlsHkdf, TlsHmac,
+};
 use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
 use crate::extensions::extension_data::supported_groups::NamedGroup;
 pub use crate::handshake::certificate::{CertificateEntryRef, CertificateRef};
 pub use crate::handshake::certificate_verify::CertificateVerifyRef;
-use aes_gcm::{AeadInPlace, Aes128Gcm, Aes256Gcm, KeyInit};
-use digest::core_api::BlockSizeUser;
-use digest::{Digest, FixedOutput, OutputSizeUser, Reset};
+use aes_gcm::{Aes128Gcm, Aes256Gcm};
 use ecdsa::elliptic_curve::SecretKey;
 use generic_array::ArrayLength;
 use heapless::Vec;
 use p256::ecdsa::SigningKey;
 use rand_core::CryptoRngCore;
 pub use sha2::{Sha256, Sha384};
-use typenum::{Sum, U10, U12, U16, U32};
+use typenum::{U12, U16, U32};
 
 pub use crate::extensions::extension_data::max_fragment_length::MaxFragmentLength;
 
 pub const TLS_RECORD_OVERHEAD: usize = 128;
 
-// longest label is 12b -> buf <= 2 + 1 + 6 + longest + 1 + hash_out = hash_out + 22
-type LongestLabel = U12;
-type LabelOverhead = U10;
-type LabelBuffer<CipherSuite> = Sum<
-    <<CipherSuite as TlsCipherSuite>::Hash as OutputSizeUser>::OutputSize,
-    Sum<LongestLabel, LabelOverhead>,
->;
-
 /// Represents a TLS 1.3 cipher suite
 pub trait TlsCipherSuite {
     const CODE_POINT: u16;
-    type Cipher: KeyInit<KeySize = Self::KeyLen> + AeadInPlace<NonceSize = Self::IvLen>;
+    type Cipher: TlsCipher<KeySize = Self::KeyLen, NonceSize = Self::IvLen>;
     type KeyLen: ArrayLength<u8>;
     type IvLen: ArrayLength<u8>;
 
-    type Hash: Digest + Reset + Clone + OutputSizeUser + BlockSizeUser + FixedOutput;
-    type LabelBufferSize: ArrayLength<u8>;
+    type Hash: TlsHash;
+
+    /// HMAC implementation for key schedule operations.
+    type Hmac: TlsHmac<OutputSize = <Self::Hash as TlsHash>::OutputSize>;
+    /// HKDF implementation for key derivation.
+    type Hkdf: TlsHkdf<OutputSize = <Self::Hash as TlsHash>::OutputSize>;
 }
 
 pub struct Aes128GcmSha256;
 impl TlsCipherSuite for Aes128GcmSha256 {
     const CODE_POINT: u16 = CipherSuite::TlsAes128GcmSha256 as u16;
-    type Cipher = Aes128Gcm;
+    type Cipher = SoftwareCipher<Aes128Gcm>;
     type KeyLen = U16;
     type IvLen = U12;
 
-    type Hash = Sha256;
-    type LabelBufferSize = LabelBuffer<Self>;
+    type Hash = SoftwareHash<Sha256>;
+
+    type Hmac = SoftwareHmac<Sha256>;
+    type Hkdf = SoftwareHkdf<Sha256>;
 }
 
 pub struct Aes256GcmSha384;
 impl TlsCipherSuite for Aes256GcmSha384 {
     const CODE_POINT: u16 = CipherSuite::TlsAes256GcmSha384 as u16;
-    type Cipher = Aes256Gcm;
+    type Cipher = SoftwareCipher<Aes256Gcm>;
     type KeyLen = U32;
     type IvLen = U12;
 
-    type Hash = Sha384;
-    type LabelBufferSize = LabelBuffer<Self>;
+    type Hash = SoftwareHash<Sha384>;
+
+    type Hmac = SoftwareHmac<Sha384>;
+    type Hkdf = SoftwareHkdf<Sha384>;
 }
 
 /// A TLS 1.3 verifier.
@@ -224,11 +225,13 @@ impl<RNG: CryptoRngCore> UnsecureProvider<'_, (), RNG> {
 }
 
 impl<'a, CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> UnsecureProvider<'a, CipherSuite, RNG> {
+    #[must_use]
     pub fn with_priv_key(mut self, priv_key: &'a [u8]) -> Self {
         self.priv_key = Some(priv_key);
         self
     }
 
+    #[must_use]
     pub fn with_cert(mut self, cert: Certificate<&'a [u8]>) -> Self {
         self.client_cert = Some(cert);
         self
@@ -250,8 +253,13 @@ impl<CipherSuite: TlsCipherSuite, RNG: CryptoRngCore> CryptoProvider
     ) -> Result<(impl signature::SignerMut<Self::Signature>, SignatureScheme), crate::TlsError>
     {
         let key_der = self.priv_key.ok_or(TlsError::InvalidPrivateKey)?;
-        let secret_key =
-            SecretKey::from_sec1_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
+        // Try SEC1 first, then PKCS#8 (OpenSSL defaults to PKCS#8 for "PRIVATE KEY")
+        let secret_key = SecretKey::from_sec1_der(key_der)
+            .or_else(|_| {
+                use p256::pkcs8::DecodePrivateKey;
+                SecretKey::from_pkcs8_der(key_der)
+            })
+            .map_err(|_| TlsError::InvalidPrivateKey)?;
 
         Ok((
             SigningKey::from(&secret_key),
@@ -361,11 +369,16 @@ impl<'a> TlsConfig<'a> {
         self
     }
 
-    /// Configure ALPN protocol names to send in the ClientHello.
+    /// Configure ALPN protocol names to send in the `ClientHello`.
     ///
     /// The server will select one of the offered protocols and echo it back
-    /// in EncryptedExtensions. This is required for endpoints that multiplex
+    /// in `EncryptedExtensions`. This is required for endpoints that multiplex
     /// protocols on a single port (e.g. AWS IoT Core MQTT over port 443).
+    ///
+    /// At most [`MAX_ALPN_PROTOCOLS`](crate::extensions::extension_data::alpn::MAX_ALPN_PROTOCOLS)
+    /// protocols may be offered; more returns `TlsError::OutOfMemory` when the
+    /// ClientHello is encoded.
+    #[allow(clippy::doc_markdown)]
     pub fn with_alpn(mut self, protocols: &'a [&'a [u8]]) -> Self {
         self.alpn_protocols = Some(protocols);
         self

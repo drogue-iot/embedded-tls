@@ -63,6 +63,7 @@ mod config;
 mod connection;
 mod content_types;
 mod crypto_engine;
+mod crypto_ops;
 mod extensions;
 pub mod flush_policy;
 mod handshake;
@@ -71,12 +72,26 @@ mod parse_buffer;
 pub mod read_buffer;
 mod record;
 mod record_reader;
+#[cfg(feature = "server")]
+pub(crate) mod server;
+#[cfg(feature = "server")]
+mod server_config;
+#[cfg(feature = "server")]
+mod server_handshake;
+#[cfg(all(feature = "server", feature = "rustpki"))]
+mod server_verify;
 mod write_buffer;
 
 pub use config::UnsecureProvider;
+pub use crypto_ops::{
+    SoftwareCipher, SoftwareHash, SoftwareHkdf, SoftwareHmac, TlsBuffer, TlsCipher, TlsHash,
+    TlsHkdf, TlsHmac,
+};
 pub use extensions::extension_data::signature_algorithms::SignatureScheme;
 pub use handshake::certificate_verify::CertificateVerify;
 pub use rand_core::{CryptoRng, CryptoRngCore};
+#[cfg(feature = "server")]
+pub use server_config::{TlsServerConfig, TlsServerContext};
 
 #[cfg(feature = "webpki")]
 pub mod webpki;

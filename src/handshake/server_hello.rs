@@ -17,9 +17,6 @@ pub struct ServerHello<'a> {
 
 impl<'a> ServerHello<'a> {
     pub fn parse(buf: &mut ParseBuffer<'a>) -> Result<ServerHello<'a>, TlsError> {
-        //let mut buf = ParseBuffer::new(&buf[0..content_length]);
-        //let mut buf = ParseBuffer::new(&buf);
-
         let _version = buf.read_u16().map_err(|_| TlsError::InvalidHandshake)?;
 
         let mut random = [0; 32];
@@ -29,23 +26,17 @@ impl<'a> ServerHello<'a> {
             .read_u8()
             .map_err(|_| TlsError::InvalidSessionIdLength)?;
 
-        //info!("sh 1");
-
         let session_id = buf
             .slice(session_id_length as usize)
             .map_err(|_| TlsError::InvalidSessionIdLength)?;
-        //info!("sh 2");
 
         let cipher_suite = CipherSuite::parse(buf).map_err(|_| TlsError::InvalidCipherSuite)?;
 
-        ////info!("sh 3");
         // skip compression method, it's 0.
         buf.read_u8()?;
 
         let extensions = ServerHelloExtension::parse_vector(buf)?;
 
-        // debug!("server random {:x}", random);
-        // debug!("server session-id {:x}", session_id.as_slice());
         debug!("server cipher_suite {:?}", cipher_suite);
         debug!("server extensions {:?}", extensions);
 
