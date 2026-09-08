@@ -1,7 +1,7 @@
 use crate::{
-    TlsError,
+    CryptoProvider, TlsError,
     buffer::CryptoBuffer,
-    config::{TLS_RECORD_OVERHEAD, TlsCipherSuite},
+    config::TLS_RECORD_OVERHEAD,
     connection::encrypt,
     key_schedule::{ReadKeySchedule, WriteKeySchedule},
     record::{ClientRecord, ClientRecordHeader},
@@ -58,10 +58,6 @@ impl<'a> WriteBuffer<'a> {
         self.reborrow().is_full()
     }
 
-    pub fn append(&mut self, buf: &[u8]) -> usize {
-        self.reborrow_mut().append(buf)
-    }
-
     pub fn is_empty(&self) -> bool {
         self.reborrow().is_empty()
     }
@@ -70,17 +66,18 @@ impl<'a> WriteBuffer<'a> {
         self.reborrow().contains(header)
     }
 
+    pub fn append(&mut self, buf: &[u8]) -> usize {
+        self.reborrow_mut().append(buf)
+    }
+
     pub(crate) fn start_record(&mut self, header: ClientRecordHeader) -> Result<(), TlsError> {
         self.reborrow_mut().start_record(header)
     }
 
-    pub(crate) fn close_record<CipherSuite>(
+    pub(crate) fn close_record<Provider: CryptoProvider>(
         &mut self,
-        write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
-    ) -> Result<&[u8], TlsError>
-    where
-        CipherSuite: TlsCipherSuite,
-    {
+        write_key_schedule: &mut WriteKeySchedule<Provider>,
+    ) -> Result<&[u8], TlsError> {
         close_record(
             self.buffer,
             &mut self.pos,
@@ -89,15 +86,12 @@ impl<'a> WriteBuffer<'a> {
         )
     }
 
-    pub fn write_record<CipherSuite>(
+    pub fn write_record<Provider: CryptoProvider>(
         &mut self,
-        record: &ClientRecord<CipherSuite>,
-        write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
-        read_key_schedule: Option<&mut ReadKeySchedule<CipherSuite>>,
-    ) -> Result<&[u8], TlsError>
-    where
-        CipherSuite: TlsCipherSuite,
-    {
+        record: &ClientRecord<Provider>,
+        write_key_schedule: &mut WriteKeySchedule<Provider>,
+        read_key_schedule: Option<&mut ReadKeySchedule<Provider>>,
+    ) -> Result<&[u8], TlsError> {
         write_record(
             self.buffer,
             &mut self.pos,
@@ -169,13 +163,10 @@ impl WriteBufferBorrowMut<'_> {
         start_record(self.buffer, self.pos, self.current_header, header)
     }
 
-    pub fn close_record<CipherSuite>(
+    pub fn close_record<Provider: CryptoProvider>(
         &mut self,
-        write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
-    ) -> Result<&[u8], TlsError>
-    where
-        CipherSuite: TlsCipherSuite,
-    {
+        write_key_schedule: &mut WriteKeySchedule<Provider>,
+    ) -> Result<&[u8], TlsError> {
         close_record(
             self.buffer,
             self.pos,
@@ -219,15 +210,12 @@ fn with_buffer(
     }
 }
 
-fn close_record<'a, CipherSuite>(
+fn close_record<'a, Provider: CryptoProvider>(
     buffer: &'a mut [u8],
     pos: &mut usize,
     current_header: &mut Option<ClientRecordHeader>,
-    write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
-) -> Result<&'a [u8], TlsError>
-where
-    CipherSuite: TlsCipherSuite,
-{
+    write_key_schedule: &mut WriteKeySchedule<Provider>,
+) -> Result<&'a [u8], TlsError> {
     const HEADER_SIZE: usize = 5;
 
     let header = current_header.take().unwrap();
@@ -256,17 +244,14 @@ where
     Ok(slice)
 }
 
-fn write_record<'a, CipherSuite>(
+fn write_record<'a, Provider: CryptoProvider>(
     buffer: &'a mut [u8],
     pos: &mut usize,
     current_header: &mut Option<ClientRecordHeader>,
-    record: &ClientRecord<CipherSuite>,
-    write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
-    read_key_schedule: Option<&mut ReadKeySchedule<CipherSuite>>,
-) -> Result<&'a [u8], TlsError>
-where
-    CipherSuite: TlsCipherSuite,
-{
+    record: &ClientRecord<Provider>,
+    write_key_schedule: &mut WriteKeySchedule<Provider>,
+    read_key_schedule: Option<&mut ReadKeySchedule<Provider>>,
+) -> Result<&'a [u8], TlsError> {
     if current_header.is_some() {
         return Err(TlsError::InternalError);
     }

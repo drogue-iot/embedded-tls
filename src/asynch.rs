@@ -20,24 +20,24 @@ pub use crate::config::*;
 /// Type representing an async TLS connection. An instance of this type can
 /// be used to establish a TLS connection, write and read encrypted data over this connection,
 /// and closing to free up the underlying resources.
-pub struct TlsConnection<'a, Socket, CipherSuite>
+pub struct TlsConnection<'a, Socket, Provider>
 where
     Socket: AsyncRead + AsyncWrite + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     delegate: Socket,
     opened: AtomicBool,
-    key_schedule: KeySchedule<CipherSuite>,
+    key_schedule: KeySchedule<Provider>,
     record_reader: RecordReader<'a>,
     record_write_buf: WriteBuffer<'a>,
     decrypted: DecryptedBufferInfo,
     flush_policy: FlushPolicy,
 }
 
-impl<'a, Socket, CipherSuite> TlsConnection<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> TlsConnection<'a, Socket, Provider>
 where
     Socket: AsyncRead + AsyncWrite + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     pub fn is_opened(&mut self) -> bool {
         *self.opened.get_mut()
@@ -61,7 +61,7 @@ where
         Self {
             delegate,
             opened: AtomicBool::new(false),
-            key_schedule: KeySchedule::new(),
+            key_schedule: KeySchedule::<Provider>::new(),
             record_reader: RecordReader::new(record_read_buf),
             record_write_buf: WriteBuffer::new(record_write_buf),
             decrypted: DecryptedBufferInfo::default(),
@@ -92,14 +92,9 @@ where
     ///
     /// Returns an error if the handshake does not proceed. If an error occurs, the connection
     /// instance must be recreated.
-    pub async fn open<Provider>(
-        &mut self,
-        mut context: TlsContext<'_, Provider>,
-    ) -> Result<(), TlsError>
-    where
-        Provider: CryptoProvider<CipherSuite = CipherSuite>,
-    {
-        let mut handshake: Handshake<CipherSuite> = Handshake::new();
+    pub async fn open(&mut self, mut context: TlsContext<'_, Provider>) -> Result<(), TlsError>
+where {
+        let mut handshake: Handshake<Provider> = Handshake::new();
         if let (Ok(verifier), Some(server_name)) = (
             context.crypto_provider.verifier(),
             context.config.server_name,
@@ -273,8 +268,8 @@ where
     pub fn split(
         &mut self,
     ) -> (
-        TlsReader<'_, Socket, CipherSuite>,
-        TlsWriter<'_, Socket, CipherSuite>,
+        TlsReader<'_, Socket, Provider>,
+        TlsWriter<'_, Socket, Provider>,
     )
     where
         Socket: Clone,
@@ -300,28 +295,28 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite> ErrorType for TlsConnection<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> ErrorType for TlsConnection<'a, Socket, Provider>
 where
     Socket: AsyncRead + AsyncWrite + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     type Error = TlsError;
 }
 
-impl<'a, Socket, CipherSuite> AsyncRead for TlsConnection<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> AsyncRead for TlsConnection<'a, Socket, Provider>
 where
     Socket: AsyncRead + AsyncWrite + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         TlsConnection::read(self, buf).await
     }
 }
 
-impl<'a, Socket, CipherSuite> BufRead for TlsConnection<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> BufRead for TlsConnection<'a, Socket, Provider>
 where
     Socket: AsyncRead + AsyncWrite + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     async fn fill_buf(&mut self) -> Result<&[u8], Self::Error> {
         self.read_buffered().await.map(|mut buf| buf.peek_all())
@@ -332,10 +327,10 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite> AsyncWrite for TlsConnection<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> AsyncWrite for TlsConnection<'a, Socket, Provider>
 where
     Socket: AsyncRead + AsyncWrite + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         TlsConnection::write(self, buf).await
@@ -346,30 +341,30 @@ where
     }
 }
 
-pub struct TlsReader<'a, Socket, CipherSuite>
+pub struct TlsReader<'a, Socket, Provider>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     opened: &'a AtomicBool,
     delegate: Socket,
-    key_schedule: &'a mut ReadKeySchedule<CipherSuite>,
+    key_schedule: &'a mut ReadKeySchedule<Provider>,
     record_reader: RecordReaderBorrowMut<'a>,
     decrypted: &'a mut DecryptedBufferInfo,
 }
 
-impl<Socket, CipherSuite> AsRef<Socket> for TlsReader<'_, Socket, CipherSuite>
+impl<Socket, Provider> AsRef<Socket> for TlsReader<'_, Socket, Provider>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     fn as_ref(&self) -> &Socket {
         &self.delegate
     }
 }
 
-impl<'a, Socket, CipherSuite> TlsReader<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> TlsReader<'a, Socket, Provider>
 where
     Socket: AsyncRead + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     fn create_read_buffer(&mut self) -> ReadBuffer<'_> {
         self.decrypted.create_read_buffer(self.record_reader.buf)
@@ -412,21 +407,21 @@ where
     }
 }
 
-pub struct TlsWriter<'a, Socket, CipherSuite>
+pub struct TlsWriter<'a, Socket, Provider>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     opened: &'a AtomicBool,
     delegate: Socket,
-    key_schedule: &'a mut WriteKeySchedule<CipherSuite>,
+    key_schedule: &'a mut WriteKeySchedule<Provider>,
     record_write_buf: WriteBufferBorrowMut<'a>,
     flush_policy: FlushPolicy,
 }
 
-impl<'a, Socket, CipherSuite> TlsWriter<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> TlsWriter<'a, Socket, Provider>
 where
     Socket: AsyncWrite + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     #[inline]
     async fn flush_transport(&mut self) -> Result<(), TlsError> {
@@ -437,33 +432,33 @@ where
     }
 }
 
-impl<Socket, CipherSuite> AsRef<Socket> for TlsWriter<'_, Socket, CipherSuite>
+impl<Socket, Provider> AsRef<Socket> for TlsWriter<'_, Socket, Provider>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     fn as_ref(&self) -> &Socket {
         &self.delegate
     }
 }
 
-impl<Socket, CipherSuite> ErrorType for TlsWriter<'_, Socket, CipherSuite>
+impl<Socket, Provider> ErrorType for TlsWriter<'_, Socket, Provider>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     type Error = TlsError;
 }
 
-impl<Socket, CipherSuite> ErrorType for TlsReader<'_, Socket, CipherSuite>
+impl<Socket, Provider> ErrorType for TlsReader<'_, Socket, Provider>
 where
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     type Error = TlsError;
 }
 
-impl<'a, Socket, CipherSuite> AsyncRead for TlsReader<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> AsyncRead for TlsReader<'a, Socket, Provider>
 where
     Socket: AsyncRead + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         if buf.is_empty() {
@@ -478,10 +473,10 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite> BufRead for TlsReader<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> BufRead for TlsReader<'a, Socket, Provider>
 where
     Socket: AsyncRead + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     async fn fill_buf(&mut self) -> Result<&[u8], Self::Error> {
         self.read_buffered().await.map(|mut buf| buf.peek_all())
@@ -492,10 +487,10 @@ where
     }
 }
 
-impl<'a, Socket, CipherSuite> AsyncWrite for TlsWriter<'a, Socket, CipherSuite>
+impl<'a, Socket, Provider> AsyncWrite for TlsWriter<'a, Socket, Provider>
 where
     Socket: AsyncWrite + 'a,
-    CipherSuite: TlsCipherSuite + 'static,
+    Provider: CryptoProvider,
 {
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         if self.opened.load(Ordering::Acquire) {

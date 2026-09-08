@@ -1,14 +1,16 @@
 use clap::Parser;
+use embassy_crypto as _;
 use embassy_executor::{Executor, Spawner};
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{Config, Ipv4Address, Ipv4Cidr, Runner, StackResources};
 use embassy_net_tuntap::TunTapDevice;
 use embassy_time::Duration;
 use embedded_io_async::Write;
-use embedded_tls::{Aes128GcmSha256, TlsConfig, TlsConnection, TlsContext, UnsecureProvider};
+use embedded_tls::embassy_crypto::EmbassyCryptoProvider;
+use embedded_tls::{Aes128GcmSha256, TlsConfig, TlsConnection, TlsContext};
 use heapless::Vec;
 use log::*;
-use rand::{rngs::OsRng, RngCore};
+use rand::Rng;
 use static_cell::StaticCell;
 
 #[derive(Parser)]
@@ -47,7 +49,7 @@ async fn main_task(spawner: Spawner) {
 
     // Generate random seed
     let mut seed = [0; 8];
-    OsRng.fill_bytes(&mut seed);
+    rand::rng().fill_bytes(&mut seed);
     let seed = u64::from_le_bytes(seed);
 
     // Init network stack
@@ -56,7 +58,7 @@ async fn main_task(spawner: Spawner) {
         embassy_net::new(device, config, RESOURCES.init(StackResources::new()), seed);
 
     // Launch network task
-    spawner.must_spawn(net_task(runner));
+    spawner.spawn(net_task(runner).expect("spawn net_task"));
 
     // Then we can use it!
     let mut rx_buffer = [0; 4096];
@@ -79,9 +81,12 @@ async fn main_task(spawner: Spawner) {
     let config = TlsConfig::new().with_server_name("example.com");
     let mut tls = TlsConnection::new(socket, &mut read_record_buffer, &mut write_record_buffer);
 
+    // Crypto is served by the `embassy-crypto` drivers (feature `embassy-crypto`):
+    // AES-128-GCM record protection plus P-256 key agreement through the
+    // high-level `embassy_crypto::asymmetric` API.
     tls.open(TlsContext::new(
         &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+        EmbassyCryptoProvider::new::<Aes128GcmSha256>(rand::rng()),
     ))
     .await
     .expect("error establishing TLS connection");
@@ -106,6 +111,6 @@ fn main() {
 
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
-        spawner.must_spawn(main_task(spawner));
+        spawner.spawn(main_task(spawner).expect("spawn main_task"));
     });
 }

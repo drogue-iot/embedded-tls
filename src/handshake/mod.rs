@@ -1,19 +1,18 @@
 //use p256::elliptic_curve::AffinePoint;
+use crate::CertificateVerify;
 use crate::TlsError;
-use crate::config::TlsCipherSuite;
 use crate::handshake::certificate::CertificateRef;
 use crate::handshake::certificate_request::CertificateRequestRef;
-use crate::handshake::certificate_verify::{CertificateVerify, CertificateVerifyRef};
+use crate::handshake::certificate_verify::CertificateVerifyRef;
 use crate::handshake::client_hello::ClientHello;
 use crate::handshake::encrypted_extensions::EncryptedExtensions;
 use crate::handshake::finished::Finished;
 use crate::handshake::new_session_ticket::NewSessionTicket;
 use crate::handshake::server_hello::ServerHello;
-use crate::key_schedule::HashOutputSize;
 use crate::parse_buffer::{ParseBuffer, ParseError};
-use crate::{buffer::CryptoBuffer, key_schedule::WriteKeySchedule};
+use crate::{CryptoProvider, buffer::CryptoBuffer, key_schedule::WriteKeySchedule};
 use core::fmt::{Debug, Formatter};
-use sha2::Digest;
+use digest::Digest;
 
 pub mod binder;
 pub mod certificate;
@@ -62,42 +61,49 @@ impl HandshakeType {
             _ => Err(ParseError::InvalidData),
         }
     }
+
+    #[allow(dead_code)]
+    pub fn encode(self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
+        buf.push(self as u8).map_err(|_| TlsError::EncodeError)
+    }
 }
 
-#[allow(clippy::large_enum_variant)]
-pub enum ClientHandshake<'config, 'a, CipherSuite>
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ClientHandshake<'config, 'a, Provider>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
-    ClientCert(CertificateRef<'a>),
-    ClientCertVerify(CertificateVerify),
-    ClientHello(ClientHello<'config, CipherSuite>),
-    Finished(Finished<HashOutputSize<CipherSuite>>),
+    ClientHello(ClientHello<'config, Provider::CipherSuite>),
+    ClientCertificate(CertificateRef<'a>),
+    ClientCertificateVerify(CertificateVerify),
+    Finished(Finished<Provider::Hash>),
 }
 
-impl<CipherSuite> ClientHandshake<'_, '_, CipherSuite>
+impl<Provider> ClientHandshake<'_, '_, Provider>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
-    fn handshake_type(&self) -> HandshakeType {
+    #[allow(dead_code)]
+    pub fn handshake_type(&self) -> HandshakeType {
         match self {
             ClientHandshake::ClientHello(_) => HandshakeType::ClientHello,
             ClientHandshake::Finished(_) => HandshakeType::Finished,
-            ClientHandshake::ClientCert(_) => HandshakeType::Certificate,
-            ClientHandshake::ClientCertVerify(_) => HandshakeType::CertificateVerify,
+            ClientHandshake::ClientCertificate(_) => HandshakeType::Certificate,
+            ClientHandshake::ClientCertificateVerify(_) => HandshakeType::CertificateVerify,
         }
     }
 
-    fn encode_inner(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+    fn encode_inner(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         match self {
             ClientHandshake::ClientHello(inner) => inner.encode(buf),
             ClientHandshake::Finished(inner) => inner.encode(buf),
-            ClientHandshake::ClientCert(inner) => inner.encode(buf),
-            ClientHandshake::ClientCertVerify(inner) => inner.encode(buf),
+            ClientHandshake::ClientCertificate(inner) => inner.encode(buf),
+            ClientHandshake::ClientCertificateVerify(inner) => inner.encode(buf),
         }
     }
 
-    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
+    pub fn encode(&self, buf: &mut CryptoBuffer) -> Result<(), TlsError> {
         buf.push(self.handshake_type() as u8)
             .map_err(|_| TlsError::EncodeError)?;
 
@@ -107,8 +113,8 @@ where
     pub fn finalize(
         &self,
         buf: &mut CryptoBuffer,
-        transcript: &mut CipherSuite::Hash,
-        write_key_schedule: &mut WriteKeySchedule<CipherSuite>,
+        transcript: &mut Provider::Hash,
+        write_key_schedule: &mut WriteKeySchedule<Provider>,
     ) -> Result<(), TlsError> {
         let enc_buf = buf.as_mut_slice();
         if let ClientHandshake::ClientHello(hello) = self {
@@ -119,7 +125,7 @@ where
         }
     }
 
-    pub fn finalize_encrypted(buf: &mut CryptoBuffer, transcript: &mut CipherSuite::Hash) {
+    pub fn finalize_encrypted(buf: &mut CryptoBuffer, transcript: &mut Provider::Hash) {
         let enc_buf = buf.as_slice();
         let end = enc_buf.len();
         transcript.update(&enc_buf[0..end]);
@@ -127,17 +133,17 @@ where
 }
 
 #[allow(clippy::large_enum_variant)]
-pub enum ServerHandshake<'a, CipherSuite: TlsCipherSuite> {
+pub enum ServerHandshake<'a, Provider: CryptoProvider> {
     ServerHello(ServerHello<'a>),
     EncryptedExtensions(EncryptedExtensions<'a>),
     NewSessionTicket(NewSessionTicket<'a>),
     Certificate(CertificateRef<'a>),
     CertificateRequest(CertificateRequestRef<'a>),
     CertificateVerify(CertificateVerifyRef<'a>),
-    Finished(Finished<HashOutputSize<CipherSuite>>),
+    Finished(Finished<Provider::Hash>),
 }
 
-impl<CipherSuite: TlsCipherSuite> ServerHandshake<'_, CipherSuite> {
+impl<Provider: CryptoProvider> ServerHandshake<'_, Provider> {
     #[allow(dead_code)]
     pub fn handshake_type(&self) -> HandshakeType {
         match self {
@@ -152,7 +158,7 @@ impl<CipherSuite: TlsCipherSuite> ServerHandshake<'_, CipherSuite> {
     }
 }
 
-impl<CipherSuite: TlsCipherSuite> Debug for ServerHandshake<'_, CipherSuite> {
+impl<Provider: CryptoProvider> Debug for ServerHandshake<'_, Provider> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             ServerHandshake::ServerHello(inner) => Debug::fmt(inner, f),
@@ -167,7 +173,7 @@ impl<CipherSuite: TlsCipherSuite> Debug for ServerHandshake<'_, CipherSuite> {
 }
 
 #[cfg(feature = "defmt")]
-impl<'a, CipherSuite: TlsCipherSuite> defmt::Format for ServerHandshake<'a, CipherSuite> {
+impl<'a, Provider: CryptoProvider> defmt::Format for ServerHandshake<'a, Provider> {
     fn format(&self, f: defmt::Formatter<'_>) {
         match self {
             ServerHandshake::ServerHello(inner) => defmt::write!(f, "{}", inner),
@@ -181,17 +187,17 @@ impl<'a, CipherSuite: TlsCipherSuite> defmt::Format for ServerHandshake<'a, Ciph
     }
 }
 
-impl<'a, CipherSuite: TlsCipherSuite> ServerHandshake<'a, CipherSuite> {
-    pub fn read(
-        buf: &mut ParseBuffer<'a>,
-        digest: &mut CipherSuite::Hash,
-    ) -> Result<Self, TlsError> {
+impl<'a, Provider: CryptoProvider> ServerHandshake<'a, Provider> {
+    pub fn read(buf: &mut ParseBuffer<'a>, digest: &mut Provider::Hash) -> Result<Self, TlsError> {
         let handshake_start = buf.offset();
         let mut handshake = Self::parse(buf)?;
         let handshake_end = buf.offset();
 
         if let ServerHandshake::Finished(finished) = &mut handshake {
-            finished.hash.replace(digest.clone().finalize());
+            let hash = digest.clone();
+            let mut out = Default::default();
+            Digest::finalize_into(hash, &mut out);
+            finished.hash.replace(out);
         }
 
         digest.update(&buf.as_slice()[handshake_start..handshake_end]);

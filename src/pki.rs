@@ -1,5 +1,5 @@
 use crate::TlsError;
-use crate::config::{Certificate, TlsCipherSuite, TlsClock, TlsVerifier};
+use crate::config::{Certificate, TlsClock, TlsVerifier};
 #[cfg(feature = "p384")]
 use crate::der_certificate::ECDSA_SHA384;
 #[cfg(feature = "ed25519")]
@@ -64,22 +64,22 @@ impl<'a> Iterator for CertificateChain<'a> {
     }
 }
 
-pub struct CertVerifier<'a, CipherSuite, Clock, const CERT_SIZE: usize>
+pub struct CertVerifier<'a, Hash, Clock, const CERT_SIZE: usize>
 where
     Clock: TlsClock,
-    CipherSuite: TlsCipherSuite,
+    Hash: Digest + Clone + digest::FixedOutputReset + digest::OutputSizeUser,
 {
     ca: Certificate<&'a [u8]>,
     host: Option<heapless::String<64>>,
-    certificate_transcript: Option<CipherSuite::Hash>,
+    certificate_transcript: Option<Hash>,
     certificate: Option<OwnedCertificate<CERT_SIZE>>,
     _clock: PhantomData<Clock>,
 }
 
-impl<'a, CipherSuite, Clock, const CERT_SIZE: usize> CertVerifier<'a, CipherSuite, Clock, CERT_SIZE>
+impl<'a, Hash, Clock, const CERT_SIZE: usize> CertVerifier<'a, Hash, Clock, CERT_SIZE>
 where
     Clock: TlsClock,
-    CipherSuite: TlsCipherSuite,
+    Hash: Digest + Clone + digest::FixedOutputReset + digest::OutputSizeUser,
 {
     #[must_use]
     pub fn new(ca: Certificate<&'a [u8]>) -> Self {
@@ -93,10 +93,10 @@ where
     }
 }
 
-impl<CipherSuite, Clock, const CERT_SIZE: usize> TlsVerifier<CipherSuite>
-    for CertVerifier<'_, CipherSuite, Clock, CERT_SIZE>
+impl<Hash, Clock, const CERT_SIZE: usize> TlsVerifier<Hash>
+    for CertVerifier<'_, Hash, Clock, CERT_SIZE>
 where
-    CipherSuite: TlsCipherSuite,
+    Hash: Digest + Clone + digest::FixedOutputReset + digest::OutputSizeUser,
     Clock: TlsClock,
 {
     fn set_hostname_verification(&mut self, hostname: &str) -> Result<(), TlsError> {
@@ -108,7 +108,7 @@ where
 
     fn verify_certificate(
         &mut self,
-        transcript: &CipherSuite::Hash,
+        transcript: &Hash,
         cert: ServerCertificate,
     ) -> Result<(), TlsError> {
         let mut names = CertificateNames {
@@ -137,10 +137,14 @@ where
         let handshake_hash = unwrap!(self.certificate_transcript.take());
         let ctx_str = b"TLS 1.3, server CertificateVerify\x00";
         let mut msg: Vec<u8, 146> = Vec::new();
+        // 64 (pad) + 34 (ctx) + 48 (SHA-384) = 146 bytes required
         msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
         msg.extend_from_slice(ctx_str)
             .map_err(|_| TlsError::EncodeError)?;
-        msg.extend_from_slice(&handshake_hash.finalize())
+        let mut hash_out = Default::default();
+        let cloned = handshake_hash.clone();
+        Digest::finalize_into(cloned, &mut hash_out);
+        msg.extend_from_slice(&hash_out)
             .map_err(|_| TlsError::EncodeError)?;
 
         let certificate = unwrap!(self.certificate.as_ref()).try_into()?;
@@ -387,20 +391,22 @@ fn verify_certificate(
             #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA256 => {
                 use rsa::{
+                    RsaPublicKey,
                     pkcs1::DecodeRsaPublicKey,
                     pkcs1v15::{Signature, VerifyingKey},
                     signature::Verifier,
                 };
                 use sha2::Sha256;
 
-                let verifying_key =
-                    VerifyingKey::<Sha256>::from_pkcs1_der(ca_public_key).map_err(|e| {
+                let verifying_key = VerifyingKey::<Sha256>::new(
+                    RsaPublicKey::from_pkcs1_der(ca_public_key).map_err(|e| {
                         #[cfg(feature = "defmt")]
                         error!("VerifyingKey: {:?}", Debug2Format(&e));
                         #[cfg(not(feature = "defmt"))]
                         error!("VerifyingKey: {}", e);
                         TlsError::DecodeError
-                    })?;
+                    })?,
+                );
 
                 let signature = Signature::try_from(
                     parsed_certificate
@@ -421,14 +427,17 @@ fn verify_certificate(
             #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA384 => {
                 use rsa::{
+                    RsaPublicKey,
                     pkcs1::DecodeRsaPublicKey,
                     pkcs1v15::{Signature, VerifyingKey},
                     signature::Verifier,
                 };
                 use sha2::Sha384;
 
-                let verifying_key = VerifyingKey::<Sha384>::from_pkcs1_der(ca_public_key)
-                    .map_err(|_| TlsError::DecodeError)?;
+                let verifying_key = VerifyingKey::<Sha384>::new(
+                    RsaPublicKey::from_pkcs1_der(ca_public_key)
+                        .map_err(|_| TlsError::DecodeError)?,
+                );
 
                 let signature = Signature::try_from(
                     parsed_certificate
@@ -443,14 +452,17 @@ fn verify_certificate(
             #[cfg(feature = "rsa")]
             a if a == RSA_PKCS1_SHA512 => {
                 use rsa::{
+                    RsaPublicKey,
                     pkcs1::DecodeRsaPublicKey,
                     pkcs1v15::{Signature, VerifyingKey},
                     signature::Verifier,
                 };
                 use sha2::Sha512;
 
-                let verifying_key = VerifyingKey::<Sha512>::from_pkcs1_der(ca_public_key)
-                    .map_err(|_| TlsError::DecodeError)?;
+                let verifying_key = VerifyingKey::<Sha512>::new(
+                    RsaPublicKey::from_pkcs1_der(ca_public_key)
+                        .map_err(|_| TlsError::DecodeError)?,
+                );
 
                 let signature = Signature::try_from(
                     parsed_certificate

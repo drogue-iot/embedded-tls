@@ -1,8 +1,11 @@
 #![cfg(feature = "webpki")]
 
+use aes_gcm::Aes128Gcm;
 use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_tls::webpki::CertVerifier;
-use embedded_tls::{Aes128GcmSha256, CryptoProvider, TlsVerifier};
+use embedded_tls::{Aes128GcmSha256, CryptoProvider, crypto_traits::AesGcmAead};
+use hmac::Hmac;
+use sha2::Sha256;
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 use std::time::SystemTime;
@@ -12,21 +15,28 @@ mod tlsserver;
 static LOG_INIT: OnceLock<()> = OnceLock::new();
 
 struct WebPkiProvider<'a> {
-    rng: rand::rngs::OsRng,
-    verifier: CertVerifier<'a, Aes128GcmSha256, SystemTime, 4096>,
+    rng: rand::rngs::ThreadRng,
+    verifier: CertVerifier<'a, Sha256, SystemTime, 4096>,
 }
 
 impl CryptoProvider for WebPkiProvider<'_> {
     type CipherSuite = Aes128GcmSha256;
-    type Signature = &'static [u8];
+    type Signature = p256::ecdsa::Signature;
+    type Hash = Sha256;
+    type Hmac = Hmac<Sha256>;
+    type Aead = AesGcmAead<Aes128Gcm>;
 
     fn rng(&mut self) -> impl embedded_tls::CryptoRngCore {
         &mut self.rng
     }
 
+    fn aead(&mut self, key: &[u8]) -> Result<Self::Aead, embedded_tls::TlsError> {
+        AesGcmAead::new(key)
+    }
+
     fn verifier(
         &mut self,
-    ) -> Result<&mut impl TlsVerifier<Aes128GcmSha256>, embedded_tls::TlsError> {
+    ) -> Result<&mut impl embedded_tls::TlsVerifier<Self::Hash>, embedded_tls::TlsError> {
         Ok(&mut self.verifier)
     }
 }
@@ -85,7 +95,7 @@ async fn test_server_certificate_validation() {
     let open_fut = tls.open(TlsContext::new(
         &config,
         WebPkiProvider {
-            rng: rand::rngs::OsRng,
+            rng: rand::rng(),
             verifier: CertVerifier::new(Certificate::X509(&der[..])),
         },
     ));

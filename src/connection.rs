@@ -1,4 +1,5 @@
-use crate::config::{TlsCipherSuite, TlsConfig};
+use crate::config::TlsConfig;
+use crate::crypto_traits::TlsAead;
 use crate::handshake::{ClientHandshake, ServerHandshake};
 use crate::key_schedule::{KeySchedule, ReadKeySchedule, WriteKeySchedule};
 use crate::record::{ClientRecord, ServerRecord};
@@ -14,40 +15,50 @@ use digest::Digest;
 use embedded_io::Error as _;
 use embedded_io::{Read as BlockingRead, Write as BlockingWrite};
 use embedded_io_async::{Read as AsyncRead, Write as AsyncWrite};
+use signature::SignatureEncoding;
 
 use crate::application_data::ApplicationData;
 use crate::buffer::CryptoBuffer;
-use digest::generic_array::typenum::Unsigned;
-use p256::ecdh::EphemeralSecret;
-use signature::SignerMut;
-
 use crate::content_types::ContentType;
+use crate::extensions::extension_data::signature_algorithms::SignatureScheme;
+use crate::extensions::extension_data::supported_groups::NamedGroup;
 use crate::parse_buffer::ParseBuffer;
-use aes_gcm::aead::{AeadCore, AeadInPlace, KeyInit};
+use signature::Signer;
 
-pub(crate) fn decrypt_record<CipherSuite>(
-    key_schedule: &mut ReadKeySchedule<CipherSuite>,
-    record: ServerRecord<'_, CipherSuite>,
+// AES-GCM tag size is always 16 bytes for the supported cipher suites
+const TAG_SIZE: usize = 16;
+
+pub(crate) fn decrypt_record<Provider>(
+    key_schedule: &mut ReadKeySchedule<Provider>,
+    record: ServerRecord<'_, Provider>,
     mut cb: impl FnMut(
-        &mut ReadKeySchedule<CipherSuite>,
-        ServerRecord<'_, CipherSuite>,
+        &mut ReadKeySchedule<Provider>,
+        ServerRecord<'_, Provider>,
     ) -> Result<(), TlsError>,
 ) -> Result<(), TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     if let ServerRecord::ApplicationData(ApplicationData {
         header,
         data: mut app_data,
     }) = record
     {
-        let server_key = key_schedule.get_key()?;
         let nonce = key_schedule.get_nonce()?;
 
-        let crypto = <CipherSuite::Cipher as KeyInit>::new(server_key);
-        crypto
-            .decrypt_in_place(&nonce, header.data(), &mut app_data)
+        // Split ciphertext and tag
+        let ciphertext_len = app_data.len().saturating_sub(TAG_SIZE);
+        if ciphertext_len == 0 {
+            return Err(TlsError::InvalidRecord);
+        }
+        let (ciphertext, tag) = app_data.as_mut_slice().split_at_mut(ciphertext_len);
+
+        let aead = key_schedule.get_aead().map_err(|_| TlsError::CryptoError)?;
+        aead.decrypt_in_place(nonce.as_ref(), header.data(), ciphertext, tag)
             .map_err(|_| TlsError::CryptoError)?;
+
+        // After decryption, ciphertext contains plaintext
+        app_data.truncate(ciphertext_len);
 
         let padding = app_data
             .as_slice()
@@ -93,22 +104,16 @@ where
     Ok(())
 }
 
-pub(crate) fn encrypt<CipherSuite>(
-    key_schedule: &WriteKeySchedule<CipherSuite>,
+pub(crate) fn encrypt<Provider>(
+    key_schedule: &mut WriteKeySchedule<Provider>,
     buf: &mut CryptoBuffer<'_>,
 ) -> Result<(), TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
-    let client_key = key_schedule.get_key()?;
     let nonce = key_schedule.get_nonce()?;
-    // trace!("encrypt key {:02x?}", client_key);
-    // trace!("encrypt nonce {:02x?}", nonce);
-    // trace!("plaintext {} {:02x?}", buf.len(), buf.as_slice(),);
-    //let crypto = Aes128Gcm::new_varkey(&self.key_schedule.get_client_key()).unwrap();
-    let crypto = <CipherSuite::Cipher as KeyInit>::new(client_key);
-    let len = buf.len() + <CipherSuite::Cipher as AeadCore>::TagSize::to_usize();
 
+    let len = buf.len() + TAG_SIZE;
     if len > buf.capacity() {
         return Err(TlsError::InsufficientSpace);
     }
@@ -123,28 +128,31 @@ where
         len_bytes[1],
     ];
 
-    crypto
-        .encrypt_in_place(&nonce, &additional_data, buf)
-        .map_err(|_| TlsError::InvalidApplicationData)
+    let aead = key_schedule.get_aead().map_err(|_| TlsError::CryptoError)?;
+    let mut tag = [0u8; TAG_SIZE];
+    aead.encrypt_in_place(
+        nonce.as_ref(),
+        &additional_data,
+        buf.as_mut_slice(),
+        &mut tag,
+    )
+    .map_err(|_| TlsError::InvalidApplicationData)?;
+    buf.extend_from_slice(&tag)
+        .map_err(|_| TlsError::InsufficientSpace)?;
+    Ok(())
 }
 
-pub struct Handshake<CipherSuite>
-where
-    CipherSuite: TlsCipherSuite,
-{
-    traffic_hash: Option<CipherSuite::Hash>,
-    secret: Option<EphemeralSecret>,
+pub struct Handshake<Provider: CryptoProvider> {
+    traffic_hash: Option<Provider::Hash>,
+    secret_key: Option<[u8; 32]>,
     certificate_request: Option<CertificateRequest>,
 }
 
-impl<CipherSuite> Handshake<CipherSuite>
-where
-    CipherSuite: TlsCipherSuite,
-{
-    pub fn new() -> Handshake<CipherSuite> {
+impl<Provider: CryptoProvider> Handshake<Provider> {
+    pub fn new() -> Handshake<Provider> {
         Handshake {
             traffic_hash: None,
-            secret: None,
+            secret_key: None,
             certificate_request: None,
         }
     }
@@ -167,10 +175,10 @@ impl<'a> State {
     pub async fn process<'v, Transport, Provider>(
         self,
         transport: &mut Transport,
-        handshake: &mut Handshake<Provider::CipherSuite>,
+        handshake: &mut Handshake<Provider>,
         record_reader: &mut RecordReader<'_>,
         tx_buf: &mut WriteBuffer<'_>,
-        key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+        key_schedule: &mut KeySchedule<Provider>,
         config: &TlsConfig<'a>,
         crypto_provider: &mut Provider,
     ) -> Result<State, TlsError>
@@ -192,9 +200,10 @@ impl<'a> State {
                     .read(transport, key_schedule.read_state())
                     .await?;
 
-                let result = process_server_hello(handshake, key_schedule, record);
+                let result = process_server_hello(handshake, key_schedule, crypto_provider, record);
 
-                handle_processing_error(result, transport, key_schedule, tx_buf).await
+                handle_processing_error(result, transport, key_schedule, tx_buf, crypto_provider)
+                    .await
             }
             State::ServerVerify => {
                 let record = record_reader
@@ -204,7 +213,8 @@ impl<'a> State {
                 let result =
                     process_server_verify(handshake, key_schedule, crypto_provider, record);
 
-                handle_processing_error(result, transport, key_schedule, tx_buf).await
+                handle_processing_error(result, transport, key_schedule, tx_buf, crypto_provider)
+                    .await
             }
             State::ClientCert => {
                 let (state, tx) = client_cert(handshake, key_schedule, crypto_provider, tx_buf)?;
@@ -225,7 +235,7 @@ impl<'a> State {
 
                 respond(tx, transport, key_schedule).await?;
 
-                client_finished_finalize(key_schedule, handshake)
+                client_finished_finalize(key_schedule, handshake, crypto_provider)
             }
             State::ApplicationData => Ok(State::ApplicationData),
         }
@@ -235,10 +245,10 @@ impl<'a> State {
     pub fn process_blocking<'v, Transport, Provider>(
         self,
         transport: &mut Transport,
-        handshake: &mut Handshake<Provider::CipherSuite>,
+        handshake: &mut Handshake<Provider>,
         record_reader: &mut RecordReader<'_>,
         tx_buf: &mut WriteBuffer,
-        key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+        key_schedule: &mut KeySchedule<Provider>,
         config: &TlsConfig<'a>,
         crypto_provider: &mut Provider,
     ) -> Result<State, TlsError>
@@ -258,9 +268,15 @@ impl<'a> State {
             State::ServerHello => {
                 let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
 
-                let result = process_server_hello(handshake, key_schedule, record);
+                let result = process_server_hello(handshake, key_schedule, crypto_provider, record);
 
-                handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
+                handle_processing_error_blocking(
+                    result,
+                    transport,
+                    key_schedule,
+                    tx_buf,
+                    crypto_provider,
+                )
             }
             State::ServerVerify => {
                 let record = record_reader.read_blocking(transport, key_schedule.read_state())?;
@@ -268,7 +284,13 @@ impl<'a> State {
                 let result =
                     process_server_verify(handshake, key_schedule, crypto_provider, record);
 
-                handle_processing_error_blocking(result, transport, key_schedule, tx_buf)
+                handle_processing_error_blocking(
+                    result,
+                    transport,
+                    key_schedule,
+                    tx_buf,
+                    crypto_provider,
+                )
             }
             State::ClientCert => {
                 let (state, tx) = client_cert(handshake, key_schedule, crypto_provider, tx_buf)?;
@@ -289,21 +311,22 @@ impl<'a> State {
 
                 respond_blocking(tx, transport, key_schedule)?;
 
-                client_finished_finalize(key_schedule, handshake)
+                client_finished_finalize(key_schedule, handshake, crypto_provider)
             }
             State::ApplicationData => Ok(State::ApplicationData),
         }
     }
 }
 
-fn handle_processing_error_blocking<CipherSuite>(
+fn handle_processing_error_blocking<Provider>(
     result: Result<State, TlsError>,
     transport: &mut impl BlockingWrite,
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut KeySchedule<Provider>,
     tx_buf: &mut WriteBuffer,
+    _provider: &mut Provider,
 ) -> Result<State, TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     if let Err(TlsError::AbortHandshake(level, description)) = result {
         let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
@@ -319,13 +342,13 @@ where
     result
 }
 
-fn respond_blocking<CipherSuite>(
+fn respond_blocking<Provider>(
     tx: &[u8],
     transport: &mut impl BlockingWrite,
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut KeySchedule<Provider>,
 ) -> Result<(), TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     transport
         .write_all(tx)
@@ -338,14 +361,15 @@ where
     Ok(())
 }
 
-async fn handle_processing_error<CipherSuite>(
+async fn handle_processing_error<Provider>(
     result: Result<State, TlsError>,
     transport: &mut impl AsyncWrite,
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut KeySchedule<Provider>,
     tx_buf: &mut WriteBuffer<'_>,
+    _provider: &mut Provider,
 ) -> Result<State, TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     if let Err(TlsError::AbortHandshake(level, description)) = result {
         let (write_key_schedule, read_key_schedule) = key_schedule.as_split();
@@ -361,13 +385,13 @@ where
     result
 }
 
-async fn respond<CipherSuite>(
+async fn respond<Provider>(
     tx: &[u8],
     transport: &mut impl AsyncWrite,
-    key_schedule: &mut KeySchedule<CipherSuite>,
+    key_schedule: &mut KeySchedule<Provider>,
 ) -> Result<(), TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     transport
         .write_all(tx)
@@ -385,11 +409,11 @@ where
 }
 
 fn client_hello<'r, Provider>(
-    key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+    key_schedule: &mut KeySchedule<Provider>,
     config: &TlsConfig,
     crypto_provider: &mut Provider,
     tx_buf: &'r mut WriteBuffer,
-    handshake: &mut Handshake<Provider::CipherSuite>,
+    handshake: &mut Handshake<Provider>,
 ) -> Result<(State, &'r [u8]), TlsError>
 where
     Provider: CryptoProvider,
@@ -400,30 +424,48 @@ where
     let slice = tx_buf.write_record(&client_hello, write_key_schedule, Some(read_key_schedule))?;
 
     if let ClientRecord::Handshake(ClientHandshake::ClientHello(client_hello), _) = client_hello {
-        handshake.secret.replace(client_hello.secret);
+        handshake.secret_key.replace(client_hello.secret_key);
         Ok((State::ServerHello, slice))
     } else {
         Err(TlsError::EncodeError)
     }
 }
 
-fn process_server_hello<CipherSuite>(
-    handshake: &mut Handshake<CipherSuite>,
-    key_schedule: &mut KeySchedule<CipherSuite>,
-    record: ServerRecord<'_, CipherSuite>,
+fn process_server_hello<Provider>(
+    handshake: &mut Handshake<Provider>,
+    key_schedule: &mut KeySchedule<Provider>,
+    provider: &mut Provider,
+    record: ServerRecord<'_, Provider>,
 ) -> Result<State, TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     match record {
         ServerRecord::Handshake(server_handshake) => match server_handshake {
             ServerHandshake::ServerHello(server_hello) => {
                 trace!("********* ServerHello");
-                let secret = handshake.secret.take().ok_or(TlsError::InvalidHandshake)?;
-                let shared = server_hello
-                    .calculate_shared_secret(&secret)
+                let secret_key = handshake
+                    .secret_key
+                    .take()
+                    .ok_or(TlsError::InvalidHandshake)?;
+                let (group, server_public) = server_hello
+                    .server_public_key()
                     .ok_or(TlsError::InvalidKeyShare)?;
-                key_schedule.initialize_handshake_secret(shared.raw_secret_bytes())?;
+
+                let shared_len = match group {
+                    NamedGroup::Secp256r1 => 32,
+                    NamedGroup::Secp384r1 => 48,
+                    _ => return Err(TlsError::InvalidKeyShare),
+                };
+                let mut shared = [0u8; 48];
+                provider.ecdh(
+                    group,
+                    &secret_key,
+                    &server_public[1..],
+                    &mut shared[..shared_len],
+                )?;
+
+                key_schedule.initialize_handshake_secret(&shared[..shared_len], provider)?;
                 Ok(State::ServerVerify)
             }
             _ => Err(TlsError::InvalidHandshake),
@@ -436,10 +478,10 @@ where
 }
 
 fn process_server_verify<Provider>(
-    handshake: &mut Handshake<Provider::CipherSuite>,
-    key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+    handshake: &mut Handshake<Provider>,
+    key_schedule: &mut KeySchedule<Provider>,
     crypto_provider: &mut Provider,
-    record: ServerRecord<'_, Provider::CipherSuite>,
+    record: ServerRecord<'_, Provider>,
 ) -> Result<State, TlsError>
 where
     Provider: CryptoProvider,
@@ -447,48 +489,45 @@ where
     let mut state = State::ServerVerify;
     decrypt_record(key_schedule.read_state(), record, |key_schedule, record| {
         match record {
-            ServerRecord::Handshake(server_handshake) => {
-                match server_handshake {
-                    ServerHandshake::EncryptedExtensions(_) => {}
-                    ServerHandshake::Certificate(certificate) => {
-                        let transcript = key_schedule.transcript_hash();
-                        if let Ok(verifier) = crypto_provider.verifier() {
-                            verifier.verify_certificate(transcript, certificate)?;
-                            debug!("Certificate verified!");
-                        } else {
-                            debug!("Certificate verification skipped due to no verifier!");
-                        }
+            ServerRecord::Handshake(server_handshake) => match server_handshake {
+                ServerHandshake::EncryptedExtensions(_) => {}
+                ServerHandshake::Certificate(certificate) => {
+                    let transcript = key_schedule.transcript_hash();
+                    if let Ok(verifier) = crypto_provider.verifier() {
+                        verifier.verify_certificate(transcript, certificate)?;
+                        debug!("Certificate verified!");
+                    } else {
+                        debug!("Certificate verification skipped due to no verifier!");
                     }
-                    ServerHandshake::CertificateVerify(verify) => {
-                        if let Ok(verifier) = crypto_provider.verifier() {
-                            verifier.verify_signature(verify)?;
-                            debug!("Signature verified!");
-                        } else {
-                            debug!("Signature verification skipped due to no verifier!");
-                        }
-                    }
-                    ServerHandshake::CertificateRequest(request) => {
-                        handshake.certificate_request.replace(request.try_into()?);
-                    }
-                    ServerHandshake::Finished(finished) => {
-                        if !key_schedule.verify_server_finished(&finished)? {
-                            warn!("Server signature verification failed");
-                            return Err(TlsError::InvalidSignature);
-                        }
-
-                        // trace!("server verified {}", verified);
-                        state = if handshake.certificate_request.is_some() {
-                            State::ClientCert
-                        } else {
-                            handshake
-                                .traffic_hash
-                                .replace(key_schedule.transcript_hash().clone());
-                            State::ClientFinished
-                        };
-                    }
-                    _ => return Err(TlsError::InvalidHandshake),
                 }
-            }
+                ServerHandshake::CertificateVerify(verify) => {
+                    if let Ok(verifier) = crypto_provider.verifier() {
+                        verifier.verify_signature(verify)?;
+                        debug!("Signature verified!");
+                    } else {
+                        debug!("Signature verification skipped due to no verifier!");
+                    }
+                }
+                ServerHandshake::CertificateRequest(request) => {
+                    handshake.certificate_request.replace(request.try_into()?);
+                }
+                ServerHandshake::Finished(finished) => {
+                    if !key_schedule.verify_server_finished(&finished)? {
+                        warn!("Server signature verification failed");
+                        return Err(TlsError::InvalidSignature);
+                    }
+
+                    state = if handshake.certificate_request.is_some() {
+                        State::ClientCert
+                    } else {
+                        handshake
+                            .traffic_hash
+                            .replace(key_schedule.transcript_hash().clone());
+                        State::ClientFinished
+                    };
+                }
+                _ => return Err(TlsError::InvalidHandshake),
+            },
             ServerRecord::ChangeCipherSpec(_) => {}
             _ => return Err(TlsError::InvalidRecord),
         }
@@ -499,8 +538,8 @@ where
 }
 
 fn client_cert<'r, Provider>(
-    handshake: &mut Handshake<Provider::CipherSuite>,
-    key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+    handshake: &mut Handshake<Provider>,
+    key_schedule: &mut KeySchedule<Provider>,
     crypto_provider: &mut Provider,
     buffer: &'r mut WriteBuffer,
 ) -> Result<(State, &'r [u8]), TlsError>
@@ -530,7 +569,7 @@ where
 
     buffer
         .write_record(
-            &ClientRecord::Handshake(ClientHandshake::ClientCert(certificate), true),
+            &ClientRecord::Handshake(ClientHandshake::ClientCertificate(certificate), true),
             write_key_schedule,
             Some(read_key_schedule),
         )
@@ -538,7 +577,7 @@ where
 }
 
 fn client_cert_verify<'r, Provider>(
-    key_schedule: &mut KeySchedule<Provider::CipherSuite>,
+    key_schedule: &mut KeySchedule<Provider>,
     crypto_provider: &mut Provider,
     buffer: &'r mut WriteBuffer,
 ) -> Result<(Result<State, TlsError>, &'r [u8]), TlsError>
@@ -546,34 +585,42 @@ where
     Provider: CryptoProvider,
 {
     let (result, record) = match crypto_provider.signer() {
-        Ok((mut signing_key, signature_scheme)) => {
+        Ok((signing_key, signature_scheme)) => {
             let ctx_str = b"TLS 1.3, client CertificateVerify\x00";
 
-            // 64 (pad) + 34 (ctx) + 48 (SHA-384) = 146 bytes required
             let mut msg: heapless::Vec<u8, 146> = heapless::Vec::new();
             msg.resize(64, 0x20).map_err(|_| TlsError::EncodeError)?;
             msg.extend_from_slice(ctx_str)
                 .map_err(|_| TlsError::EncodeError)?;
-            msg.extend_from_slice(&key_schedule.transcript_hash().clone().finalize())
+
+            let mut transcript_hash = Default::default();
+            let cloned = key_schedule.transcript_hash().clone();
+            Digest::finalize_into(cloned, &mut transcript_hash);
+            msg.extend_from_slice(&transcript_hash)
                 .map_err(|_| TlsError::EncodeError)?;
 
             let signature = signing_key.sign(&msg);
 
             trace!(
                 "Signature: {:?} ({})",
-                signature.as_ref(),
-                signature.as_ref().len()
+                signature.to_bytes().as_ref(),
+                signature.to_bytes().as_ref().len()
             );
 
+            let signature = encode_certificate_verify_signature(
+                signature_scheme,
+                signature.to_bytes().as_ref(),
+            )?;
             let certificate_verify = CertificateVerify {
                 signature_scheme,
-                signature: heapless::Vec::from_slice(signature.as_ref()).unwrap(),
+                signature: heapless::Vec::from_slice(signature.as_slice())
+                    .map_err(|_| TlsError::EncodeError)?,
             };
 
             (
                 Ok(State::ClientFinished),
                 ClientRecord::Handshake(
-                    ClientHandshake::ClientCertVerify(certificate_verify),
+                    ClientHandshake::ClientCertificateVerify(certificate_verify),
                     true,
                 ),
             )
@@ -597,12 +644,73 @@ where
         .map(|slice| (result, slice))
 }
 
-fn client_finished<'r, CipherSuite>(
-    key_schedule: &mut KeySchedule<CipherSuite>,
+/// Encodes provider signatures in the format required by TLS `CertificateVerify`.
+///
+/// The upgraded ECDSA API returns raw `r || s` bytes, while TLS requires ECDSA
+/// signatures to use ASN.1 DER encoding. Non-ECDSA signatures are copied unchanged.
+fn encode_certificate_verify_signature(
+    signature_scheme: SignatureScheme,
+    signature: &[u8],
+) -> Result<heapless::Vec<u8, 512>, TlsError> {
+    let is_ecdsa = matches!(
+        signature_scheme,
+        SignatureScheme::EcdsaSecp256r1Sha256
+            | SignatureScheme::EcdsaSecp384r1Sha384
+            | SignatureScheme::EcdsaSecp521r1Sha512
+            | SignatureScheme::Sha224Ecdsa
+            | SignatureScheme::EcdsaSha1
+            | SignatureScheme::Sha256BrainpoolP256r1
+            | SignatureScheme::Sha384BrainpoolP384r1
+            | SignatureScheme::Sha512BrainpoolP512r1
+    );
+
+    if !is_ecdsa {
+        return heapless::Vec::from_slice(signature).map_err(|_| TlsError::EncodeError);
+    }
+
+    if signature.len() == 0 || signature.len() % 2 != 0 {
+        return Err(TlsError::InvalidSignature);
+    }
+
+    let split = signature.len() / 2;
+    let mut integers = heapless::Vec::<u8, 512>::new();
+    for value in [&signature[..split], &signature[split..]] {
+        let value = value
+            .iter()
+            .position(|byte| *byte != 0)
+            .map(|index| &value[index..])
+            .unwrap_or(&value[value.len() - 1..]);
+        integers.push(0x02).map_err(|_| TlsError::EncodeError)?;
+        let needs_padding = value[0] & 0x80 != 0;
+        let length = value.len() + usize::from(needs_padding);
+        integers
+            .push(length as u8)
+            .map_err(|_| TlsError::EncodeError)?;
+        if needs_padding {
+            integers.push(0).map_err(|_| TlsError::EncodeError)?;
+        }
+        integers
+            .extend_from_slice(value)
+            .map_err(|_| TlsError::EncodeError)?;
+    }
+
+    let mut encoded = heapless::Vec::<u8, 512>::new();
+    encoded.push(0x30).map_err(|_| TlsError::EncodeError)?;
+    encoded
+        .push(integers.len() as u8)
+        .map_err(|_| TlsError::EncodeError)?;
+    encoded
+        .extend_from_slice(&integers)
+        .map_err(|_| TlsError::EncodeError)?;
+    Ok(encoded)
+}
+
+fn client_finished<'r, Provider>(
+    key_schedule: &mut KeySchedule<Provider>,
     buffer: &'r mut WriteBuffer,
 ) -> Result<&'r [u8], TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     let client_finished = key_schedule
         .create_client_finished()
@@ -617,12 +725,13 @@ where
     )
 }
 
-fn client_finished_finalize<CipherSuite>(
-    key_schedule: &mut KeySchedule<CipherSuite>,
-    handshake: &mut Handshake<CipherSuite>,
+fn client_finished_finalize<Provider>(
+    key_schedule: &mut KeySchedule<Provider>,
+    handshake: &mut Handshake<Provider>,
+    provider: &mut Provider,
 ) -> Result<State, TlsError>
 where
-    CipherSuite: TlsCipherSuite,
+    Provider: CryptoProvider,
 {
     key_schedule.replace_transcript_hash(
         handshake
@@ -630,7 +739,7 @@ where
             .take()
             .ok_or(TlsError::InvalidHandshake)?,
     );
-    key_schedule.initialize_master_secret()?;
+    key_schedule.initialize_master_secret(provider)?;
 
     Ok(State::ApplicationData)
 }

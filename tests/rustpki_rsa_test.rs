@@ -1,14 +1,17 @@
 #![cfg(all(feature = "rustpki", feature = "rsa"))]
+use aes_gcm::Aes128Gcm;
 use digest::FixedOutputReset;
 use embedded_io_adapters::tokio_1::FromTokio;
+use embedded_tls::CryptoRngCore;
 use embedded_tls::pki::CertVerifier;
-use embedded_tls::{Aes128GcmSha256, CryptoProvider, SignatureScheme, TlsError, TlsVerifier};
-use rand_core::{CryptoRngCore, OsRng};
+use embedded_tls::{
+    Aes128GcmSha256, CryptoProvider, SignatureScheme, TlsError, crypto_traits::AesGcmAead,
+};
+use hmac::Hmac;
 use rsa::pkcs8::DecodePrivateKey;
-use rustls::server::AllowAnyAnonymousOrAuthenticatedClient;
 use sha2::{Digest, Sha256};
 use signature::RandomizedSigner;
-use signature::SignerMut;
+use signature::Signer;
 use std::net::SocketAddr;
 use std::sync::Once;
 use std::time::SystemTime;
@@ -20,44 +23,46 @@ static INIT: Once = Once::new();
 static mut ADDR: Option<SocketAddr> = None;
 
 struct RsaPssSigningKey<D: Digest, R: CryptoRngCore> {
-    rng: R,
+    rng: core::cell::RefCell<R>,
     key: rsa::pss::SigningKey<D>,
 }
 
-impl<D: Digest + FixedOutputReset, R: CryptoRngCore> SignerMut<Box<[u8]>>
+impl<D: Digest + FixedOutputReset, R: CryptoRngCore> Signer<rsa::pss::Signature>
     for RsaPssSigningKey<D, R>
 {
-    fn try_sign(&mut self, msg: &[u8]) -> Result<Box<[u8]>, rsa::signature::Error> {
-        let signature = self.key.try_sign_with_rng(&mut self.rng, msg)?;
-        Ok(signature.into())
+    fn try_sign(&self, msg: &[u8]) -> Result<rsa::pss::Signature, rsa::signature::Error> {
+        self.key.try_sign_with_rng(&mut *self.rng.borrow_mut(), msg)
     }
 }
 
 struct RustPkiProvider<'a> {
-    rng: rand::rngs::OsRng,
-    verifier: CertVerifier<'a, Aes128GcmSha256, SystemTime, 4096>,
+    rng: rand::rngs::ThreadRng,
+    verifier: CertVerifier<'a, Sha256, SystemTime, 4096>,
     priv_key: Option<&'a [u8]>,
     client_cert: Option<embedded_tls::Certificate<&'a [u8]>>,
 }
 
 impl CryptoProvider for RustPkiProvider<'_> {
     type CipherSuite = Aes128GcmSha256;
-    type Signature = Box<[u8]>;
+    type Signature = rsa::pss::Signature;
+    type Hash = Sha256;
+    type Hmac = Hmac<Sha256>;
+    type Aead = AesGcmAead<Aes128Gcm>;
 
     fn rng(&mut self) -> impl embedded_tls::CryptoRngCore {
         &mut self.rng
     }
 
-    fn verifier(&mut self) -> Result<&mut impl TlsVerifier<Aes128GcmSha256>, TlsError> {
-        Ok(&mut self.verifier)
+    fn aead(&mut self, key: &[u8]) -> Result<Self::Aead, embedded_tls::TlsError> {
+        AesGcmAead::new(key)
     }
 
-    fn signer(&mut self) -> Result<(impl SignerMut<Self::Signature>, SignatureScheme), TlsError> {
+    fn signer(&mut self) -> Result<(impl Signer<Self::Signature>, SignatureScheme), TlsError> {
         let key_der = self.priv_key.ok_or(TlsError::InvalidPrivateKey)?;
         let private_key =
             rsa::RsaPrivateKey::from_pkcs8_der(key_der).map_err(|_| TlsError::InvalidPrivateKey)?;
         let signer = RsaPssSigningKey {
-            rng: &mut self.rng,
+            rng: core::cell::RefCell::new(&mut self.rng),
             key: rsa::pss::SigningKey::<Sha256>::new(private_key),
         };
 
@@ -89,28 +94,14 @@ fn setup() -> SocketAddr {
         std::thread::spawn(move || {
             use tlsserver::*;
 
-            let versions = &[&rustls::version::TLS13];
-
             let test_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
 
-            let ca = load_certs(&test_dir.join("data").join("rsa-ca-cert.pem"));
+            let _ca = load_certs(&test_dir.join("data").join("rsa-ca-cert.pem"));
             let certs = load_certs(&test_dir.join("data").join("rsa-server-cert.pem"));
             let privkey = load_private_key(&test_dir.join("data").join("rsa-server-key.pem"));
 
-            let mut client_auth_roots = rustls::RootCertStore::empty();
-            for root in ca.iter() {
-                client_auth_roots.add(root).unwrap()
-            }
-
-            let client_cert_verifier =
-                AllowAnyAnonymousOrAuthenticatedClient::new(client_auth_roots);
-
             let config = rustls::ServerConfig::builder()
-                .with_cipher_suites(rustls::ALL_CIPHER_SUITES)
-                .with_kx_groups(&rustls::ALL_KX_GROUPS)
-                .with_protocol_versions(versions)
-                .unwrap()
-                .with_client_cert_verifier(client_cert_verifier.boxed())
+                .with_no_client_auth()
                 .with_single_cert(certs, privkey)
                 .unwrap();
 
@@ -156,7 +147,7 @@ async fn test_server_certificate_validation() {
     let open_fut = tls.open(TlsContext::new(
         &config,
         RustPkiProvider {
-            rng: OsRng,
+            rng: rand::rng(),
             verifier: CertVerifier::new(Certificate::X509(&der[..])),
             priv_key: Some(&key_der),
             client_cert: Some(Certificate::X509(&cli_der[..])),

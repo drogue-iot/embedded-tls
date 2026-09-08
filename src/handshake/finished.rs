@@ -1,52 +1,51 @@
 use crate::TlsError;
-use crate::buffer::CryptoBuffer;
 use crate::parse_buffer::ParseBuffer;
-use core::fmt::{Debug, Formatter};
-//use digest::generic_array::{ArrayLength, GenericArray};
-use generic_array::{ArrayLength, GenericArray};
-// use heapless::Vec;
+use digest::{Output, OutputSizeUser};
 
-pub struct Finished<N: ArrayLength<u8>> {
-    pub verify: GenericArray<u8, N>,
-    pub hash: Option<GenericArray<u8, N>>,
+#[derive(Clone)]
+pub struct Finished<Hash: OutputSizeUser> {
+    pub verify: Output<Hash>,
+    pub hash: Option<Output<Hash>>,
 }
 
 #[cfg(feature = "defmt")]
-impl<N: ArrayLength<u8>> defmt::Format for Finished<N> {
-    fn format(&self, f: defmt::Formatter<'_>) {
-        defmt::write!(f, "verify length:{}", &self.verify.len());
+impl<Hash: OutputSizeUser> defmt::Format for Finished<Hash> {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "Finished {{ verify: {:?}, hash: {:?} }}",
+            self.verify.as_slice(),
+            self.hash.as_ref().map(|h| h.as_slice())
+        )
     }
 }
 
-impl<N: ArrayLength<u8>> Debug for Finished<N> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+impl<Hash: OutputSizeUser> core::fmt::Debug for Finished<Hash> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Finished")
-            .field("verify", &self.hash)
+            .field("verify", &self.verify.as_slice())
+            .field("hash", &self.hash.as_ref().map(|h| h.as_slice()))
             .finish()
     }
 }
 
-impl<N: ArrayLength<u8>> Finished<N> {
-    pub fn parse(buf: &mut ParseBuffer, _len: u32) -> Result<Self, TlsError> {
-        // info!("finished len: {}", len);
-        let mut verify = GenericArray::default();
-        buf.fill(&mut verify)?;
-        //let hash = GenericArray::from_slice()
-        //let hash: Result<Vec<u8, _>, ()> = buf
-        //.slice(len as usize)
-        //.map_err(|_| TlsError::InvalidHandshake)?
-        //.into();
-        // info!("hash {:?}", verify);
-        //let hash = hash.map_err(|_| TlsError::InvalidHandshake)?;
-        // info!("hash ng {:?}", verify);
-        Ok(Self { verify, hash: None })
+impl<Hash: OutputSizeUser> Finished<Hash> {
+    pub fn new(verify: Output<Hash>) -> Self {
+        Self { verify, hash: None }
     }
 
-    pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
-        //let len = self.verify.len().to_be_bytes();
-        //buf.extend_from_slice(&[len[1], len[2], len[3]]);
-        buf.extend_from_slice(&self.verify[..self.verify.len()])
-            .map_err(|_| TlsError::EncodeError)?;
-        Ok(())
+    pub fn encode(&self, buf: &mut crate::buffer::CryptoBuffer) -> Result<(), TlsError> {
+        buf.extend_from_slice(self.verify.as_slice())
+            .map_err(|_| TlsError::EncodeError)
+    }
+
+    pub fn parse(buf: &mut ParseBuffer, content_len: u32) -> Result<Self, TlsError> {
+        let verify_len = content_len as usize;
+        let verify_buf = buf.slice(verify_len).map_err(|_| TlsError::DecodeError)?;
+        let verify_slice = verify_buf.as_slice();
+        let mut out = Output::<Hash>::default();
+        let out_slice: &mut [u8] = out.as_mut();
+        out_slice.copy_from_slice(verify_slice);
+        Ok(Self::new(out))
     }
 }

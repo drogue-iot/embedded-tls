@@ -1,28 +1,37 @@
+use aes_gcm::Aes128Gcm;
 use embedded_io::Write as _;
 use embedded_io_adapters::std::FromStd;
 use embedded_tls::blocking::*;
+use embedded_tls::crypto_traits::AesGcmAead;
 use embedded_tls::webpki::CertVerifier;
-use rand::rngs::OsRng;
+use hmac::Hmac;
+use sha2::Sha256;
 use std::net::TcpStream;
 use std::time::SystemTime;
 
 struct Provider<'a> {
-    rng: OsRng,
-    verifier: CertVerifier<'a, Aes128GcmSha256, SystemTime, 4096>,
+    rng: rand::rngs::ThreadRng,
+    verifier: CertVerifier<'a, Sha256, SystemTime, 4096>,
 }
 
 impl CryptoProvider for Provider<'_> {
     type CipherSuite = Aes128GcmSha256;
-
-    type Signature = &'static [u8];
+    type Signature = p256::ecdsa::Signature;
+    type Hash = Sha256;
+    type Hmac = Hmac<Sha256>;
+    type Aead = AesGcmAead<Aes128Gcm>;
 
     fn rng(&mut self) -> impl embedded_tls::CryptoRngCore {
         &mut self.rng
     }
 
+    fn aead(&mut self, key: &[u8]) -> Result<Self::Aead, embedded_tls::TlsError> {
+        AesGcmAead::new(key)
+    }
+
     fn verifier(
         &mut self,
-    ) -> Result<&mut impl TlsVerifier<Self::CipherSuite>, embedded_tls::TlsError> {
+    ) -> Result<&mut impl embedded_tls::TlsVerifier<Self::Hash>, embedded_tls::TlsError> {
         Ok(&mut self.verifier)
     }
 }
@@ -57,7 +66,7 @@ fn main() {
     tls.open(TlsContext::new(
         &config,
         Provider {
-            rng: OsRng,
+            rng: rand::rng(),
             verifier: CertVerifier::new(Certificate::X509(&der)),
         },
     ))
