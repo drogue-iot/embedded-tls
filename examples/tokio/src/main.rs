@@ -3,7 +3,7 @@
 use embedded_io_adapters::tokio_1::FromTokio;
 use embedded_io_async::Write as _;
 use embedded_tls::*;
-use rand::rngs::OsRng;
+use rand::rngs::SysRng;
 use std::error::Error;
 use tokio::net::TcpStream;
 

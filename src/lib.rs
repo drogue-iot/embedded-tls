@@ -14,11 +14,13 @@
 ```
 use embedded_tls::*;
 use embedded_io_adapters::tokio_1::FromTokio;
-use rand::rngs::OsRng;
+use rand::rngs::SysRng;
+use rand_core::UnwrapErr;
 use tokio::net::TcpStream;
 
 #[tokio::main]
 async fn main() {
+    let rng = UnwrapErr(SysRng);
     let stream = TcpStream::connect("google.com:443")
         .await
         .expect("error creating TCP connection");
@@ -37,7 +39,7 @@ async fn main() {
     // otherwise, use embedded_tls::webpki::CertVerifier, which only works on std for now.
     tls.open(TlsContext::new(
         &config,
-        UnsecureProvider::new::<Aes128GcmSha256>(OsRng),
+        UnsecureProvider::new::<Aes128GcmSha256>(rng),
     ))
     .await
     .expect("error establishing TLS connection");
@@ -75,7 +77,7 @@ mod write_buffer;
 pub use config::UnsecureProvider;
 pub use extensions::extension_data::signature_algorithms::SignatureScheme;
 pub use handshake::certificate_verify::CertificateVerify;
-pub use rand_core::{CryptoRng, CryptoRngCore};
+pub use rand_core::CryptoRng;
 
 #[cfg(feature = "webpki")]
 pub mod webpki;

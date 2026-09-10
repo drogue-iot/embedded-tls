@@ -19,8 +19,8 @@ openssl x509 -req -in server.csr -CA ca-cert.pem -CAkey ca-key.pem -CAcreateseri
 
 # Create private key, certificate signing request (CSR) and certificate from intermediate CA for server with hostname
 openssl ecparam -name prime256v1 -genkey -noout -out im-server-key.pem
-openssl req -new -sha256 -key im-server-key.pem -out im-server.csr -subj "/CN=localhost"
-openssl x509 -req -in im-server.csr -CA im-cert.pem -CAkey im-key.pem -CAcreateserial -out im-server-cert.pem -days 10000 -sha256
+openssl req -new -sha256 -key im-server-key.pem -out im-server.csr -subj "/CN=None" -addext "subjectAltName = DNS:localhost, IP:127.0.0.1"
+openssl x509 -req -in im-server.csr -CA im-cert.pem -CAkey im-key.pem -CAcreateserial -out im-server-cert.pem -days 10000 -sha256 -copy_extensions copy
 cat im-server-cert.pem im-cert.pem > chain-cert.pem
 
 # Create Ed25519 CA private key and certificate
