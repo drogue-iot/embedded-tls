@@ -73,7 +73,6 @@ where
         }
     }
 
-    #[allow(irrefutable_let_patterns)]
     pub(crate) fn encode(&self, buf: &mut CryptoBuffer<'_>) -> Result<(), TlsError> {
         #[cfg(not(any(feature = "x25519", feature = "mlkem")))]
         let KeyExchangeSecret::Secp256r1(secret) = &self.secret;
@@ -90,19 +89,23 @@ where
         let public_key = public_key.as_ref();
 
         #[cfg(feature = "x25519")]
-        let public_key = x25519_dalek::PublicKey::from(secret).to_bytes();
-        #[cfg(feature = "x25519")]
-        let public_key = &public_key[..];
+        let public_key = &x25519_dalek::PublicKey::from(secret).to_bytes()[..];
 
         // concat(pubkey + ek) for secp256MlKem768 (65+1184 = 1249 bytes)
-        // concat(pubkey + ek) for x25519MlKem768 (32+1184 = 1216 bytes)
-        // so maxsize for hybrid handshake is 1249 bytes
-        #[cfg(feature = "mlkem")]
+        #[cfg(all(feature = "mlkem", not(feature = "x25519")))]
         let mut hybrid: Vec<u8, 1249> = Vec::new();
-        #[cfg(feature = "mlkem")]
+        #[cfg(all(feature = "mlkem", not(feature = "x25519")))]
         hybrid.extend_from_slice(public_key).unwrap();
-        #[cfg(feature = "mlkem")]
+        #[cfg(all(feature = "mlkem", not(feature = "x25519")))]
         hybrid.extend(kem.encapsulation_key().to_bytes());
+
+        // concat(ek + pubkey) for x25519MlKem768 (1184+32 = 1216 bytes)
+        #[cfg(all(feature = "x25519", feature = "mlkem"))]
+        let mut hybrid: Vec<u8, 1216> = Vec::new();
+        #[cfg(all(feature = "x25519", feature = "mlkem"))]
+        hybrid.extend(kem.encapsulation_key().to_bytes());
+        #[cfg(all(feature = "x25519", feature = "mlkem"))]
+        hybrid.extend_from_slice(public_key).unwrap();
 
         buf.push_u16(LEGACY_VERSION)
             .map_err(|_| TlsError::EncodeError)?;

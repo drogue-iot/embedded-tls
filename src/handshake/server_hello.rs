@@ -117,8 +117,8 @@ impl<'a> ServerHello<'a> {
                     .decapsulate_slice(&server_key_share.opaque[..1088])
                     .ok()?;
                 let mut shared = Vec::new();
-                shared.extend_from_slice(&pubkey_secret).ok()?;
                 shared.extend_from_slice(&decap_secret).ok()?;
+                shared.extend_from_slice(&pubkey_secret).ok()?;
                 Some(shared)
             }
             g => {
