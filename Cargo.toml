@@ -16,9 +16,9 @@ features = ["webpki", "rustpki", "rsa", "ed25519", "p384"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-portable-atomic = { version = "1.13.0", default-features = false }
-p256 = { version = "0.14.0-rc.9", default-features = false, features = [ "ecdh", "ecdsa", "sha256", "pkcs8" ] }
-p384 = { version = "0.14.0-rc.9", default-features = false, features = [ "ecdsa", "sha384", "pkcs8" ], optional = true }
+portable-atomic = { version = "1.15.0", default-features = false }
+p256 = { version = "0.14.0", default-features = false, features = [ "ecdh", "ecdsa", "sha256", "pkcs8" ] }
+p384 = { version = "0.14.0", default-features = false, features = [ "ecdsa", "sha384", "pkcs8" ], optional = true }
 ed25519-dalek = { version = "3.0", default-features = false, optional = true }
 x25519-dalek = { version = "3.0", default-features = false, features = ["static_secrets"], optional = true }
 rsa = { version = "0.10.0-rc.18", default-features = false, features = ["sha2", "encoding"], optional = true }
@@ -26,20 +26,20 @@ rand_core = { version = "0.10.1", default-features = false }
 hkdf = "0.13"
 hmac = "0.13"
 sha2 = { version = "0.11", default-features = false }
-aes-gcm = { version = "0.11.0-rc.3", default-features = false, features = ["aes"] }
+aes-gcm = { version = "0.11.1", default-features = false, features = ["aes"] }
 digest = { version = "0.11.2", default-features = false }
-typenum = { version = "1.20.0", default-features = false }
+typenum = { version = "1.20.1", default-features = false }
 heapless = { version = "0.9.3", default-features = false }
 embedded-io = "0.7"
 embedded-io-async = "0.7"
 embedded-io-adapters = { version = "0.7", optional = true }
 webpki = { package = "rustls-webpki", version = "0.101", default-features = false, optional = true }
 const-oid = { version = "0.10.2", optional = true }
-der = { version = "0.8.0", features = ["derive", "oid", "time", "heapless"], optional = true }
-signature = { version = "3.0.0-rc.10", default-features = false }
-ecdsa = { version = "0.17.0-rc.18", default-features = false }
-dhkem = { version = "0.1.0-rc.0", default-features = false, optional = true }
-ml-kem = { version = "0.3.0-rc.2", default-features = false, optional = true }
+der = { version = "0.8.2", features = ["derive", "oid", "time", "heapless"], optional = true }
+signature = { version = "3.0.0", default-features = false }
+ecdsa = { version = "0.17.0", default-features = false }
+dhkem = { version = "0.1.0", default-features = false, optional = true }
+ml-kem = { version = "0.3.2", default-features = false, optional = true }
 
 # Logging alternatives
 log = { version = "0.4", optional = true }
