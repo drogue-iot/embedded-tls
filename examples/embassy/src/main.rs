@@ -8,7 +8,7 @@ use embedded_io_async::Write;
 use embedded_tls::{Aes128GcmSha256, TlsConfig, TlsConnection, TlsContext, UnsecureProvider};
 use heapless::Vec;
 use log::*;
-use rand::{rngs::OsRng, RngCore};
+use rand::{RngCore, rngs::SysRng};
 use static_cell::StaticCell;
 
 #[derive(Parser)]
